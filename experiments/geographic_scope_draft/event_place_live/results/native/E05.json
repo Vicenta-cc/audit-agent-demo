@@ -1,0 +1,617 @@
+{
+  "id": "E05",
+  "expectation": {
+    "decision": "apply",
+    "status": "resolved",
+    "target": "广东省"
+  },
+  "sessions": [
+    "investigation-session:d6b7bee45c254c06b58ac0cd239f9a70"
+  ],
+  "setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references",
+  "started_at": "2026-10-15T08:51:39.673634+00:00",
+  "snapshot": {
+    "session_id": "investigation-session:d6b7bee45c254c06b58ac0cd239f9a70",
+    "draft": {
+      "id": "investigation-draft:83417691421546b291e5de02aaa40561",
+      "current_revision": 1,
+      "title": "广东食品安全问题调查",
+      "objective": "调查广东食品安全问题",
+      "configuration": {
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "enabled_main_terms": [
+              "舆情事件"
+            ],
+            "expected_runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+            "lexicon_id": "custom_f43c26f2445a4a0e",
+            "strategy": "existing_lexicon"
+          }
+        },
+        "judgement": {
+          "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+          "expected_ruleset_version": 1,
+          "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+          "strategy": "existing_ruleset"
+        },
+        "platform": "dy",
+        "relevance_scope": {
+          "content_unit": "parent_post_event",
+          "province": {
+            "aliases": [
+              "广东"
+            ],
+            "name": "广东省"
+          },
+          "schema_version": "geo-scope-v1",
+          "selection_policy": "local_first_with_supplement",
+          "target": {
+            "aliases": [
+              "广东"
+            ],
+            "name": "广东省"
+          },
+          "topic": null
+        },
+        "relevance_scope_state": {
+          "application_turn_id": "investigation-turn:76f9cf6898c7425a96c93b66a38bc3c8",
+          "candidates": [
+            {
+              "kind": "省",
+              "level": "province",
+              "name": "广东省",
+              "province_name": "广东省"
+            }
+          ],
+          "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+          "copied_from_draft_id": "",
+          "draft_id": "investigation-draft:83417691421546b291e5de02aaa40561",
+          "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+          "province": {
+            "aliases": [
+              "广东"
+            ],
+            "name": "广东省"
+          },
+          "province_code": "440000",
+          "reason": "",
+          "selection_policy": "local_first_with_supplement",
+          "session_id": "investigation-session:d6b7bee45c254c06b58ac0cd239f9a70",
+          "source_quote": "调查广东食品安全问题",
+          "source_sequence": 1,
+          "source_turn_id": "investigation-turn:5b3355d756454e36b3c2a797c478dc36",
+          "source_user_message_id": "investigation-message:56667922a6bd4d37b42d2074787ff79d",
+          "status": "resolved",
+          "target": {
+            "aliases": [
+              "广东"
+            ],
+            "name": "广东省"
+          },
+          "target_code": "440000",
+          "target_level": "province",
+          "target_text": "广东",
+          "task_anchor_turn_id": "investigation-turn:5b3355d756454e36b3c2a797c478dc36"
+        },
+        "schema_version": "investigation-draft-config-v4"
+      }
+    },
+    "public_draft": {
+      "id": "investigation-draft:83417691421546b291e5de02aaa40561",
+      "status": "DRAFT",
+      "current_revision": 1,
+      "title": "广东食品安全问题调查",
+      "objective": "调查广东食品安全问题",
+      "configuration": {
+        "schema_version": "investigation-draft-config-v4",
+        "platform": "dy",
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "strategy": "existing_lexicon",
+            "lexicon_id": "custom_f43c26f2445a4a0e",
+            "expected_runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+            "enabled_main_terms": [
+              "舆情事件"
+            ]
+          }
+        },
+        "judgement": {
+          "strategy": "existing_ruleset",
+          "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+          "expected_ruleset_version": 1,
+          "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1"
+        },
+        "relevance_scope": {
+          "schema_version": "geo-scope-v1",
+          "target": {
+            "name": "广东省",
+            "aliases": [
+              "广东"
+            ]
+          },
+          "province": {
+            "name": "广东省",
+            "aliases": [
+              "广东"
+            ]
+          },
+          "topic": null,
+          "selection_policy": "local_first_with_supplement",
+          "content_unit": "parent_post_event"
+        },
+        "relevance_scope_state": {
+          "status": "resolved",
+          "target_text": "广东",
+          "selection_policy": "local_first_with_supplement",
+          "reason": "",
+          "candidates": [
+            {
+              "name": "广东省",
+              "level": "province",
+              "kind": "省",
+              "province_name": "广东省"
+            }
+          ],
+          "target": {
+            "name": "广东省",
+            "aliases": [
+              "广东"
+            ]
+          },
+          "province": {
+            "name": "广东省",
+            "aliases": [
+              "广东"
+            ]
+          }
+        }
+      },
+      "created_at": "2026-10-15T08:52:16.858703+00:00",
+      "updated_at": "2026-10-15T08:52:16.858703+00:00",
+      "confirmed_revision": null,
+      "confirmed_at": ""
+    },
+    "preview": {
+      "relevance_scope": {
+        "schema_version": "geo-scope-v1",
+        "target": {
+          "name": "广东省",
+          "aliases": [
+            "广东"
+          ]
+        },
+        "province": {
+          "name": "广东省",
+          "aliases": [
+            "广东"
+          ]
+        },
+        "topic": null,
+        "selection_policy": "local_first_with_supplement",
+        "content_unit": "parent_post_event"
+      },
+      "relevance_scope_state": {
+        "status": "resolved",
+        "target_text": "广东",
+        "selection_policy": "local_first_with_supplement",
+        "reason": "",
+        "candidates": [
+          {
+            "name": "广东省",
+            "level": "province",
+            "kind": "省",
+            "province_name": "广东省"
+          }
+        ],
+        "target": {
+          "name": "广东省",
+          "aliases": [
+            "广东"
+          ]
+        },
+        "province": {
+          "name": "广东省",
+          "aliases": [
+            "广东"
+          ]
+        }
+      },
+      "max_post_limit": 10,
+      "task_settings_revision": 0,
+      "requested_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 1,
+        "analysis_batch_size": 5
+      },
+      "effective_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 10,
+        "analysis_batch_size": 5
+      },
+      "estimated_max_contents": 1,
+      "draft_id": "investigation-draft:83417691421546b291e5de02aaa40561",
+      "draft_revision": 1,
+      "title": "广东食品安全问题调查",
+      "objective": "调查广东食品安全问题",
+      "mode": "search",
+      "platform": "dy",
+      "resolved_search_terms": [
+        "舆情事件"
+      ],
+      "unused_search_terms": [],
+      "search_terms_notice": "",
+      "creator_url": "",
+      "recall_plan": {
+        "strategy": "existing_lexicon",
+        "lexicon_id": "custom_f43c26f2445a4a0e",
+        "lexicon_title": "独立测试通用舆情词库",
+        "runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+        "enabled_main_term_count": 1,
+        "enabled_main_terms": [
+          "舆情事件"
+        ],
+        "temporary_terms": [],
+        "source_lexicon_ids": [],
+        "lexicon_content": {
+          "title": "独立测试通用舆情词库",
+          "risk_label": "",
+          "description": "",
+          "entries": [
+            {
+              "id": "generic-topic",
+              "term": "舆情事件",
+              "kind": "main",
+              "parent_id": "",
+              "enabled": true,
+              "platform": "全平台",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": ""
+            }
+          ]
+        }
+      },
+      "ruleset_revision": {
+        "id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+        "ruleset_id": "ruleset.72b79ad82ad3",
+        "name": "独立测试通用舆情规则",
+        "domain": "public_opinion",
+        "version": 1,
+        "content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+        "enabled_rule_count": 1,
+        "available": true
+      },
+      "temporary_ruleset": null,
+      "max_notes": 1,
+      "max_posts_per_keyword": 1,
+      "max_comments_per_post": 300,
+      "get_sub_comment": false,
+      "blockers": [
+        {
+          "code": "collection_service_unavailable",
+          "message": "抖音采集服务当前不可用，请稍后重试。",
+          "resource_type": "",
+          "resource_id": "",
+          "latest_safe_summary": {},
+          "management_url": ""
+        },
+        {
+          "code": "RELEVANCE_SCOPE_EXECUTION_UNAVAILABLE",
+          "message": "地域执行能力尚未接通，当前不能启动。",
+          "resource_type": "",
+          "resource_id": "",
+          "latest_safe_summary": {},
+          "management_url": ""
+        }
+      ],
+      "can_confirm": false
+    },
+    "receipts": [
+      {
+        "tool_name": "configure_investigation_draft",
+        "status": "SUCCEEDED",
+        "is_mutation": 1,
+        "turn_id": "investigation-session:d6b7bee45c254c06b58ac0cd239f9a70:investigation-turn:76f9cf6898c7425a96c93b66a38bc3c8:202f3168"
+      }
+    ]
+  },
+  "evaluation": {
+    "pass": true,
+    "errors": [],
+    "observed_status": "resolved",
+    "observed_target": "广东省",
+    "scope": {
+      "content_unit": "parent_post_event",
+      "province": {
+        "aliases": [
+          "广东"
+        ],
+        "name": "广东省"
+      },
+      "schema_version": "geo-scope-v1",
+      "selection_policy": "local_first_with_supplement",
+      "target": {
+        "aliases": [
+          "广东"
+        ],
+        "name": "广东省"
+      },
+      "topic": null
+    },
+    "scope_state": {
+      "application_turn_id": "investigation-turn:76f9cf6898c7425a96c93b66a38bc3c8",
+      "candidates": [
+        {
+          "kind": "省",
+          "level": "province",
+          "name": "广东省",
+          "province_name": "广东省"
+        }
+      ],
+      "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+      "copied_from_draft_id": "",
+      "draft_id": "investigation-draft:83417691421546b291e5de02aaa40561",
+      "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+      "province": {
+        "aliases": [
+          "广东"
+        ],
+        "name": "广东省"
+      },
+      "province_code": "440000",
+      "reason": "",
+      "selection_policy": "local_first_with_supplement",
+      "session_id": "investigation-session:d6b7bee45c254c06b58ac0cd239f9a70",
+      "source_quote": "调查广东食品安全问题",
+      "source_sequence": 1,
+      "source_turn_id": "investigation-turn:5b3355d756454e36b3c2a797c478dc36",
+      "source_user_message_id": "investigation-message:56667922a6bd4d37b42d2074787ff79d",
+      "status": "resolved",
+      "target": {
+        "aliases": [
+          "广东"
+        ],
+        "name": "广东省"
+      },
+      "target_code": "440000",
+      "target_level": "province",
+      "target_text": "广东",
+      "task_anchor_turn_id": "investigation-turn:5b3355d756454e36b3c2a797c478dc36"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "investigation-turn:5b3355d756454e36b3c2a797c478dc36",
+      "session_id": "investigation-session:d6b7bee45c254c06b58ac0cd239f9a70",
+      "user": "调查广东食品安全问题",
+      "status": "completed",
+      "answer": "现有资源里没有专门针对「食品安全」的黑话库和审核规则。目前可用的词库都是暴恐、涉毒、诈骗、赌博、软色情、民族意识形态等方向，规则库也只有「独立测试通用舆情规则」和「赌博博彩风险规则集」，都跟广东食品安全这个议题对不上。\n\n现在的情况是：\n\n- **平台**：只有抖音可用（小红书、快手、微博当前不可用）。\n- **审核规则**：缺少匹配「食品安全」主题的已发布规则。\n- **黑话库**：缺少能召回「广东食品安全」相关讨论的搜索词。\n\n我可以帮你**临时生成一套这次调查用的搜索词**（比如围绕食品安全事件、投诉、监管、黑作坊等关键词），等词库和规则补齐后就能创建调查草稿。你要我先生成这次调查的搜索词吗？",
+      "safe_message": "",
+      "seconds": 18.12,
+      "accounting": {
+        "id": "investigation-turn:5b3355d756454e36b3c2a797c478dc36",
+        "status": "completed",
+        "input_tokens": 4566,
+        "output_tokens": 436,
+        "total_tokens": 25994,
+        "llm_call_count": 3,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "query_investigation_options"
+        },
+        {
+          "name": "query_investigation_options"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 6758,
+            "output_tokens": 89,
+            "total_tokens": 6847,
+            "latency_seconds": 3.4
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 8399,
+            "output_tokens": 168,
+            "total_tokens": 8567,
+            "latency_seconds": 4.0
+          },
+          {
+            "number": 3,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 10401,
+            "output_tokens": 179,
+            "total_tokens": 10580,
+            "latency_seconds": 5.9
+          }
+        ],
+        "llm_call_count": 3,
+        "total_tokens": 25994,
+        "tool_lifecycle_and_exit": [
+          "tool query_investigation_options completed (0.02s, 3974 chars)",
+          "tool query_investigation_options completed (0.02s, 4130 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=3/12 budget=3/12 tool_turns=2 last_msg_role=assistant response_len=303 session=investigation-session:d6b7bee45c254c06b58ac0cd239f9a70"
+        ]
+      }
+    },
+    {
+      "turn_id": "investigation-turn:76f9cf6898c7425a96c93b66a38bc3c8",
+      "session_id": "investigation-session:d6b7bee45c254c06b58ac0cd239f9a70",
+      "user": "在抖音调查，使用现有“独立测试通用舆情规则”和“独立测试通用舆情词库”。这些测试资源按原样使用即可。请生成调查草案，不启动采集，不正式保存新资源。",
+      "status": "completed",
+      "answer": "调查草案已生成，未启动采集，也未保存任何新资源。\n\n**草案要点**\n\n- **标题**：广东食品安全问题调查\n- **目标**：调查广东食品安全问题\n- **平台**：抖音\n- **审核规则**：独立测试通用舆情规则（v1，按原样使用）\n- **黑话库**：独立测试通用舆情词库（实际搜索词「舆情事件」，按原样使用）\n- **调查地域**：广东省，采用「当地优先、不足时补充」策略\n\n需要提醒的是，草案当前**不能确认启动**，存在两个阻塞项：\n\n1. 抖音采集服务当前不可用；\n2. 地域执行能力尚未接通。\n\n所以这只是一份可编辑的草案，等阻塞解除后才能进入确认启动流程。你可以继续调整标题、目标、词库或规则。",
+      "safe_message": "",
+      "seconds": 25.67,
+      "accounting": {
+        "id": "investigation-turn:76f9cf6898c7425a96c93b66a38bc3c8",
+        "status": "completed",
+        "input_tokens": 5710,
+        "output_tokens": 806,
+        "total_tokens": 63348,
+        "llm_call_count": 5,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "lexicon_ref": "resource-ref:249595165fe9479380e0cbce87898527",
+            "objective": "调查广东食品安全问题",
+            "operation": "create",
+            "platform": "dy",
+            "relevance_scope_change": {
+              "action": "set",
+              "selection_policy": "local_first_with_supplement",
+              "source_quote": "调查广东食品安全问题",
+              "target_text": "广东"
+            },
+            "ruleset_ref": "resource-ref:6afacaf1bfc74ecc827d1a3792cbc4cc",
+            "scope_decision": "apply",
+            "title": "广东食品安全问题调查"
+          }
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [
+        "{\"name\": \"configure_investigation_draft\", \"description\": \"创建或局部更新调查草案的唯一配置入口。operation 明确为 create 或 update。create 提供标题、目标、平台、ruleset_ref，以及 lexicon_ref（关键词调查）或 creator_url（账号调查）。create 必须明确传 scope_decision：apply 同时传 relevance_scope_change.action=set；none 必须省略 relevance_scope_change。缺失或矛盾会在写入前拒绝。update 提供 draft_id/expected_revision，只传变化字段，省略的内容由后台原样保留；不传 null 或整份 configuration。update 不传 create 专用的 scope_decision；地域沿用省略保留、set 修改、clear 取消。正式和临时规则都填 ruleset_ref，正式和临时词库都填 lexicon_ref；引用从 read_resource/get_resource_edit 取得，不能猜测引用或抄写内容、hash、presentation_id。临时规则仍须先完整展示，等待后续用户明确采用；引用不是同意凭证。多个字段一起校验、一起提交。词库按其主词、变体与启用状态计算搜索词；改词条或启用状态先 update_resource_edit，再取新引用。本工具不修改资源正文、不保存资源、不启动任务；启动仍使用现有确认工具。版本冲突先读草案并核对，不强行替换版本重试。本次调查对象、议题或事件名称包含地域时默认采用该地域，无需用户另说某地的舆情或明确限定。例如调查克拉玛依大火、深圳楼市、新疆棉花争议，分别采用克拉玛依、深圳、新疆；议题与地域分别保存，不能只写入标题、目标或词库。设置或换地域时，relevance_scope_change传action=set、用户原始地名target_text、真实用户原话source_quote和selection_policy。同任务用户最新明确更换、取消或要求全国且不限制地域优先；关注全国网友讨论该事件不等于取消事件地域。资源齐备并获采用授权时，回看同任务真实用户历史中的调查对象和后续变更或取消；本轮只说采用资源不表示放弃此前地域，创建时引用原要求并一并配置，不要求用户重复。明确只要当地、不补充选local_only，其余有地域的调查选local_first_with_supplement，无需为默认策略重复确认。创建前明确取消地域时选scope_decision=none；已有草案取消时只传action=clear和source_quote；只改资源或标题时省略地域变化保留原地域，不能传null。不要从账号背景、资源名称、引用举例、否定、助手建议或仅修改标题推断地域；用户没提地名时不靠事件常识补地点；不填行政代码、身份或来源ID。调查目标支持单一省级地域或地级市（含直辖市）；地域简称直接传原文解析，解析成功直接报告。省市同名简称、下级地域、未知名或指代不明也传原文解析，仅按真实pending回执及候选提示澄清；区县同名不阻断明确城市别名，不自行猜测纠错或扩大范围。已有草案不能只口头澄清而保留可启动状态。条件齐备且用户已明确要求时直接修改草案，成功后报告，无需再问是否应用；资源展示和后续采用授权仍须满足。地域仅保存和展示，执行尚未接通，不能声称已经限定采集或可以启动地域调查。\", \"parameters\": {\"$defs\": {\"Platform\": {\"enum\": [\"xhs\", \"dy\", \"ks\"], \"title\": \"Platform\", \"type\": \"string\"}, \"RelevanceScopeChange\": {\"additionalProperties\": false, \"properties\": {\"action\": {\"enum\": [\"set\", \"clear\"], \"title\": \"Action\", \"type\": \"string\"}, \"source_quote\": {\"maxLength\": 4000, \"minLength\": 1, \"title\": \"Source Quote\", \"type\": \"string\"}, \"target_text\": {\"maxLength\": 300, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Target Text\", \"default\": null}, \"selection_policy\": {\"enum\": [\"local_only\", \"local_first_with_supplement\"], \"type\": \"string\", \"nullable\": true, \"title\": \"Selection Policy\", \"default\": null}}, \"required\": [\"action\", \"source_quote\"], \"title\": \"RelevanceScopeChange\", \"type\": \"object\"}}, \"additionalProperties\": false, \"properties\": {\"operation\": {\"enum\": [\"create\", \"update\"], \"title\": \"Operation\", \"type\": \"string\"}, \"draft_id\": {\"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Draft Id\", \"default\": null}, \"expected_revision\": {\"minimum\": 1, \"type\": \"integer\", \"nullable\": true, \"title\": \"Expected Revision\", \"default\": null}, \"title\": {\"maxLength\": 300, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Title\", \"default\": null}, \"objective\": {\"maxLength\": 4000, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Objective\", \"default\": null}, \"platform\": {\"$ref\": \"#/$defs/Platform\", \"nullable\": true}, \"ruleset_ref\": {\"pattern\": \"^resource-ref:[0-9a-f]{32}$\", \"type\": \"string\", \"nullable\": true, \"title\": \"Ruleset Ref\", \"default\": null}, \"lexicon_ref\": {\"pattern\": \"^resource-ref:[0-9a-f]{32}$\", \"type\": \"string\", \"nullable\": true, \"title\": \"Lexicon Ref\", \"default\": null}, \"creator_url\": {\"maxLength\": 2000, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Creator Url\", \"default\": null}, \"scope_decision\": {\"enum\": [\"apply\", \"none\"], \"type\": \"string\", \"nullable\": true, \"title\": \"Scope Decision\", \"description\": \"仅 create 必填：调查对象/事件名称包含地域选 apply 并传 set；无地域或已明确取消选 none 且不传 change。update 省略。\", \"default\": null}, \"relevance_scope_change\": {\"$ref\": \"#/$defs/RelevanceScopeChange\", \"nullable\": true}}, \"required\": [\"operation\"], \"title\": \"ConfigureDraftInput\", \"type\": \"object\"}}"
+      ],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 10630,
+            "output_tokens": 166,
+            "total_tokens": 10796,
+            "latency_seconds": 4.7
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 11510,
+            "output_tokens": 192,
+            "total_tokens": 11702,
+            "latency_seconds": 4.1
+          },
+          {
+            "number": 3,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 11858,
+            "output_tokens": 57,
+            "total_tokens": 11915,
+            "latency_seconds": 3.0
+          },
+          {
+            "number": 4,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 13335,
+            "output_tokens": 214,
+            "total_tokens": 13549,
+            "latency_seconds": 4.4
+          },
+          {
+            "number": 5,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 15209,
+            "output_tokens": 177,
+            "total_tokens": 15386,
+            "latency_seconds": 5.1
+          }
+        ],
+        "llm_call_count": 5,
+        "total_tokens": 63348,
+        "tool_lifecycle_and_exit": [
+          "tool read_resource completed (0.01s, 1194 chars)",
+          "tool read_resource completed (0.00s, 624 chars)",
+          "tool tool_describe completed (0.00s, 3682 chars)",
+          "tool configure_investigation_draft completed (0.05s, 4621 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=5/12 budget=5/12 tool_turns=6 last_msg_role=assistant response_len=307 session=investigation-session:d6b7bee45c254c06b58ac0cd239f9a70"
+        ]
+      }
+    }
+  ],
+  "ended_at": "2026-10-15T08:52:23.562284+00:00",
+  "session_tool_receipts": []
+}

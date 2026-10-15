@@ -1,0 +1,393 @@
+{
+  "id": "E13",
+  "expectation": {
+    "decision": "none",
+    "status": "absent",
+    "target": null
+  },
+  "sessions": [
+    "investigation-session:34b955d1654543e6acd2284f9ec24c7e"
+  ],
+  "setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references",
+  "started_at": "2026-10-15T08:57:37.535441+00:00",
+  "snapshot": {
+    "session_id": "investigation-session:34b955d1654543e6acd2284f9ec24c7e",
+    "draft": {
+      "id": "investigation-draft:f0421157e9ca4bdfaffad94ca5398c3e",
+      "current_revision": 1,
+      "title": "全国招聘风险调查",
+      "objective": "调查全国招聘相关风险内容",
+      "configuration": {
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "enabled_main_terms": [
+              "舆情事件"
+            ],
+            "expected_runtime_content_hash": "60f87ad39d8cd6263cf8ce0e3f0f86f10f9754a0eff8c6fb501bb5d67c3f35db",
+            "lexicon_id": "custom_6d69ef202bfc4b84",
+            "strategy": "existing_lexicon"
+          }
+        },
+        "judgement": {
+          "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+          "expected_ruleset_version": 1,
+          "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+          "strategy": "existing_ruleset"
+        },
+        "platform": "dy",
+        "schema_version": "investigation-draft-config-v4"
+      }
+    },
+    "public_draft": {
+      "id": "investigation-draft:f0421157e9ca4bdfaffad94ca5398c3e",
+      "status": "DRAFT",
+      "current_revision": 1,
+      "title": "全国招聘风险调查",
+      "objective": "调查全国招聘相关风险内容",
+      "configuration": {
+        "schema_version": "investigation-draft-config-v4",
+        "platform": "dy",
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "strategy": "existing_lexicon",
+            "lexicon_id": "custom_6d69ef202bfc4b84",
+            "expected_runtime_content_hash": "60f87ad39d8cd6263cf8ce0e3f0f86f10f9754a0eff8c6fb501bb5d67c3f35db",
+            "enabled_main_terms": [
+              "舆情事件"
+            ]
+          }
+        },
+        "judgement": {
+          "strategy": "existing_ruleset",
+          "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+          "expected_ruleset_version": 1,
+          "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1"
+        }
+      },
+      "created_at": "2026-10-15T08:58:14.072121+00:00",
+      "updated_at": "2026-10-15T08:58:14.072121+00:00",
+      "confirmed_revision": null,
+      "confirmed_at": ""
+    },
+    "preview": {
+      "max_post_limit": 10,
+      "task_settings_revision": 0,
+      "requested_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 1,
+        "analysis_batch_size": 5
+      },
+      "effective_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 10,
+        "analysis_batch_size": 5
+      },
+      "estimated_max_contents": 1,
+      "draft_id": "investigation-draft:f0421157e9ca4bdfaffad94ca5398c3e",
+      "draft_revision": 1,
+      "title": "全国招聘风险调查",
+      "objective": "调查全国招聘相关风险内容",
+      "mode": "search",
+      "platform": "dy",
+      "resolved_search_terms": [
+        "舆情事件"
+      ],
+      "unused_search_terms": [],
+      "search_terms_notice": "",
+      "creator_url": "",
+      "recall_plan": {
+        "strategy": "existing_lexicon",
+        "lexicon_id": "custom_6d69ef202bfc4b84",
+        "lexicon_title": "深圳招聘",
+        "runtime_content_hash": "60f87ad39d8cd6263cf8ce0e3f0f86f10f9754a0eff8c6fb501bb5d67c3f35db",
+        "enabled_main_term_count": 1,
+        "enabled_main_terms": [
+          "舆情事件"
+        ],
+        "temporary_terms": [],
+        "source_lexicon_ids": [],
+        "lexicon_content": {
+          "title": "深圳招聘",
+          "risk_label": "",
+          "description": "",
+          "entries": [
+            {
+              "id": "generic-topic",
+              "term": "舆情事件",
+              "kind": "main",
+              "parent_id": "",
+              "enabled": true,
+              "platform": "全平台",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": ""
+            }
+          ]
+        }
+      },
+      "ruleset_revision": {
+        "id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+        "ruleset_id": "ruleset.72b79ad82ad3",
+        "name": "独立测试通用舆情规则",
+        "domain": "public_opinion",
+        "version": 1,
+        "content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+        "enabled_rule_count": 1,
+        "available": true
+      },
+      "temporary_ruleset": null,
+      "max_notes": 1,
+      "max_posts_per_keyword": 1,
+      "max_comments_per_post": 300,
+      "get_sub_comment": false,
+      "blockers": [
+        {
+          "code": "collection_service_unavailable",
+          "message": "抖音采集服务当前不可用，请稍后重试。",
+          "resource_type": "",
+          "resource_id": "",
+          "latest_safe_summary": {},
+          "management_url": ""
+        }
+      ],
+      "can_confirm": false
+    },
+    "receipts": [
+      {
+        "tool_name": "configure_investigation_draft",
+        "status": "SUCCEEDED",
+        "is_mutation": 1,
+        "turn_id": "investigation-session:34b955d1654543e6acd2284f9ec24c7e:investigation-turn:e117cdf55bcd46daa09af7fb11962923:f0cd9e9d"
+      }
+    ]
+  },
+  "evaluation": {
+    "pass": true,
+    "errors": [],
+    "observed_status": "absent",
+    "observed_target": null,
+    "scope": null,
+    "scope_state": {}
+  },
+  "turns": [
+    {
+      "turn_id": "investigation-turn:e6070a0ea13d4ce88df567629b5e992e",
+      "session_id": "investigation-session:34b955d1654543e6acd2284f9ec24c7e",
+      "user": "用“深圳招聘”词库调查全国招聘风险",
+      "status": "completed",
+      "answer": "情况我已经摸清了，先跟你说清楚现状和问题：\n\n**关于词库**\n“深圳招聘”这个正式词库，实际启用的搜索词是「**舆情事件**」，主词是「舆情事件」（归到“黑话词”类）。也就是说，这个名字叫“深圳招聘”的词库，里面的搜索词其实跟“深圳招聘”没关系，而是“舆情事件”。用它会按“舆情事件”去搜，搜不到招聘相关内容。\n\n**关于审核规则**\n库里现有可用的审核规则只有两类：\n- 独立测试通用舆情规则（舆情领域，1 条规则）\n- 赌博博彩风险规则集（博彩领域，7 条规则）\n\n没有跟“招聘风险”匹配的审核规则。\n\n**结论**\n按你现在的要求——用“深圳招聘”词库调查全国招聘风险——有两个缺口：\n1. 词库实际搜索词是“舆情事件”，不是“招聘”，无法命中招聘讨论；\n2. 没有匹配招聘风险的审核规则。\n\n所以现在还不能直接配出一个有效的调查。你可以选择：\n\n1. **确认词库怎么用**：如果你就是要按“深圳招聘”词库现在的实际搜索词“舆情事件”去查，那调查目标会变成“舆情事件”而非招聘；或者你告诉我“深圳招聘”词库你期望的搜索词是什么，我帮你改/建。\n2. **补审核规则**：需要一套招聘风险的审核规则。如果你有现成的规则内容，我可以帮你新建；没有的话我可以为你生成一套临时规则。\n\n你想怎么处理？告诉我你的方向，我再继续配。",
+      "safe_message": "",
+      "seconds": 24.16,
+      "accounting": {
+        "id": "investigation-turn:e6070a0ea13d4ce88df567629b5e992e",
+        "status": "completed",
+        "input_tokens": 5198,
+        "output_tokens": 748,
+        "total_tokens": 38970,
+        "llm_call_count": 5,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "query_investigation_options"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 6765,
+            "output_tokens": 87,
+            "total_tokens": 6852,
+            "latency_seconds": 2.7
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 7080,
+            "output_tokens": 73,
+            "total_tokens": 7153,
+            "latency_seconds": 3.3
+          },
+          {
+            "number": 3,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 7274,
+            "output_tokens": 165,
+            "total_tokens": 7439,
+            "latency_seconds": 3.7
+          },
+          {
+            "number": 4,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 7730,
+            "output_tokens": 91,
+            "total_tokens": 7821,
+            "latency_seconds": 3.4
+          },
+          {
+            "number": 5,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 9373,
+            "output_tokens": 332,
+            "total_tokens": 9705,
+            "latency_seconds": 8.1
+          }
+        ],
+        "llm_call_count": 5,
+        "total_tokens": 38970,
+        "tool_lifecycle_and_exit": [
+          "tool read_resource completed (0.02s, 245 chars)",
+          "tool read_resource completed (0.01s, 618 chars)",
+          "tool read_resource completed (0.00s, 58 chars)",
+          "tool query_investigation_options completed (0.02s, 3974 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=5/12 budget=5/12 tool_turns=4 last_msg_role=assistant response_len=565 session=investigation-session:34b955d1654543e6acd2284f9ec24c7e"
+        ]
+      }
+    },
+    {
+      "turn_id": "investigation-turn:e117cdf55bcd46daa09af7fb11962923",
+      "session_id": "investigation-session:34b955d1654543e6acd2284f9ec24c7e",
+      "user": "在抖音调查，使用现有“独立测试通用舆情规则”和“深圳招聘”。这些测试资源按原样使用即可。请生成调查草案，不启动采集，不正式保存新资源。",
+      "status": "completed",
+      "answer": "草案已生成，没有启动采集、没有正式保存任何新资源。\n\n**调查草案**\n- 标题：全国招聘风险调查\n- 目标：调查全国招聘相关风险内容\n- 平台：抖音\n- 模式：搜索\n- 审核规则：独立测试通用舆情规则（v1，舆情领域，1 条规则）\n- 词库：深圳招聘\n- 实际搜索词：**舆情事件**\n\n**需要提醒你的一点**\n“深圳招聘”词库的实际搜索词是「舆情事件」，跟“招聘”无关，所以草案的实际搜索词是“舆情事件”，不是招聘相关内容。这是按你要求“原样使用”的结果，草案里已如实反映。\n\n**当前状态**\n抖音采集服务当前不可用（`collection_service_unavailable`），所以这个草案暂时**不能确认启动**，只能保留为草稿。等采集服务恢复后再确认即可。\n\n草案 ID：内部标识已隐藏（当前修订 1）。需要我调整标题、目标或搜索词的话告诉我。",
+      "safe_message": "",
+      "seconds": 19.64,
+      "accounting": {
+        "id": "investigation-turn:e117cdf55bcd46daa09af7fb11962923",
+        "status": "completed",
+        "input_tokens": 4389,
+        "output_tokens": 654,
+        "total_tokens": 32691,
+        "llm_call_count": 3,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "lexicon_ref": "resource-ref:0f57b7dc054c4cbcbadc2d7314b5094a",
+            "operation": "create",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:6afacaf1bfc74ecc827d1a3792cbc4cc",
+            "scope_decision": "none",
+            "title": "全国招聘风险调查",
+            "objective": "调查全国招聘相关风险内容"
+          }
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 9751,
+            "output_tokens": 188,
+            "total_tokens": 9939,
+            "latency_seconds": 4.5
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 10401,
+            "output_tokens": 230,
+            "total_tokens": 10631,
+            "latency_seconds": 5.2
+          },
+          {
+            "number": 3,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 11885,
+            "output_tokens": 236,
+            "total_tokens": 12121,
+            "latency_seconds": 5.8
+          }
+        ],
+        "llm_call_count": 3,
+        "total_tokens": 32691,
+        "tool_lifecycle_and_exit": [
+          "tool read_resource completed (0.01s, 1194 chars)",
+          "tool configure_investigation_draft completed (0.02s, 3292 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=3/12 budget=3/12 tool_turns=6 last_msg_role=assistant response_len=429 session=investigation-session:34b955d1654543e6acd2284f9ec24c7e"
+        ]
+      }
+    }
+  ],
+  "ended_at": "2026-10-15T08:58:21.445753+00:00",
+  "session_tool_receipts": []
+}

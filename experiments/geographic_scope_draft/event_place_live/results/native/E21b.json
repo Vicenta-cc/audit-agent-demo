@@ -1,0 +1,431 @@
+{
+  "id": "E21b",
+  "expectation": {
+    "status": "resolved",
+    "target": "克拉玛依市"
+  },
+  "sessions": [
+    "investigation-session:ca55068a0fe24caf825836fb1ae7b3b2"
+  ],
+  "setup": "real session preparation and model calls; E21 twice clean, temporary resources not precreated",
+  "started_at": "2026-10-15T08:46:33.553414+00:00",
+  "snapshot": {
+    "session_id": "investigation-session:ca55068a0fe24caf825836fb1ae7b3b2",
+    "draft": null,
+    "artifact_type": null
+  },
+  "evaluation": {
+    "pass": false,
+    "errors": [
+      "no persisted draft; clarification-only is recorded as incomplete",
+      "real temporary resource generation not successful: create_ruleset_proposal",
+      "real temporary resource generation not successful: create_lexicon_edit"
+    ]
+  },
+  "turns": [
+    {
+      "turn_id": "investigation-turn:49f4b22ecec944e999eb74f2763120b3",
+      "session_id": "investigation-session:ca55068a0fe24caf825836fb1ae7b3b2",
+      "user": "调查克拉玛依大火",
+      "status": "completed",
+      "answer": "现在情况清楚了。\n\n**调查克拉玛依大火**（事件地域：克拉玛依），当前可用的资源没有适配的：\n\n- **黑话库**：现有词库是暴恐、涉毒、赌博、软色情、民族意识形态、诈骗等，以及一个通用舆情词库（实际搜索词只有「舆情事件」），没有一个针对火灾事故或克拉玛依事件的搜索词。\n- **审核规则**：只有「独立测试通用舆情规则」（1 条「未经证实断言」通用条款）和「赌博博彩风险规则集」，前者可以通用兜底，但没有针对重大安全事故讨论的专门条款。\n\n所以现在缺一个能搜到「克拉玛依大火」相关讨论的黑话库。通用舆情词库的「舆情事件」太宽泛，搜不到这个具体事件。\n\n**要不要我帮你生成这次的临时搜索词**（比如「克拉玛依大火」相关词），用于本次调查？生成后你确认了，我再用它加上通用舆情规则建草案。",
+      "safe_message": "",
+      "seconds": 34.74,
+      "accounting": {
+        "id": "investigation-turn:49f4b22ecec944e999eb74f2763120b3",
+        "status": "completed",
+        "input_tokens": 13827,
+        "output_tokens": 1043,
+        "total_tokens": 65558,
+        "llm_call_count": 7,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "query_investigation_options"
+        },
+        {
+          "name": "tool_search"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 6759,
+            "output_tokens": 82,
+            "total_tokens": 6841,
+            "latency_seconds": 3.7
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 8393,
+            "output_tokens": 83,
+            "total_tokens": 8476,
+            "latency_seconds": 2.9
+          },
+          {
+            "number": 3,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 8508,
+            "output_tokens": 183,
+            "total_tokens": 8691,
+            "latency_seconds": 4.4
+          },
+          {
+            "number": 4,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 9143,
+            "output_tokens": 152,
+            "total_tokens": 9295,
+            "latency_seconds": 3.5
+          },
+          {
+            "number": 5,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 9483,
+            "output_tokens": 142,
+            "total_tokens": 9625,
+            "latency_seconds": 3.5
+          },
+          {
+            "number": 6,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 10625,
+            "output_tokens": 189,
+            "total_tokens": 10814,
+            "latency_seconds": 5.5
+          },
+          {
+            "number": 7,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 11604,
+            "output_tokens": 212,
+            "total_tokens": 11816,
+            "latency_seconds": 6.4
+          }
+        ],
+        "llm_call_count": 7,
+        "total_tokens": 65558,
+        "tool_lifecycle_and_exit": [
+          "tool query_investigation_options completed (0.02s, 3974 chars)",
+          "tool read_resource completed (0.01s, 1194 chars)",
+          "tool read_resource completed (0.01s, 1394 chars)",
+          "tool read_resource completed (0.00s, 624 chars)",
+          "tool read_resource completed (0.01s, 1402 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=7/12 budget=7/12 tool_turns=6 last_msg_role=assistant response_len=345 session=investigation-session:ca55068a0fe24caf825836fb1ae7b3b2"
+        ]
+      }
+    },
+    {
+      "turn_id": "investigation-turn:a34d6c2a548c4f1fa3fb0ae9de44f96c",
+      "session_id": "investigation-session:ca55068a0fe24caf825836fb1ae7b3b2",
+      "user": "对，在抖音调查这件事。请真实生成本次调查临时使用的审核规则和黑话库，完整展示给我，不正式保存，也不启动采集。",
+      "status": "completed",
+      "answer": "两项临时资源都已生成，均为会话编辑稿，未正式保存、未启动采集。以下是完整内容。\n\n## 审核规则（临时）\n\n**名称**：克拉玛依大火舆情不实信息审核规则\n**领域**：重大安全事故舆情\n**审核目标**：识别抖音上围绕克拉玛依大火的不实信息，打击旧闻当新闻翻炒、伪造官方通报、捏造伤亡细节、误导性剪辑、煽动性谣言等；保留正常报道、悼念与理性讨论。\n\n**全局豁免**：\n- 正常新闻报道豁免（正规媒体来源、无伪造歪曲）\n- 悼念与理性讨论豁免（不含不实数字、伪官方身份或煽动）\n- 普通批评与情绪表达豁免（无虚构事实、无冒充信源）\n\n| 分类 | 规则 | 风险 |\n|---|---|---|\n| 旧闻当新闻翻炒 | 旧闻当新发事故翻炒 | 高 |\n| 旧闻当新闻翻炒 | 无明显时间标注重新翻炒旧闻 | 中 |\n| 伪造官方通报/冒充信源 | 伪造官方通报 | 高 |\n| 伪造官方通报/冒充信源 | 冒充官方信源发布虚假消息 | 高 |\n| 捏造伤亡数字/事故细节 | 捏造伤亡数字 | 高 |\n| 捏造伤亡数字/事故细节 | 捏造事故经过或内幕细节 | 中 |\n| 误导性剪辑视频 | 误导性视频剪辑 | 高 |\n| 煽动性谣言 | 煽动性事故谣言 | 高 |\n| 其他重大不实信息兜底 | 重大不实信息兜底 | 中 |\n\n## 黑话库（临时）\n\n**名称**：克拉玛依大火事件讨论搜索词\n**风险标签**：公共事件信息真实性与传播方式\n\n两个主题主词下共 7 个启用变体，实际搜索词为：\n\n- 克拉玛依大火\n- 克拉玛依火灾\n- 克拉玛依友谊馆火灾\n- 克拉玛依1994火灾\n- 克拉玛依大火真相\n- 克拉玛依大火内幕\n- 克拉玛依大火揭秘\n\n这两份都是临时稿，等你明确说采用，我再拿它们建调查草案；也可以只采用其中一份。需要调整哪部分告诉我即可。\n\n临时审核规则 · 完整规则快照\n名称：克拉玛依大火舆情不实信息审核规则\n领域：重大安全事故舆情\n版本：1\n方案标识：ruleset-proposal:f03838d1072b41c188b4191117b6d3b8\n内容指纹：eddadd7b8a3c2e32a504e3530977d883310c97fb60b60fea1e243701db67964b\n研判目标：识别抖音平台上围绕克拉玛依大火这一重大火灾事故的破坏社会稳定内容，重点打击把旧闻当新闻重新翻炒、伪造官方通报或冒充官方信源、捏造伤亡数字或细节、误导性剪辑视频、煽动性谣言等不实信息。保留正常新闻报道、事实陈述、悼念和理性讨论，不把普通批评或情绪表达直接判为违规。规则基于抖音平台文本、图片、视频帧、OCR、ASR及评论等多模态证据进行审核，最终由 fusion_audit 阶段完成综合判定。\n分类数：6；规则数：9\n通用豁免：\n- 正常新闻报道豁免（normal_news_report）\n  条件：内容属于有明确正规媒体来源的正常新闻报道、事实陈述或现场实录，未包含伪造、歪曲、捏造或煽动性不实信息。\n- 悼念与理性讨论豁免（mourning_rational_discussion）\n  条件：内容属于对事故遇难者的正常悼念、对事故教训的理性讨论或平和的事实复述，未包含不实伤亡数字、伪造官方身份或煽动性谣言。\n- 普通批评与情绪表达豁免（ordinary_emotion_criticism）\n  条件：内容为个人对事故的普通批评、悲伤或关切情绪表达，未包含明确的虚构事实、冒充官方信源或煽动性不实信息。\n\n分类：旧闻当新闻翻炒（old_news_recirculation，排序 10）\n说明：将历史火灾事故或旧信息重新包装为新发生事件，误导公众判断和舆情方向。\n\n规则 1：旧闻当新发事故翻炒（old_fire_as_new）\n启用：是；排序：10\n命中条件：内容以近期或新发生叙事方式呈现历史克拉玛依大火事故，并满足任一：明示或暗示该事故刚刚发生、使用当前时间语境包装旧影像或旧信息；或将旧事故与近期事件混剪、拼接制造新舆情。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：本规则针对将克拉玛依大火历史事件伪装为新发事故的误导行为。命中必要条件是该内容具有以新近发生口径呈现旧闻的特征；单纯发布历史资料但未标注为近期事故不命中。普通纪念或历史回顾内容不属于风险。\n规则豁免：\n- 明确历史回顾标识豁免（historical_review_labeled）\n  条件：内容明确标注为历史回顾、纪念、档案资料或专题回顾，未以新发生事故的口吻或时间标签呈现。\n\n规则 2：无明显时间标注重新翻炒旧闻（old_news_recirculated_without_context）\n启用：是；排序：20\n命中条件：内容发布或搬运克拉玛依大火相关旧影像、旧文字或旧信息，无明确历史回顾标识，且发布时间或标签使其在抖音上被受众理解为新发事故或新动态。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：本规则针对无时间上下文的旧闻翻炒，要求综合发布情境、文案和画面判断是否可能被误解为新发事件。有明确档案日期或历史说明则不命中。\n规则豁免：\n- 明确日期档案资料豁免（clearly_dated_archive）\n  条件：内容显著标注原始事发日期、来源及历史档案属性，不会使一般受众误认为新发事故。\n\n分类：伪造官方通报或冒充官方信源（fake_official_notice，排序 20）\n说明：伪造或仿冒官方通报、冒充官方账号或权威信源发布虚假信息，扰乱事故舆情。\n\n规则 3：伪造官方通报（fake_official_notice_climate）\n启用：是；排序：10\n命中条件：内容伪造、仿冒或篡改与克拉玛依大火相关的官方通报、通知、新闻稿、立案调查书、伤亡统计或救援通报，并以官方口吻发布或传播。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：需重点核查通报文本、字号、落款、公章及发布来源。只要具有伪造或仿冒官方信息意图，即予命中。真实官方通报转载不命中。\n规则豁免：\n- 真实官方通报转载豁免（genuine_official_repost）\n  条件：内容为明确可核验的真实官方通报原文转载或链接，未篡改关键信息。\n\n规则 4：冒充官方信源发布虚假消息（impersonating_official_claims）\n启用：是；排序：20\n命中条件：内容冒用官方机构、官员、救援指挥、调查组或权威媒体名义，发布克拉玛依大火相关的伤亡数字、原因、进展或处理结果，且该信息无法核实或系虚假。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：强调冒用身份制造权威感以传播不实信息。命中条件同时包括冒充官方信源和内容不实或无法核实。\n规则豁免：\n- 可核验官方信息豁免（verified_official_quote）\n  条件：信息来自可核验的官方账号、官方发布会或权威媒体确证报道，非虚构引用。\n\n分类：捏造伤亡数字或事故细节（fabricated_facts，排序 30）\n说明：虚构事故伤亡数字、原因、经过或处理措施，制造恐慌和误导。\n\n规则 5：捏造伤亡数字（fabricated_casualty_numbers）\n启用：是；排序：10\n命中条件：内容明确发布或传播未经确认、明显夸大或虚构的克拉玛依大火伤亡数字，并以真实事故信息包装。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：重点识别与公开权威信息不符或无来源的伤亡数字，且具有真实性包装。若数字与官方数据一致或有可验证来源，则不命中。\n规则豁免：\n- 官方确认数字豁免（officially_confirmed_numbers）\n  条件：所述伤亡数字与官方通报或权威报道一致，或来源可核验。\n\n规则 6：捏造事故经过或内幕细节（fabricated_incident_details）\n启用：是；排序：20\n命中条件：内容编造与克拉玛依大火相关的事故原因、起火点、责任人处理、救援过程或内部细节，伪造目击者陈述、内部文件或聊天记录。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：需关注伪造聊天记录、内部文件或目击说法等虚构细节。合理讨论和基于资料的分析不命中。\n规则豁免：\n- 基于记录的合理讨论豁免（documented_discussion）\n  条件：内容基于可核验资料或权威报道进行事实讨论，未虚构细节或伪造证据。\n\n分类：误导性剪辑视频（misleading_editing，排序 40）\n说明：通过剪辑、拼接、配音、字幕或特效手段误导受众理解和事故真实情况。\n\n规则 7：误导性视频剪辑（misleading_video_edit）\n启用：是；排序：10\n命中条件：视频内容包含与克拉玛依大火相关的误导性剪辑，并满足任一：将事故画面与他处火灾或无关画面拼接、错位时间标注；通过配音、字幕或特效改变事故真实经过或夸大后果；以伪纪录片、伪直播或伪现场方式误导受众。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：命中条件为存在误导性剪辑行为并改变事故真实认知。明确标注的复原、模拟演示不冒充真实现场不命中。\n规则豁免：\n- 明确标注复原或演示豁免（clearly_marked_reenactment）\n  条件：视频显眼标注为事故复原、模拟推演、警示片或艺术化演示，不冒充真实事故画面。\n\n分类：煽动性谣言（incendiary_rumors，排序 50）\n说明：通过谣言制造恐慌、仇恨或对立，破坏社会稳定和事故舆情秩序。\n\n规则 8：煽动性事故谣言（incendiary_accident_rumors）\n启用：是；排序：10\n命中条件：内容发布或传播克拉玛依大火相关谣言，并包含煽动性表达，满足任一：煽动抵制官方救援、辱骂或攻击特定群体；故意渲染事故扩大化或后续灾难，制造社会恐慌；号召非法聚集、冲击相关场所或对抗处置。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：必须同时包含谣言和煽动性号召或煽动性对立表达。普通悲伤、批评或关切不命中。\n规则豁免：\n- 普通悲伤关切豁免（ordinary_sadness_concern）\n  条件：内容仅为普通人员对事故的悲伤、关切或求助，无虚构事实、无煽动对抗或聚集号召。\n\n分类：其他重大不实信息兜底（false_info_general，排序 60）\n说明：对未覆盖于上述具体类别的重大不实信息进行最终兜底识别。\n\n规则 9：重大不实信息兜底（major_false_info_fallback）\n启用：是；排序：10\n命中条件：内容明确传播关于克拉玛依大火的重大虚假信息，且满足任一：相关信息直接影响公众对事故性质、规模或处理的认知；有意误导舆论或制造恐慌；该信息无法通过上述具体规则类别处理。\n建议风险：medium\n应用阶段：fusion_audit\n裁决说明：本规则仅在重大不实信息无法归入上述明确规则时使用，避免重复判定。细微出入、普通推测且无重大后果的不命中。\n规则豁免：\n- 非重大细微出入豁免（non_impacting_correction）\n  条件：内容属于不改变公众对事故基本认知的细微出入、口误或普通推测，无重大误导后果。",
+      "safe_message": "",
+      "seconds": 96.74,
+      "accounting": {
+        "id": "investigation-turn:a34d6c2a548c4f1fa3fb0ae9de44f96c",
+        "status": "completed",
+        "input_tokens": 13549,
+        "output_tokens": 994,
+        "total_tokens": 54991,
+        "llm_call_count": 3,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "create_ruleset_proposal"
+        },
+        {
+          "name": "create_lexicon_edit"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 11854,
+            "output_tokens": 100,
+            "total_tokens": 11954,
+            "latency_seconds": 3.9
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 18531,
+            "output_tokens": 399,
+            "total_tokens": 18930,
+            "latency_seconds": 9.0
+          },
+          {
+            "number": 3,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 23612,
+            "output_tokens": 495,
+            "total_tokens": 24107,
+            "latency_seconds": 8.9
+          }
+        ],
+        "llm_call_count": 3,
+        "total_tokens": 54991,
+        "tool_lifecycle_and_exit": [
+          "tool tool_describe completed (0.00s, 7069 chars)",
+          "tool tool_describe completed (0.00s, 9748 chars)",
+          "tool create_ruleset_proposal completed (48.82s, 7193 chars)",
+          "tool create_lexicon_edit completed (8.96s, 4055 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=3/12 budget=3/12 tool_turns=8 last_msg_role=assistant response_len=780 session=investigation-session:ca55068a0fe24caf825836fb1ae7b3b2"
+        ]
+      }
+    },
+    {
+      "turn_id": "investigation-turn:f4398eadda7b42869177400841ada2db",
+      "session_id": "investigation-session:ca55068a0fe24caf825836fb1ae7b3b2",
+      "user": "就用刚才展示的这份临时审核规则和黑话库，生成调查草案，不启动采集，不正式保存资源。",
+      "status": "error",
+      "answer": "",
+      "safe_message": "还没创建完成：我已完成前面所有步骤，但最后一次创建草案的调用还未执行。\n\n已就绪的内容：\n- 临时审核规则和黑话库都已生成并完整展示，均未保存、未启动采集。\n- 我已取得两份临时资源的精确引用，随时可以绑入草案。\n\n尚未完成：\n- **调查草案尚未创建**。\n\n请再发一句“继续”或“创建草案”，我就用这两份临时资源、抖音平台、克拉玛依地域配置生成调查草案，仍然不启动采集、不正式保存。",
+      "seconds": 113.23,
+      "accounting": {
+        "id": "investigation-turn:f4398eadda7b42869177400841ada2db",
+        "status": "error",
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "llm_call_count": 0,
+        "stop_reason": "error",
+        "error_code": "hermes_execution_failed",
+        "safe_message": "还没创建完成：我已完成前面所有步骤，但最后一次创建草案的调用还未执行。\n\n已就绪的内容：\n- 临时审核规则和黑话库都已生成并完整展示，均未保存、未启动采集。\n- 我已取得两份临时资源的精确引用，随时可以绑入草案。\n\n尚未完成：\n- **调查草案尚未创建**。\n\n请再发一句“继续”或“创建草案”，我就用这两份临时资源、抖音平台、克拉玛依地域配置生成调查草案，仍然不启动采集、不正式保存。"
+      },
+      "model_tool_calls": [],
+      "configure_describe_receipts": [],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 24294,
+            "output_tokens": 50,
+            "total_tokens": 24344,
+            "latency_seconds": 3.4
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 25764,
+            "output_tokens": 75,
+            "total_tokens": 25839,
+            "latency_seconds": 3.5
+          },
+          {
+            "number": 3,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 25978,
+            "output_tokens": 94,
+            "total_tokens": 26072,
+            "latency_seconds": 3.9
+          },
+          {
+            "number": 4,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 29126,
+            "output_tokens": 150,
+            "total_tokens": 29276,
+            "latency_seconds": 5.0
+          },
+          {
+            "number": 5,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 29738,
+            "output_tokens": 122,
+            "total_tokens": 29860,
+            "latency_seconds": 5.3
+          },
+          {
+            "number": 6,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 30879,
+            "output_tokens": 129,
+            "total_tokens": 31008,
+            "latency_seconds": 4.6
+          },
+          {
+            "number": 7,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 32031,
+            "output_tokens": 71,
+            "total_tokens": 32102,
+            "latency_seconds": 3.8
+          },
+          {
+            "number": 8,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 32397,
+            "output_tokens": 162,
+            "total_tokens": 32559,
+            "latency_seconds": 5.4
+          },
+          {
+            "number": 9,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 33449,
+            "output_tokens": 73,
+            "total_tokens": 33522,
+            "latency_seconds": 3.5
+          },
+          {
+            "number": 10,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 34247,
+            "output_tokens": 354,
+            "total_tokens": 34601,
+            "latency_seconds": 7.9
+          },
+          {
+            "number": 11,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 35321,
+            "output_tokens": 895,
+            "total_tokens": 36216,
+            "latency_seconds": 15.0
+          },
+          {
+            "number": 12,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 39685,
+            "output_tokens": 175,
+            "total_tokens": 39860,
+            "latency_seconds": 4.8
+          }
+        ],
+        "llm_call_count": 12,
+        "total_tokens": 375259,
+        "tool_lifecycle_and_exit": [
+          "tool tool_describe completed (0.00s, 3682 chars)",
+          "tool tool_describe completed (0.00s, 477 chars)",
+          "tool get_ruleset_proposal completed (0.01s, 7193 chars)",
+          "tool read_resource completed (0.01s, 1194 chars)",
+          "tool tool_search completed (0.00s, 2571 chars)",
+          "tool tool_search completed (0.00s, 2578 chars)",
+          "tool tool_describe completed (0.00s, 705 chars)",
+          "tool tool_search completed (0.00s, 2413 chars)",
+          "tool tool_search completed (0.00s, 1980 chars)",
+          "tool tool_search completed (0.00s, 1972 chars)",
+          "tool tool_describe completed (0.00s, 720 chars)",
+          "tool tool_describe completed (0.00s, 9805 chars)",
+          "tool get_resource_edit completed (0.01s, 15558 chars)",
+          "reason=max_iterations_reached(12/12) model=deepseek-v4-pro-ga-260813 api_calls=12/12 budget=12/12 tool_turns=20 last_msg_role=assistant response_len=193 session=investigation-session:ca55068a0fe24caf825836fb1ae7b3b2"
+        ]
+      }
+    }
+  ],
+  "ended_at": "2026-10-15T08:50:38.314670+00:00",
+  "session_tool_receipts": []
+}

@@ -29,12 +29,14 @@ from .contracts import (
     InvestigationDraftView,
     QueryInvestigationOptions,
     StrictModel,
+    TemporaryRuleSetProposal,
     UpdateDraftCommand,
 )
 from .errors import IdempotencyConflictError
 from . import draft_operations, continuity
 from backend.audit_agent.config import settings
 from .principal import Principal
+from .public_projection import tool_draft_view
 from .approval import UseRuleSetProposalInput
 from .resource_ref_inputs import (
     ToolDraftConfiguration, ToolUseRuleSetProposalInput, resolve_arguments,
@@ -383,6 +385,14 @@ for _authoring_tool in ("update_ruleset_proposal",):
     M3_TOOL_DESCRIPTIONS[_authoring_tool] += "\n" + RULESET_AUTHORING_GUIDANCE
 
 M3_TOOL_DESCRIPTIONS.update(RESOURCE_DESCRIPTIONS)
+for _proposal_tool in ('create_ruleset_proposal', 'get_ruleset_proposal', 'update_ruleset_proposal'):
+    M3_TOOL_DESCRIPTIONS[_proposal_tool] += (
+        ' 成功返回准确版本的 resource_ref，后续用户明确采用后直接传给 configure_investigation_draft.ruleset_ref，'
+        '无需另调工具转换引用。完整正文在 proposal_snapshot.content，proposal_snapshot 是完整展示快照；'
+        'proposal_id/version 为轻量别名，局部编辑使用 update_arguments 加 changes 调 update_resource_edit。'
+        '引用不代表采用、正式保存或启动。失败回执若 write_status=COMMITTED，规则已写入；'
+        '保持原调用身份和参数恢复，不重新生成或猜新版。'
+    )
 
 # Attach guidance before freezing the schemas used by deferred discovery.
 M3_PARAMETER_GUIDANCE = {
@@ -410,7 +420,8 @@ M3_PARAMETER_GUIDANCE = {
         '仅用于用户提供完整替换内容；局部修改请用 update_resource_edit（edit_id=proposal_id），不要抄写整套规则。'
         '参数为 proposal_id、expected_version、content（完整新内容）。不是局部 '
         'patch，也不传 ruleset_id。expected_version 必须逐字取自 get_ruleset_proposal 返回的 version，不可省略或自行加一。'
-        '只有修改工具返回 status=ok 才能宣称修改完成，版本以返回结果为准；报错时如实说明未完成，不把拟修改文字当作已写入。'
+        '修改是否落地以实际回执为准；status=ok 时按返回版本报告；write_status=COMMITTED 表示修改已提交但引用或响应需恢复；'
+        '其他失败不把拟修改文字当作已写入。'
     ),
     'get_ruleset_proposal': (
         '参数只有 proposal_id，使用工具返回的真实 ID。'
@@ -612,7 +623,7 @@ class InvestigationCreationToolService:
             with draft_operations.validation_phase(create_operation is not None):
                 draft = configure.execute(self, parsed, principal=principal, session_id=session_id,
                     identity=runtime_identity, create_operation=create_operation, mutation_receipt=mutation_receipt)
-            return self.application_service.get_draft_view(draft.id, principal=principal).model_dump(mode='json')
+            return tool_draft_view(self.application_service.get_draft_view(draft.id, principal=principal))
         resource_ref = None
         generation_profile = None
         if tool_name in {'create_investigation_draft', 'update_investigation_draft', 'use_ruleset_proposal'}:
@@ -673,12 +684,14 @@ class InvestigationCreationToolService:
             )
         elif tool_name == "create_ruleset_proposal":
             result = self.application_service.create_ruleset_proposal(
-                parsed.content, session_id=session_id
+                parsed.content, session_id=session_id,
+                mutation_receipt=mutation_receipt, principal=principal,
             )
         elif tool_name == "update_ruleset_proposal":
             result = self.application_service.update_ruleset_proposal(
                 parsed.proposal_id, session_id=session_id,
                 expected_version=parsed.expected_version, content=parsed.content,
+                mutation_receipt=mutation_receipt, principal=principal,
             )
         elif tool_name == "get_ruleset_proposal":
             result = self.application_service.get_ruleset_proposal(
@@ -750,7 +763,11 @@ class InvestigationCreationToolService:
             result = self.application_service.get_run(
                 parsed.run_id, principal=principal
             )
-        return result.model_dump(mode="json", warnings=False)
+        if isinstance(result, TemporaryRuleSetProposal):
+            from backend.resource_management.ruleset_refs import proposal_view
+            return proposal_view(self.application_service.store, result, principal=principal, session_id=session_id)
+        return (tool_draft_view(result) if isinstance(result, InvestigationDraftView)
+                else result.model_dump(mode="json", warnings=False))
 
     def execute_with_identity(
         self,
@@ -786,6 +803,18 @@ class InvestigationCreationToolService:
         contract_error = argument_error(tool_name, raw_arguments)
         if contract_error:
             return contract_error
+        # Historical successful creates predate the explicit scope decision.
+        # Replay only the exact immutable success; never synthesize a decision
+        # or claim a receipt before validating a new/failed request.
+        if (tool_name == configure.NAME and raw_arguments.get('operation') == 'create'
+                and 'scope_decision' not in raw_arguments):
+            historical = self.application_service.store.successful_tool_execution_response(
+                session_id=identity.session_id, turn_id=identity.turn_id,
+                tool_call_id=identity.tool_call_id, principal=principal.id,
+                tool_name=tool_name, arguments=raw_arguments,
+            )
+            if historical is not None:
+                return historical
         if tool_name in M3_MUTATION_TOOL_NAMES:
             try:
                 M3_TOOL_INPUTS[tool_name].model_validate(raw_arguments)
@@ -865,16 +894,22 @@ class InvestigationCreationToolService:
                     application_turn_id=application_turn_id,
                 )
                 if receipt["replay"]:
+                    if (tool_name in {'create_ruleset_proposal', 'update_ruleset_proposal'}
+                            and receipt['status'] != 'SUCCEEDED'
+                            and (receipt['response'] or {}).get('status') != 'ok'):
+                        committed = self.application_service.store.committed_proposal_write(receipt['receipt_id'], principal.id)
+                        if committed:
+                            return self.application_service.store.recover_proposal_write(
+                                receipt['receipt_id'], principal, session_id=identity.session_id)
                     if receipt['status'] != 'SUCCEEDED' and tool_name == configure.NAME:
                         committed = self.application_service.store.committed_draft_write(receipt['receipt_id'], principal.id)
                         if committed:
                             view = self.application_service.get_draft_view(committed[0], principal=principal)
                             if view.draft.current_revision != committed[1]:
-                                from .errors import IdempotencyConflictError
                                 raise IdempotencyConflictError('修改已提交，草案之后又有更新；请读取当前草案，不要重复修改。',
                                     code='DRAFT_WRITE_SUPERSEDED', details={'write_status': 'COMMITTED',
                                     'mutation_applied': True, 'draft_id': committed[0], 'committed_revision': committed[1]})
-                            recovered = {'status': 'ok', 'data': view.model_dump(mode='json')}
+                            recovered = {'status': 'ok', 'data': tool_draft_view(view)}
                             self.application_service.store.recover_draft_write(receipt['receipt_id'], principal.id, recovered)
                             return recovered
                     if receipt["status"] != "SUCCEEDED":
@@ -906,17 +941,18 @@ class InvestigationCreationToolService:
                 draft = self.application_service.store.get_created_draft(
                     receipt['operation_id'], principal=principal.id,
                 )
-                payload = InvestigationDraftView(draft=draft,
+                payload = tool_draft_view(InvestigationDraftView(draft=draft,
                     confirmation_preview=self.application_service.resource_service.confirmation_preview(
                         draft, principal=principal),
-                ).model_dump(mode='json', warnings=False)
+                ))
             else:
                 payload = self.execute(
                     tool_name,
                     raw_arguments,
                     principal=principal,
                     session_id=identity.session_id,
-                    **({"mutation_receipt": receipt["receipt_id"]} if receipt and tool_name == configure.NAME else {}),
+                    **({"mutation_receipt": receipt["receipt_id"]} if receipt and tool_name in {
+                        configure.NAME, 'create_ruleset_proposal', 'update_ruleset_proposal'} else {}),
                     **({"runtime_identity": identity} if tool_name in {"use_ruleset_proposal", configure.NAME} else {}),
                     **({'create_operation': (receipt['operation_id'], receipt['receipt_id'])}
                        if receipt and receipt.get('operation_id') else {}),
@@ -931,6 +967,15 @@ class InvestigationCreationToolService:
                     "details": dict(getattr(exc, "details", {}) or {}),
                 },
             }
+        if (receipt is not None and result['status'] == 'error'
+                and tool_name in {'create_ruleset_proposal', 'update_ruleset_proposal'}):
+            committed = self.application_service.store.committed_proposal_write(receipt['receipt_id'], principal.id)
+            if committed:
+                result['error'].setdefault('details', {}).update(
+                    write_status='COMMITTED', mutation_applied=True, resource_created=tool_name == 'create_ruleset_proposal',
+                    proposal_id=committed.proposal_id, committed_version=committed.version,
+                    content_hash=committed.content_hash,
+                    recovery='规则已提交；保持原调用身份和参数恢复，或读取核对当前稿，不重新生成或重复修改。')
         if receipt is not None and not receipt.get("replay"):
             if tool_name == configure.NAME and result['status'] == 'error':
                 committed = self.application_service.store.committed_draft_write(receipt['receipt_id'], principal.id)

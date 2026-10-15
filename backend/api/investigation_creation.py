@@ -10,7 +10,7 @@ from backend.api.contracts import (
     PublicInvestigationDraft,
     PublicInvestigationRunProjection,
 )
-from backend.investigation_creation.public_projection import public_draft, public_run
+from backend.investigation_creation.public_projection import public_draft, public_run, PublicDraftConfiguration
 
 from backend.investigation_creation.contracts import (
     ConfirmAndQueueCommand,
@@ -48,7 +48,7 @@ class RequestModel(BaseModel):
 class CreateDraftRequest(RequestModel):
     title: str = Field(min_length=1, max_length=300)
     objective: str = Field(min_length=1, max_length=4_000)
-    configuration: InvestigationDraftConfiguration
+    configuration: PublicDraftConfiguration
 
     @field_validator("title", "objective", mode="before")
     @classmethod
@@ -60,7 +60,7 @@ class UpdateDraftRequest(RequestModel):
     expected_revision: int = Field(ge=1)
     title: str | None = Field(default=None, min_length=1, max_length=300)
     objective: str | None = Field(default=None, min_length=1, max_length=4_000)
-    configuration: InvestigationDraftConfiguration | None = None
+    configuration: PublicDraftConfiguration | None = None
 
     @field_validator("title", "objective", mode="before")
     @classmethod
@@ -135,9 +135,11 @@ def create_investigation_creation_router(
         principal: Principal = Depends(provide_principal),
     ) -> PublicInvestigationDraft:
         try:
+            body = request.model_dump()
+            body['configuration'] = service.public_configuration_input(request.configuration, principal=principal)
             return public_draft(
                 service.create_draft(
-                    CreateDraftCommand(**request.model_dump()), principal=principal
+                    CreateDraftCommand(**body), principal=principal
                 )
             )
         except Exception as exc:
@@ -153,9 +155,13 @@ def create_investigation_creation_router(
         principal: Principal = Depends(provide_principal),
     ) -> PublicInvestigationDraft:
         try:
+            body = request.model_dump()
+            if request.configuration is not None:
+                body['configuration'] = service.public_configuration_input(request.configuration,
+                    principal=principal, draft_id=draft_id)
             return public_draft(
                 service.update_draft(
-                    UpdateDraftCommand(draft_id=draft_id, **request.model_dump()),
+                    UpdateDraftCommand(draft_id=draft_id, **body),
                     principal=principal,
                 )
             )

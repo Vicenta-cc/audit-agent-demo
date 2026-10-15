@@ -1,0 +1,569 @@
+{
+  "alias_ambiguities": {
+    "东兴": [
+      "450681",
+      "511011"
+    ],
+    "东安": [
+      "231002",
+      "431122"
+    ],
+    "东山": [
+      "230406",
+      "350626"
+    ],
+    "东港": [
+      "210681",
+      "371102"
+    ],
+    "东营": [
+      "370500",
+      "370502"
+    ],
+    "中山": [
+      "210202",
+      "442000"
+    ],
+    "临夏": [
+      "622901",
+      "622921"
+    ],
+    "乌鲁木齐": [
+      "650100",
+      "650121"
+    ],
+    "云龙": [
+      "320303",
+      "532929"
+    ],
+    "五华": [
+      "441424",
+      "530102"
+    ],
+    "伊宁": [
+      "654002",
+      "654021"
+    ],
+    "克拉玛依": [
+      "650200",
+      "650203"
+    ],
+    "兴宁": [
+      "441481",
+      "450102"
+    ],
+    "兴安": [
+      "230405",
+      "450325"
+    ],
+    "兴山": [
+      "230407",
+      "420526"
+    ],
+    "华容": [
+      "420703",
+      "430623"
+    ],
+    "南山": [
+      "230404",
+      "440305"
+    ],
+    "南山区": [
+      "230404",
+      "440305"
+    ],
+    "南昌": [
+      "360100",
+      "360121"
+    ],
+    "南沙": [
+      "440115",
+      "460303"
+    ],
+    "南沙区": [
+      "440115",
+      "460303"
+    ],
+    "台江": [
+      "350103",
+      "522630"
+    ],
+    "吉安": [
+      "360800",
+      "360821"
+    ],
+    "吉林": [
+      "220000",
+      "220200"
+    ],
+    "向阳": [
+      "230402",
+      "230803"
+    ],
+    "向阳区": [
+      "230402",
+      "230803"
+    ],
+    "和平": [
+      "120101",
+      "210102",
+      "441624"
+    ],
+    "和平区": [
+      "120101",
+      "210102"
+    ],
+    "和田": [
+      "653201",
+      "653221"
+    ],
+    "城": [
+      "140302",
+      "140502",
+      "441502"
+    ],
+    "城中": [
+      "450202",
+      "630103"
+    ],
+    "城中区": [
+      "450202",
+      "630103"
+    ],
+    "城关": [
+      "540102",
+      "620102"
+    ],
+    "城关区": [
+      "540102",
+      "620102"
+    ],
+    "城区": [
+      "140302",
+      "140502",
+      "441502"
+    ],
+    "大同": [
+      "140200",
+      "230606"
+    ],
+    "大安": [
+      "220882",
+      "510304"
+    ],
+    "太和": [
+      "210711",
+      "341222"
+    ],
+    "安宁": [
+      "530181",
+      "620105"
+    ],
+    "安阳": [
+      "410500",
+      "410522"
+    ],
+    "宝山": [
+      "230506",
+      "310113"
+    ],
+    "宝山区": [
+      "230506",
+      "310113"
+    ],
+    "山阳": [
+      "410811",
+      "611024"
+    ],
+    "岳阳": [
+      "430600",
+      "430621"
+    ],
+    "市中": [
+      "370103",
+      "370402",
+      "511002",
+      "511102"
+    ],
+    "市中区": [
+      "370103",
+      "370402",
+      "511002",
+      "511102"
+    ],
+    "平山": [
+      "130131",
+      "210502"
+    ],
+    "广安": [
+      "511600",
+      "511602"
+    ],
+    "开平": [
+      "130205",
+      "440783"
+    ],
+    "承德": [
+      "130800",
+      "130821"
+    ],
+    "抚顺": [
+      "210400",
+      "210421"
+    ],
+    "新乡": [
+      "410700",
+      "410721"
+    ],
+    "新兴": [
+      "230902",
+      "445321"
+    ],
+    "新华": [
+      "130105",
+      "130902",
+      "410402"
+    ],
+    "新华区": [
+      "130105",
+      "130902",
+      "410402"
+    ],
+    "新城": [
+      "150102",
+      "610102"
+    ],
+    "新城区": [
+      "150102",
+      "610102"
+    ],
+    "昌邑": [
+      "220202",
+      "370786"
+    ],
+    "普陀": [
+      "310107",
+      "330903"
+    ],
+    "普陀区": [
+      "310107",
+      "330903"
+    ],
+    "朝阳": [
+      "110105",
+      "211300",
+      "211321",
+      "220104"
+    ],
+    "朝阳区": [
+      "110105",
+      "220104"
+    ],
+    "栖霞": [
+      "320113",
+      "370686"
+    ],
+    "桥西": [
+      "130104",
+      "130703"
+    ],
+    "桥西区": [
+      "130104",
+      "130703"
+    ],
+    "梨树": [
+      "220322",
+      "230305"
+    ],
+    "永定": [
+      "350803",
+      "430802"
+    ],
+    "永定区": [
+      "350803",
+      "430802"
+    ],
+    "沙湾": [
+      "511111",
+      "654203"
+    ],
+    "河东": [
+      "120102",
+      "371312"
+    ],
+    "河东区": [
+      "120102",
+      "371312"
+    ],
+    "河北": [
+      "120105",
+      "130000"
+    ],
+    "海南": [
+      "150303",
+      "460000"
+    ],
+    "海城": [
+      "210381",
+      "450502"
+    ],
+    "海州": [
+      "210902",
+      "320706"
+    ],
+    "海州区": [
+      "210902",
+      "320706"
+    ],
+    "淮安": [
+      "320800",
+      "320803"
+    ],
+    "清河": [
+      "130534",
+      "211204"
+    ],
+    "湘潭": [
+      "430300",
+      "430321"
+    ],
+    "濮阳": [
+      "410900",
+      "410928"
+    ],
+    "白云": [
+      "440111",
+      "520113"
+    ],
+    "白云区": [
+      "440111",
+      "520113"
+    ],
+    "白银": [
+      "620400",
+      "620402"
+    ],
+    "荆州": [
+      "421000",
+      "421003"
+    ],
+    "衡阳": [
+      "430400",
+      "430421"
+    ],
+    "襄城": [
+      "411025",
+      "420602"
+    ],
+    "西安": [
+      "220403",
+      "231005",
+      "610100"
+    ],
+    "西安区": [
+      "220403",
+      "231005"
+    ],
+    "西湖": [
+      "330106",
+      "360103"
+    ],
+    "西湖区": [
+      "330106",
+      "360103"
+    ],
+    "象山": [
+      "330225",
+      "450304"
+    ],
+    "资阳": [
+      "430902",
+      "512000"
+    ],
+    "辽阳": [
+      "211000",
+      "211021"
+    ],
+    "通化": [
+      "220500",
+      "220521"
+    ],
+    "通州": [
+      "110112",
+      "320612"
+    ],
+    "通州区": [
+      "110112",
+      "320612"
+    ],
+    "邵阳": [
+      "430500",
+      "430523"
+    ],
+    "郊": [
+      "140311",
+      "230811",
+      "340711"
+    ],
+    "郊区": [
+      "140311",
+      "230811",
+      "340711"
+    ],
+    "金川": [
+      "513226",
+      "620302"
+    ],
+    "钟山": [
+      "451122",
+      "520201"
+    ],
+    "铁东": [
+      "210302",
+      "220303"
+    ],
+    "铁东区": [
+      "210302",
+      "220303"
+    ],
+    "铁岭": [
+      "211200",
+      "211221"
+    ],
+    "铁西": [
+      "210106",
+      "210303",
+      "220302"
+    ],
+    "铁西区": [
+      "210106",
+      "210303",
+      "220302"
+    ],
+    "长宁": [
+      "310105",
+      "511524"
+    ],
+    "长安": [
+      "130102",
+      "610116"
+    ],
+    "长安区": [
+      "130102",
+      "610116"
+    ],
+    "长沙": [
+      "430100",
+      "430121"
+    ],
+    "青山": [
+      "150204",
+      "420107"
+    ],
+    "青山区": [
+      "150204",
+      "420107"
+    ],
+    "鹤山": [
+      "410602",
+      "440784"
+    ],
+    "黄山": [
+      "341000",
+      "341003"
+    ],
+    "鼓楼": [
+      "320106",
+      "320302",
+      "350102",
+      "410204"
+    ],
+    "鼓楼区": [
+      "320106",
+      "320302",
+      "350102",
+      "410204"
+    ],
+    "龙华": [
+      "440309",
+      "460106"
+    ],
+    "龙华区": [
+      "440309",
+      "460106"
+    ],
+    "龙山": [
+      "220402",
+      "433130"
+    ],
+    "龙港": [
+      "211403",
+      "330383"
+    ]
+  },
+  "date_boundary": "2026-09-02 is the upstream Git commit date, not an official administrative effective date. 2026-10-15 is the retrieval/review date.",
+  "evidence_boundary": "Local raw bytes, normalized bytes, deterministic transform, records and coverage shape verified. Authenticity and full-table completeness require review of the cited source and coverage_review; matching counts or invented fixtures cannot prove national coverage. Alias cross-level uniqueness requires review against county-level official evidence and is not established by a city-only table.",
+  "excluded_counts": {
+    "unsupported_township_or_street": 84,
+    "virtual_municipality_layer": 5
+  },
+  "gaps": [],
+  "kind_counts": {
+    "县": 1302,
+    "县级市": 398,
+    "地区": 7,
+    "地级市": 293,
+    "市辖区": 980,
+    "旗": 49,
+    "林区": 1,
+    "特别行政区": 2,
+    "特区": 1,
+    "盟": 3,
+    "直辖市": 4,
+    "省": 23,
+    "自治区": 5,
+    "自治县": 117,
+    "自治州": 30,
+    "自治旗": 3
+  },
+  "level_counts": {
+    "county": 2851,
+    "prefecture": 333,
+    "province": 34
+  },
+  "license": "MIT; retained in upstream/LICENSE and losslessly embedded in snapshot.json.",
+  "municipality_count": 4,
+  "production_output_allowed": true,
+  "record_count": 3218,
+  "records_sha256": "34324bc22cd202c30d91b529f18a694a10a58d64c933bd40b54305429c0e128f",
+  "sources": [
+    {
+      "coverage_review": "Third-party cn-division commit 88f2021ea21769bdb95d93699d8a625fcd9165ef, MIT. The raw snapshot envelope is derived; inputs preserve exact upstream bytes and SHA256. Commit date is not official effective date. 34 provinces supplemented from official sources; true prefecture/county types retained; 5 virtual municipality layers and 84 township/street rows excluded with audit trail. Province short forms and exact terminal 市/区/县 removal only for known true types are materialized offline as reviewed aliases; all cross-level conflicts retained. All 367 province/prefecture identities (including 297 supported P1 city targets (293 prefecture cities and four municipalities)) individually match independent official historical full-table evidence plus verified Laiwu removal/Nagqu reclassification, with zero missing/extra/different identities; official 2024 counts corroborate. This is not a freshly published 2026 official nationwide full table. County auxiliaries are upstream third-party data, not independently officially verified; they provide auxiliary type evidence for unsupported inputs; runtime city matching ignores cross-level aliases outside the supported city set. See official_verification/comparison_report.json and EVIDENCE.md.",
+      "data_date": "2026-09-02",
+      "full_table_evidence_url": "https://github.com/kk-418/cn-division/tree/88f2021ea21769bdb95d93699d8a625fcd9165ef",
+      "normalized_file": "normalized.json",
+      "normalized_sha256": "3ae65e9f130492b1cf9150d4630f7f9e63ed7d016f4d0f43545440df8674f750",
+      "raw_file": "snapshot.json",
+      "raw_sha256": "1662df76ab88778307049e1ff9182892c68d9df071aa287d1016bce13dce4b42",
+      "retrieved_date": "2026-10-15",
+      "transform": {
+        "id": "cn_division_snapshot_v1",
+        "implementation_sha256": "8b8b3efef9cec6fedd2b17afda9d358c8fc8713b19a3f9a07fde144206b4f6a9",
+        "version": "geographic-json-transform-v1"
+      },
+      "url": "https://github.com/kk-418/cn-division/tree/88f2021ea21769bdb95d93699d8a625fcd9165ef",
+      "version": "cn-division-2026.0.1@88f2021ea21769bdb95d93699d8a625fcd9165ef"
+    }
+  ],
+  "status": "complete",
+  "upstream_input_sha256": {
+    "LICENSE": "1847e0e0698142ed4347c1441a9fa81c8fbddd44b1d8bbcd5e3647f991759d7f",
+    "dist/code/cities.json": "c5bc774fcf24b139d71a22a851266b8399d94a8a3ff0a7b7514c011fa12d3dbe",
+    "dist/code/counties.json": "1ee1d75e9072e09ec9993025a6bec2543b23c7fc24b6dd668a0a5536e178ae16",
+    "dist/code/provinces.json": "6f48fb4fd851fb85735effbcc93921c3ba61adadf3f1b3bc2b7cd947f132176b",
+    "lib/build.js": "dddbb22e904976b2cbc82656f82a363d2ffeae3515b466816635ac403d626187",
+    "lib/fetch.js": "3cc5070fdf0464543afd28b3c2352d151f3840a045436b658c6cab98c7b485b0",
+    "package.json": "53b0ab51c342a0c837f0912fd1a754c539bf58050c99fd31e718e00e543ec095"
+  },
+  "version": "cn-division-2026.0.1-reviewed-p1-v1"
+}

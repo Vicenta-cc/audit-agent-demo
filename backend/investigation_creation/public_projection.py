@@ -6,7 +6,6 @@ from pydantic import Field
 
 from .contracts import (
     ConfirmationPreview,
-    DraftConfiguration,
     DraftStatus,
     InvestigationOptions,
     Platform,
@@ -17,7 +16,25 @@ from .contracts import (
     StrictModel,
     TemporaryRuleSetProposal,
     TemporaryRuleSetJudgement,
+    InvestigationDraftConfiguration,
+    LegacyInvestigationDraftConfigurationV3,
+    InvestigationConfiguration,
 )
+from .scope_intent import PublicRelevanceScopeState
+
+
+class PublicDraftConfiguration(InvestigationDraftConfiguration):
+    relevance_scope_state: PublicRelevanceScopeState | None = None
+
+
+def public_configuration(configuration):
+    payload = configuration.model_dump(mode='json') if hasattr(configuration, 'model_dump') else dict(configuration)
+    state = payload.get('relevance_scope_state')
+    if state is not None:
+        # Only these display fields can cross any API/model/SSE boundary.
+        payload['relevance_scope_state'] = {key: state[key]
+            for key in PublicRelevanceScopeState.model_fields if key in state}
+    return payload
 
 
 class PublicInvestigationDraft(StrictModel):
@@ -26,7 +43,7 @@ class PublicInvestigationDraft(StrictModel):
     current_revision: int = Field(ge=1)
     title: str
     objective: str
-    configuration: DraftConfiguration
+    configuration: PublicDraftConfiguration | LegacyInvestigationDraftConfigurationV3 | InvestigationConfiguration
     created_at: str
     updated_at: str
     confirmed_revision: int | None = None
@@ -127,7 +144,7 @@ def public_draft(draft: Any) -> PublicInvestigationDraft:
         objective=(
             draft.objective if not isinstance(draft, dict) else draft.get("objective")
         ),
-        configuration=(
+        configuration=public_configuration(
             draft.configuration
             if not isinstance(draft, dict)
             else draft.get("configuration")
@@ -149,6 +166,14 @@ def public_draft(draft: Any) -> PublicInvestigationDraft:
             else draft.get("confirmed_at", "")
         ),
     )
+
+
+def tool_draft_view(view):
+    # Tool receipts retain their existing Draft shape while the new private
+    # provenance stays confined to durable storage.
+    payload = view.model_dump(mode='json')
+    payload['draft']['configuration'] = public_configuration(view.draft.configuration)
+    return payload
 
 
 def public_run(run: Any) -> PublicInvestigationRunProjection:

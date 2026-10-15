@@ -49,6 +49,23 @@ export function TaskConfirmationCard({
             <strong>{view.objective}</strong>
           </div>
         ) : null}
+        {view.relevanceScope ? (
+          <>
+            <div className="task-final-field">
+              <span>{view.relevanceScope.pending ? "最新地域要求（待澄清）" : "调查地域"}</span>
+              <strong>{view.relevanceScope.target}</strong>
+            </div>
+            {view.relevanceScope.policy ? <div className="task-final-field">
+              <span>选择策略</span><strong>{view.relevanceScope.policy}</strong>
+            </div> : null}
+            {view.relevanceScope.reason ? <div className="task-final-field">
+              <span>待澄清原因</span><strong>{view.relevanceScope.reason}</strong>
+            </div> : null}
+            {view.relevanceScope.candidates ? <div className="task-final-field">
+              <span>候选地域</span><strong>{view.relevanceScope.candidates}</strong>
+            </div> : null}
+          </>
+        ) : null}
         <div className="task-final-field">
           <span>{preview?.mode === "creator" ? "创作者主页" : "最终搜索词"}</span>
           <div className="task-final-term-summary">
@@ -93,6 +110,9 @@ export function TaskConfirmationCard({
           </>
         ) : null}
       </div>
+
+      {view.relevanceScope && !preview?.blockers.some((blocker) => blocker.code.startsWith("RELEVANCE_SCOPE_"))
+        ? <p aria-label="地域配置说明">{view.relevanceScope.notice}</p> : null}
 
       {preview?.effective_parameters ? <p aria-label="本次使用的统一设置">
         本次使用统一采集与分析设置：{preview.effective_parameters.max_items_per_minute} 条/分钟；

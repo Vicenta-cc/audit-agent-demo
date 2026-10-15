@@ -1,0 +1,40 @@
+
+> xhs-audit-agent-frontend-v2@0.1.0 test
+> playwright test --config=playwright.config.ts tests/geographicScopeDisplay.spec.ts tests/taskSuggestionKeywordEditing.spec.ts
+
+[WebServer] (node:93712) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 25 tests using 1 worker
+
+(node:93714) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/25] tests/geographicScopeDisplay.spec.ts:64:1 › scope display handles canonical city, municipality, policies and omitted legacy fields
+[2/25] tests/geographicScopeDisplay.spec.ts:81:1 › pending latest requirement hides previously resolved target and server blockers remain readable
+[3/25] tests/geographicScopeDisplay.spec.ts:95:1 › workspace recovery retains pending and resolved projections without freezing blocked draft or polluting old snapshots
+[4/25] tests/geographicScopeDisplay.spec.ts:116:3 › original card and drawer render resolved scope read-only
+[5/25] tests/geographicScopeDisplay.spec.ts:116:3 › original card and drawer render pending scope read-only
+[6/25] tests/geographicScopeDisplay.spec.ts:116:3 › original card and drawer render local_only scope read-only
+[7/25] tests/geographicScopeDisplay.spec.ts:116:3 › original card and drawer render legacy scope read-only
+[8/25] tests/geographicScopeDisplay.spec.ts:181:3 › real service fixture resolved workspace restores into original card and drawer
+[9/25] tests/geographicScopeDisplay.spec.ts:181:3 › real service fixture pending workspace restores into original card and drawer
+[10/25] tests/geographicScopeDisplay.spec.ts:181:3 › real service national resolved workspace restores into original card and drawer
+[11/25] tests/geographicScopeDisplay.spec.ts:181:3 › real service national pending workspace restores into original card and drawer
+[12/25] tests/geographicScopeDisplay.spec.ts:260:3 › suggestion preview allows only geographic readiness blockers: resolved geography
+[13/25] tests/geographicScopeDisplay.spec.ts:260:3 › suggestion preview allows only geographic readiness blockers: pending geography
+[14/25] tests/geographicScopeDisplay.spec.ts:260:3 › suggestion preview allows only geographic readiness blockers: unsupported geographic mode
+[15/25] tests/geographicScopeDisplay.spec.ts:260:3 › suggestion preview allows only geographic readiness blockers: missing rule resource
+[16/25] tests/geographicScopeDisplay.spec.ts:260:3 › suggestion preview allows only geographic readiness blockers: missing recall resource
+[17/25] tests/geographicScopeDisplay.spec.ts:260:3 › suggestion preview allows only geographic readiness blockers: missing crawler account
+[18/25] tests/geographicScopeDisplay.spec.ts:260:3 › suggestion preview allows only geographic readiness blockers: unknown blocker
+[19/25] tests/geographicScopeDisplay.spec.ts:260:3 › suggestion preview allows only geographic readiness blockers: geographic code without geographic state
+[20/25] tests/geographicScopeDisplay.spec.ts:260:3 › suggestion preview allows only geographic readiness blockers: historical read-only card
+[21/25] tests/geographicScopeDisplay.spec.ts:260:3 › suggestion preview allows only geographic readiness blockers: missing platform
+[22/25] tests/taskSuggestionKeywordEditing.spec.ts:3:1 › suggestion Draft opens the structured keyword drawer instead of editing inline
+[23/25] tests/taskSuggestionKeywordEditing.spec.ts:65:1 › started task explains that its search terms are frozen
+[24/25] tests/taskSuggestionKeywordEditing.spec.ts:121:1 › final Draft delegates keyword editing to the structured drawer
+[25/25] tests/taskSuggestionKeywordEditing.spec.ts:184:1 › structured keyword drawer prefers enabled variants and falls back to enabled main
+  25 passed (10.0s)

@@ -5,6 +5,7 @@ import type { RuleSetProposalPresentation } from "../../types/investigationCreat
 import { GeneratedRulesMessage } from "./GeneratedRulesMessage";
 import type { ConfirmationPreview } from "../../types/investigationCreation";
 import {
+  buildRelevanceScopeView,
   formatConfirmationBlockerMessage,
   formatCreationErrorMessage
 } from "./confirmationView";
@@ -68,6 +69,17 @@ export function TaskSuggestionCard({
   const keywordsRef = useRef<HTMLParagraphElement>(null);
   const keywordsText = draft.keywords.join("、");
   const blockerLink = buildSuggestionBlockerLink(preview);
+  const relevanceScope = buildRelevanceScopeView(preview);
+  const hasGeographicState = preview?.relevance_scope_state?.status === "resolved"
+    || preview?.relevance_scope_state?.status === "pending";
+  const hasPreviewBlocker = preview?.blockers.some((blocker) => (
+    blocker.code !== "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE"
+    && !(hasGeographicState && [
+      "RELEVANCE_SCOPE_PENDING",
+      "RELEVANCE_SCOPE_EXECUTION_UNAVAILABLE",
+      "RELEVANCE_SCOPE_MODE_UNSUPPORTED"
+    ].includes(blocker.code))
+  ));
   const hasAnalysisPlan = preview
     ? Boolean(preview.ruleset_revision || preview.temporary_ruleset)
     : Boolean(draft.analysisPlanName || draft.matchedRuleSet);
@@ -194,6 +206,19 @@ export function TaskSuggestionCard({
             </div>
           </section>
 
+          {relevanceScope ? <section className="task-suggestion-section" aria-label="调查地域配置">
+            <div className="task-suggestion-label">
+              {relevanceScope.pending ? "最新地域要求（待澄清）" : "调查地域"}
+            </div>
+            <div className="task-suggestion-field-body">
+              <p className="task-suggestion-value">{relevanceScope.target}</p>
+              {relevanceScope.policy ? <p>选择策略：{relevanceScope.policy}</p> : null}
+              {relevanceScope.reason ? <p>待澄清原因：{relevanceScope.reason}</p> : null}
+              {relevanceScope.candidates ? <p>候选地域：{relevanceScope.candidates}</p> : null}
+              <p className="task-suggestion-help" aria-label="地域配置说明">{relevanceScope.notice}</p>
+            </div>
+          </section> : null}
+
           <section className="task-suggestion-section task-suggestion-plan-section">
             <div className="task-suggestion-label">推荐审核规则</div>
             <div className="task-suggestion-field-body task-suggestion-plan-body">
@@ -274,9 +299,7 @@ export function TaskSuggestionCard({
           <button
             type="button"
             className="mt-button mt-button-primary"
-            disabled={isReadOnly || draft.platforms.length === 0 || Boolean(preview?.blockers.some(
-              (blocker) => blocker.code !== "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE"
-            ))}
+            disabled={isReadOnly || draft.platforms.length === 0 || Boolean(hasPreviewBlocker)}
             onClick={onGenerateConfig}
           >
             生成任务配置

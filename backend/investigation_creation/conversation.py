@@ -50,7 +50,7 @@ from .errors import (
     RunNotFoundError,
 )
 from .principal import Principal
-from .public_projection import draft_artifact, public_draft, run_artifact
+from .public_projection import draft_artifact, public_configuration, public_draft, run_artifact
 from .public_answer import has_failed_ruleset_update, redact_creation_internal_references
 from .tools import (
     HermesToolExecutionIdentity,
@@ -70,6 +70,21 @@ logger = logging.getLogger(__name__)
 DRAFT_TERM_TOOLS = frozenset({"create_investigation_draft", "update_investigation_draft", "use_ruleset_proposal", "configure_investigation_draft"})
 
 CREATION_SYSTEM_PROMPT = """用用户提问的语言自然回答，原名、原文引用和必要术语保持原样。
+地域配置：本次调查对象、议题或事件名称包含地域时，默认将其作为调查地域，不要求用户另外强调某地的舆情或明确限定地域。
+例如“调查克拉玛依大火”“调查深圳楼市”“调查新疆棉花争议”分别采用克拉玛依、深圳、新疆；事件议题和调查地域分别保存，不能仅把地点藏入标题、目标或词库。
+调查地域指所讨论事件或议题的地域，不要求发帖人、评论者或 IP 来自该地；“关注全国网友对该事件的讨论”不等于取消事件地域。
+同任务用户最新明确更换、取消或要求全国且不限制地域时，以最新要求为准。账号背景、资源名称、引用举例、否定、助手建议和仅修改标题不等于地域要求；用户未提地名时不靠事件常识补地点。
+每次通过 configure_investigation_draft 创建草案必须传 scope_decision：有地域选 apply，并通过 relevance_scope_change 传 action=set、原始地名、selection_policy 和真实用户原话 source_quote；无地域或创建前已明确取消选 none，且省略 relevance_scope_change。缺失或矛盾会在写入前拒绝，应根据真实历史补全后重试，不要求用户重复。
+明确只要当地、不补充用 local_only，其余有地域的调查用 local_first_with_supplement 并在方案中说明，不额外确认默认策略。
+更新草案不传 create 专用 scope_decision；明确设置或换地域时传 set，明确取消地域时传 clear 和取消原话；只改标题、规则或黑话库时省略 relevance_scope_change 保留已有地域。不要从旧报告继承新一轮范围。
+用户已明确要求创建、修改或取消，且必要信息、资源引用和采用条件满足时直接配置，成功后报告，不再询问是否应用。
+资源缺失时不创建占位草案，保留真实用户消息中的要求，资源齐备后引用同任务此前原话；资源展示和后续采用授权边界继续适用。
+资源齐备并获采用授权时，回看同一任务真实用户消息中的调查对象、事件及其地域，以及后续变更或取消；本轮仅说采用资源不表示放弃此前地域。创建草案时一并作出 scope_decision 判断，有地域时引用原要求并配置，不要求用户重复此前要求。
+调查范围支持单一省级地域或地级市（含直辖市），最细到城市。地域简称先交给配置工具解析；解析成功直接报告结果。
+仅在真实回执为 pending 时，根据原因和候选请用户核对地域名或明确指代；吉林这类省市同名简称不强行择一，完整省名或市名可正常解析；区县同名不阻断明确城市别名。查不到不代表用户一定写错，不自行猜测纠错。
+已有草案须先通过同一配置工具保存原始目标的待澄清状态，再根据成功回执提问；无草案且资源不足时可直接澄清。
+区县、县级市、街道和非市地级类型暂不支持，保留原始目标待澄清，不能自动扩大为其所属城市或省。
+读取草案和预览作为状态依据；pending 表示最新要求待澄清，上次已解析范围不代表本次要求已生效。地域执行尚未接通，不能启动地域调查或声称采集已限定地域。
 推荐现有资源时，说明真实名称、已发布版本、覆盖范围和缺口；已发布或主题相近不等于完整适配。
 规则创建或修改成功后，应用会展示完整快照，回复只需说明关键内容和变化。
 你的产品身份固定为“研判助手”。不要自称 Hermes、Hermes Agent，不能向用户透露底层代理框架、
@@ -1712,7 +1727,18 @@ class InvestigationCreationConversationService:
                 f"- 单任务总量：{preview.get('max_notes', 1)} 条",
             ]
         )
-        lines.append("\n可以继续确认并启动任务，或先修改草案。")
+        if preview.get('relevance_scope_state') or preview.get('relevance_scope'):
+            state = preview.get('relevance_scope_state') or {}
+            scope = preview.get('relevance_scope') or {}
+            if state.get('status') == 'pending':
+                lines.append(f"- 调查地域待澄清：{state.get('target_text', '')}；{state.get('reason', '')}")
+            elif scope:
+                lines.append(f"- 调查地域：{scope['target']['name']}（{scope['province']['name']}）")
+        if preview.get('blockers'):
+            lines.extend('- ' + item['message'] for item in preview['blockers'])
+            lines.append("\n当前配置不能启动，可继续修改草案或澄清要求。")
+        else:
+            lines.append("\n可以继续确认并启动任务，或先修改草案。")
         return "\n".join(lines)
 
     def _binding_failure_notice(self, turn: InvestigationTurn, trace_messages: list[dict] | None = None) -> str:
@@ -1989,7 +2015,8 @@ class InvestigationCreationConversationService:
                 raise RuntimeError("Draft ToolResult no longer matches Application state")
             if (tool_name == "use_ruleset_proposal"
                     and verified.draft.current_revision == tool_draft.current_revision
-                    and (verified.draft.configuration != tool_draft.configuration
+                    and (public_configuration(verified.draft.configuration)
+                         != public_configuration(tool_draft.configuration)
                          or verified.draft.title != tool_draft.title
                          or verified.draft.objective != tool_draft.objective)):
                 raise RuntimeError("Adoption Draft content no longer matches its receipt")

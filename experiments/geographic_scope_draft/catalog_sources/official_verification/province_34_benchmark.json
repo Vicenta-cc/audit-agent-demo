@@ -1,0 +1,415 @@
+{
+  "artifact_kind": "locally_derived_official_evidence_not_official_json",
+  "source_date": "2016-07-31",
+  "alias_source_date": "2014-01-04",
+  "records": [
+    {
+      "code": "110000",
+      "name": "北京市",
+      "level": "province",
+      "kind": "直辖市",
+      "province_code": "110000",
+      "aliases": [
+        "北京"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "120000",
+      "name": "天津市",
+      "level": "province",
+      "kind": "直辖市",
+      "province_code": "120000",
+      "aliases": [
+        "天津"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "130000",
+      "name": "河北省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "130000",
+      "aliases": [
+        "河北"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "140000",
+      "name": "山西省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "140000",
+      "aliases": [
+        "山西"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "150000",
+      "name": "内蒙古自治区",
+      "level": "province",
+      "kind": "自治区",
+      "province_code": "150000",
+      "aliases": [
+        "内蒙古"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "210000",
+      "name": "辽宁省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "210000",
+      "aliases": [
+        "辽宁"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "220000",
+      "name": "吉林省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "220000",
+      "aliases": [
+        "吉林"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "230000",
+      "name": "黑龙江省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "230000",
+      "aliases": [
+        "黑龙江"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "310000",
+      "name": "上海市",
+      "level": "province",
+      "kind": "直辖市",
+      "province_code": "310000",
+      "aliases": [
+        "上海"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "320000",
+      "name": "江苏省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "320000",
+      "aliases": [
+        "江苏"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "330000",
+      "name": "浙江省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "330000",
+      "aliases": [
+        "浙江"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "340000",
+      "name": "安徽省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "340000",
+      "aliases": [
+        "安徽"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "350000",
+      "name": "福建省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "350000",
+      "aliases": [
+        "福建"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "360000",
+      "name": "江西省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "360000",
+      "aliases": [
+        "江西"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "370000",
+      "name": "山东省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "370000",
+      "aliases": [
+        "山东"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "410000",
+      "name": "河南省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "410000",
+      "aliases": [
+        "河南"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "420000",
+      "name": "湖北省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "420000",
+      "aliases": [
+        "湖北"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "430000",
+      "name": "湖南省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "430000",
+      "aliases": [
+        "湖南"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "440000",
+      "name": "广东省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "440000",
+      "aliases": [
+        "广东"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "450000",
+      "name": "广西壮族自治区",
+      "level": "province",
+      "kind": "自治区",
+      "province_code": "450000",
+      "aliases": [
+        "广西"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "460000",
+      "name": "海南省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "460000",
+      "aliases": [
+        "海南"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "500000",
+      "name": "重庆市",
+      "level": "province",
+      "kind": "直辖市",
+      "province_code": "500000",
+      "aliases": [
+        "重庆"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "510000",
+      "name": "四川省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "510000",
+      "aliases": [
+        "四川"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "520000",
+      "name": "贵州省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "520000",
+      "aliases": [
+        "贵州"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "530000",
+      "name": "云南省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "530000",
+      "aliases": [
+        "云南"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "540000",
+      "name": "西藏自治区",
+      "level": "province",
+      "kind": "自治区",
+      "province_code": "540000",
+      "aliases": [
+        "西藏"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "610000",
+      "name": "陕西省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "610000",
+      "aliases": [
+        "陕西"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "620000",
+      "name": "甘肃省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "620000",
+      "aliases": [
+        "甘肃"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "630000",
+      "name": "青海省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "630000",
+      "aliases": [
+        "青海"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "640000",
+      "name": "宁夏回族自治区",
+      "level": "province",
+      "kind": "自治区",
+      "province_code": "640000",
+      "aliases": [
+        "宁夏"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "650000",
+      "name": "新疆维吾尔自治区",
+      "level": "province",
+      "kind": "自治区",
+      "province_code": "650000",
+      "aliases": [
+        "新疆"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "710000",
+      "name": "台湾省",
+      "level": "province",
+      "kind": "省",
+      "province_code": "710000",
+      "aliases": [
+        "台湾"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "810000",
+      "name": "香港特别行政区",
+      "level": "province",
+      "kind": "特别行政区",
+      "province_code": "810000",
+      "aliases": [
+        "香港"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    },
+    {
+      "code": "820000",
+      "name": "澳门特别行政区",
+      "level": "province",
+      "kind": "特别行政区",
+      "province_code": "820000",
+      "aliases": [
+        "澳门"
+      ],
+      "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+      "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm"
+    }
+  ]
+}

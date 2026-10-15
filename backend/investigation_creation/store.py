@@ -249,6 +249,8 @@ class InvestigationCreationStore:
             draft_operations.initialize(connection)
             from backend.resource_management.selections import initialize as initialize_selections
             initialize_selections(connection)
+            from backend.resource_management.ruleset_refs import initialize as initialize_ruleset_refs
+            initialize_ruleset_refs(connection)
             connection.execute("CREATE TABLE IF NOT EXISTS resource_edit_history (edit_id TEXT NOT NULL,version INTEGER NOT NULL,content_json TEXT NOT NULL,PRIMARY KEY(edit_id,version))")
             connection.execute("INSERT OR IGNORE INTO resource_edit_history SELECT proposal_id,version,content_json FROM ruleset_proposals")
         # Serialize additive upgrades so concurrent process initialization cannot
@@ -259,6 +261,7 @@ class InvestigationCreationStore:
             self._ensure_column(connection, "investigation_creation_tool_receipts", "committed_draft_id", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "investigation_creation_tool_receipts", "committed_draft_revision", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(connection, "investigation_creation_tool_receipts", "recovered_response_json", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(connection, "investigation_creation_tool_receipts", "committed_proposal_snapshot_json", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "ruleset_proposal_approvals", "presentation_id", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "ruleset_proposal_approvals", "tool_call_id", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "ruleset_proposal_approvals", "runtime_turn_id", "TEXT NOT NULL DEFAULT ''")
@@ -445,6 +448,25 @@ class InvestigationCreationStore:
             ).encode("utf-8")
         ).hexdigest()
 
+    def successful_tool_execution_response(
+        self, *, session_id: str, turn_id: str, tool_call_id: str,
+        principal: str, tool_name: str, arguments: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Read an exact terminal success without claiming or rebinding it."""
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT response_json FROM investigation_creation_tool_receipts
+                   WHERE session_id=? AND turn_id=? AND tool_call_id=?
+                     AND principal=? AND tool_name=? AND arguments_fingerprint=?
+                     AND is_mutation=1 AND status='SUCCEEDED'""",
+                (session_id, turn_id, tool_call_id, principal, tool_name,
+                 self.tool_arguments_fingerprint(arguments)),
+            ).fetchone()
+        if row is None or not row['response_json']:
+            return None
+        response = json.loads(row['response_json'])
+        return response if isinstance(response, dict) and response.get('status') == 'ok' else None
+
     def begin_tool_execution(
         self,
         *,
@@ -625,9 +647,11 @@ class InvestigationCreationStore:
                     "SELECT * FROM investigation_draft_revisions WHERE draft_id=? AND revision=?",
                     (owned["id"], recorded["current_revision"]),
                 ).fetchone()
+                from .public_projection import public_configuration
                 if (revision is None or revision["title"] != recorded["title"]
                         or revision["objective"] != recorded["objective"]
-                        or json.loads(revision["configuration_json"]) != recorded["configuration"]):
+                        or public_configuration(json.loads(revision["configuration_json"]))
+                        != recorded["configuration"]):
                     raise RuntimeError("Adoption receipt does not match the durable Draft revision")
                 judgement = recorded["configuration"]["judgement"]
                 if row['tool_name'] == 'configure_investigation_draft' and judgement.get('strategy') == 'existing_ruleset':
@@ -722,9 +746,12 @@ class InvestigationCreationStore:
         # Only durable successful Application receipts may select snapshots for display.
         with self._connect() as connection:
             rows = connection.execute(
-                """SELECT r.response_json FROM investigation_creation_tool_receipts r
+                """SELECT CASE WHEN r.recovered_response_json<>'' THEN r.recovered_response_json
+                               ELSE r.response_json END AS response_json
+                   FROM investigation_creation_tool_receipts r
                    JOIN ruleset_proposal_conversation_bindings b ON b.receipt_id = r.receipt_id
-                   WHERE r.session_id = ? AND b.application_turn_id = ? AND r.status = 'SUCCEEDED'
+                   WHERE r.session_id = ? AND b.application_turn_id = ?
+                     AND (r.status = 'SUCCEEDED' OR r.recovered_response_json<>'')
                      AND r.tool_name IN ('create_ruleset_proposal', 'update_ruleset_proposal', 'get_ruleset_proposal', 'open_resource_edit', 'update_resource_edit', 'get_resource_edit')
                    ORDER BY r.rowid""", (session_id, turn_id),
             ).fetchall()
@@ -751,6 +778,7 @@ class InvestigationCreationStore:
     def create_ruleset_proposal(
         self, *, session_id: str, content: RuleSetContent, content_hash: str,
         connection: sqlite3.Connection | None = None,
+        mutation_receipt: str | None = None, principal: str = '',
     ) -> TemporaryRuleSetProposal:
         proposal_id = f"ruleset-proposal:{uuid4().hex}"
         now = self._now_text()
@@ -763,7 +791,10 @@ class InvestigationCreationStore:
             row = connection.execute('SELECT version,content_json FROM ruleset_proposals WHERE proposal_id=? AND session_id=?', (proposal_id,session_id)).fetchone()
             if row:
                 connection.execute('INSERT OR IGNORE INTO resource_edit_history VALUES (?,?,?)', (proposal_id,row['version'],row['content_json']))
-            return self._owned_proposal(connection, proposal_id, session_id)
+            proposal = self._owned_proposal(connection, proposal_id, session_id)
+            if mutation_receipt:
+                self._bind_proposal_write(connection, mutation_receipt, principal, proposal, 'create_ruleset_proposal')
+            return proposal
 
     def get_ruleset_proposal(self, proposal_id: str, *, session_id: str) -> TemporaryRuleSetProposal:
         with self._connect() as connection:
@@ -772,12 +803,15 @@ class InvestigationCreationStore:
     def update_ruleset_proposal(
         self, proposal_id: str, *, session_id: str, expected_version: int,
         content: RuleSetContent, content_hash: str,
+        mutation_receipt: str | None = None, principal: str = '',
     ) -> TemporaryRuleSetProposal:
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             current = self._owned_proposal(connection, proposal_id, session_id)
             self.check_proposal_version(current, expected_version)
             if current.content_hash == content_hash:
+                if mutation_receipt:
+                    self._bind_proposal_write(connection, mutation_receipt, principal, current, 'update_ruleset_proposal')
                 return current
             connection.execute(
                 """UPDATE ruleset_proposals
@@ -789,7 +823,64 @@ class InvestigationCreationStore:
             row = connection.execute('SELECT version,content_json FROM ruleset_proposals WHERE proposal_id=? AND session_id=?', (proposal_id,session_id)).fetchone()
             if row:
                 connection.execute('INSERT OR IGNORE INTO resource_edit_history VALUES (?,?,?)', (proposal_id,row['version'],row['content_json']))
-            return self._owned_proposal(connection, proposal_id, session_id)
+            proposal = self._owned_proposal(connection, proposal_id, session_id)
+            if mutation_receipt:
+                self._bind_proposal_write(connection, mutation_receipt, principal, proposal, 'update_ruleset_proposal')
+            return proposal
+
+    @staticmethod
+    def _bind_proposal_write(connection, receipt_id, principal, proposal, tool_name):
+        # The content and this recovery anchor commit together. A failed view
+        # must never make an already committed generation look safe to repeat.
+        changed = connection.execute('''UPDATE investigation_creation_tool_receipts
+            SET committed_proposal_snapshot_json=?
+            WHERE receipt_id=? AND principal=? AND session_id=? AND tool_name=?
+              AND status='STARTED' AND committed_proposal_snapshot_json='' ''',
+            (InvestigationCreationStore._json(proposal.model_dump(mode='json')),
+             receipt_id, principal, proposal.session_id, tool_name)).rowcount
+        if changed != 1:
+            raise IdempotencyConflictError('Proposal write no longer owns the execution receipt')
+
+    def committed_proposal_write(self, receipt_id, principal):
+        with self._connect() as conn:
+            row = conn.execute('''SELECT committed_proposal_snapshot_json
+                FROM investigation_creation_tool_receipts WHERE receipt_id=? AND principal=?
+                  AND tool_name IN ('create_ruleset_proposal','update_ruleset_proposal')''',
+                (receipt_id, principal)).fetchone()
+        return (TemporaryRuleSetProposal.model_validate_json(row[0])
+                if row and row[0] else None)
+
+    def recover_proposal_write(self, receipt_id, principal, *, session_id):
+        with self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('''SELECT status, response_json, recovered_response_json,
+                                         committed_proposal_snapshot_json
+                FROM investigation_creation_tool_receipts
+                WHERE receipt_id=? AND principal=? AND session_id=?
+                  AND committed_proposal_snapshot_json<>''
+                  AND tool_name IN ('create_ruleset_proposal','update_ruleset_proposal')''',
+                (receipt_id, principal.id, session_id)).fetchone()
+            if row is None:
+                raise IdempotencyConflictError('No committed proposal snapshot for this recovery')
+            # The original writer or another recovery may have finished after
+            # begin_tool_execution returned STARTED. Replay its exact success.
+            if row['recovered_response_json']:
+                return json.loads(row['recovered_response_json'])
+            if row['status'] == 'SUCCEEDED':
+                return json.loads(row['response_json'])
+            snapshot = TemporaryRuleSetProposal.model_validate_json(row['committed_proposal_snapshot_json'])
+            current = self._owned_proposal(conn, snapshot.proposal_id, snapshot.session_id)
+            if current.version != snapshot.version or current.content_hash != snapshot.content_hash:
+                raise IdempotencyConflictError('规则修改已提交，之后又有更新；请读取当前稿，不要重复生成或修改。',
+                    code='PROPOSAL_WRITE_SUPERSEDED')
+            from backend.resource_management.ruleset_refs import proposal_view
+            response = {'status': 'ok', 'data': proposal_view(
+                self, snapshot, principal=principal, session_id=session_id, connection=conn)}
+            # Preserve the original failed attempt; presentation and history
+            # readers use this verified recovery response as the effective view.
+            conn.execute('''UPDATE investigation_creation_tool_receipts
+                SET recovered_response_json=? WHERE receipt_id=?''', (self._json(response), receipt_id))
+        return response
 
     @staticmethod
     def check_proposal_version(current: TemporaryRuleSetProposal, expected_version: int) -> None:
@@ -893,6 +984,8 @@ class InvestigationCreationStore:
                 draft_id, revision = f"investigation-draft:{uuid4().hex}", 1
                 title, objective = creation.title, creation.objective
             configuration = normalize(configuration, previous=draft.configuration if command.draft_id else None)
+            from .scope_intent import bind_draft_state
+            configuration = bind_draft_state(configuration, draft_id, principal)
             if (configuration.investigation.mode == "search"
                     and not (getattr(configuration.investigation.recall_plan, "terms", None)
                              or getattr(configuration.investigation.recall_plan, "enabled_main_terms", None))):
@@ -951,7 +1044,6 @@ class InvestigationCreationStore:
             self.protect_temporary_judgement(configuration)
         draft_id = f"investigation-draft:{uuid4().hex}"
         now = self._now_text()
-        configuration_json = self._json(configuration.model_dump(mode="json"))
         with draft_operations.validation_phase(create_operation is not None), self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             if copy_source is not None:
@@ -967,6 +1059,10 @@ class InvestigationCreationStore:
                     raise PrincipalAccessDeniedError('复制操作不属于原调查会话。')
             if before_write:
                 before_write(connection)
+            from .scope_intent import bind_draft_state
+            configuration = bind_draft_state(configuration, draft_id, principal,
+                copied_from_draft_id=copy_source[1] if copy_source else '')
+            configuration_json = self._json(configuration.model_dump(mode="json"))
             connection.execute(
                 """
                 INSERT INTO investigation_drafts (
@@ -1168,6 +1264,8 @@ class InvestigationCreationStore:
                 raise DraftRevisionConflictError(
                     f"expected revision {expected_revision}, current revision is {current_revision}"
                 )
+            from .scope_intent import ensure_execution_ready
+            ensure_execution_ready(self._draft(draft).configuration)
             existing = connection.execute(
                 """
                 SELECT * FROM investigation_runs

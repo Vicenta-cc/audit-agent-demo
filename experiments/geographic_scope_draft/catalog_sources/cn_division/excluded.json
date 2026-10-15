@@ -1,0 +1,714 @@
+[
+  {
+    "original": {
+      "c": "1101",
+      "n": "北京市",
+      "p": "11"
+    },
+    "reason": "virtual_municipality_layer"
+  },
+  {
+    "original": {
+      "c": "1201",
+      "n": "天津市",
+      "p": "12"
+    },
+    "reason": "virtual_municipality_layer"
+  },
+  {
+    "original": {
+      "c": "3101",
+      "n": "上海市",
+      "p": "31"
+    },
+    "reason": "virtual_municipality_layer"
+  },
+  {
+    "original": {
+      "c": "5001",
+      "n": "重庆市",
+      "p": "50"
+    },
+    "reason": "virtual_municipality_layer"
+  },
+  {
+    "original": {
+      "c": "5002",
+      "n": "县",
+      "p": "50"
+    },
+    "reason": "virtual_municipality_layer"
+  },
+  {
+    "original": {
+      "c": "441900003000",
+      "cc": "4419",
+      "n": "东城街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900004000",
+      "cc": "4419",
+      "n": "南城街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900005000",
+      "cc": "4419",
+      "n": "万江街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900006000",
+      "cc": "4419",
+      "n": "莞城街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900101000",
+      "cc": "4419",
+      "n": "石碣镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900102000",
+      "cc": "4419",
+      "n": "石龙镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900103000",
+      "cc": "4419",
+      "n": "茶山镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900104000",
+      "cc": "4419",
+      "n": "石排镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900105000",
+      "cc": "4419",
+      "n": "企石镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900106000",
+      "cc": "4419",
+      "n": "横沥镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900107000",
+      "cc": "4419",
+      "n": "桥头镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900108000",
+      "cc": "4419",
+      "n": "谢岗镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900109000",
+      "cc": "4419",
+      "n": "东坑镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900110000",
+      "cc": "4419",
+      "n": "常平镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900111000",
+      "cc": "4419",
+      "n": "寮步镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900112000",
+      "cc": "4419",
+      "n": "樟木头镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900113000",
+      "cc": "4419",
+      "n": "大朗镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900114000",
+      "cc": "4419",
+      "n": "黄江镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900115000",
+      "cc": "4419",
+      "n": "清溪镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900116000",
+      "cc": "4419",
+      "n": "塘厦镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900117000",
+      "cc": "4419",
+      "n": "凤岗镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900118000",
+      "cc": "4419",
+      "n": "大岭山镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900119000",
+      "cc": "4419",
+      "n": "长安镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900121000",
+      "cc": "4419",
+      "n": "虎门镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900122000",
+      "cc": "4419",
+      "n": "厚街镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900123000",
+      "cc": "4419",
+      "n": "沙田镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900124000",
+      "cc": "4419",
+      "n": "道滘镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900125000",
+      "cc": "4419",
+      "n": "洪梅镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900126000",
+      "cc": "4419",
+      "n": "麻涌镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900127000",
+      "cc": "4419",
+      "n": "望牛墩镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900128000",
+      "cc": "4419",
+      "n": "中堂镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900129000",
+      "cc": "4419",
+      "n": "高埗镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000001000",
+      "cc": "4420",
+      "n": "石岐街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000002000",
+      "cc": "4420",
+      "n": "东区街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000003000",
+      "cc": "4420",
+      "n": "中山港街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000004000",
+      "cc": "4420",
+      "n": "西区街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000005000",
+      "cc": "4420",
+      "n": "南区街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000006000",
+      "cc": "4420",
+      "n": "五桂山街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000007000",
+      "cc": "4420",
+      "n": "民众街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000008000",
+      "cc": "4420",
+      "n": "南朗街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000101000",
+      "cc": "4420",
+      "n": "黄圃镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000103000",
+      "cc": "4420",
+      "n": "东凤镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000105000",
+      "cc": "4420",
+      "n": "古镇镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000106000",
+      "cc": "4420",
+      "n": "沙溪镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000107000",
+      "cc": "4420",
+      "n": "坦洲镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000108000",
+      "cc": "4420",
+      "n": "港口镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000109000",
+      "cc": "4420",
+      "n": "三角镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000110000",
+      "cc": "4420",
+      "n": "横栏镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000111000",
+      "cc": "4420",
+      "n": "南头镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000112000",
+      "cc": "4420",
+      "n": "阜沙镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000114000",
+      "cc": "4420",
+      "n": "三乡镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000115000",
+      "cc": "4420",
+      "n": "板芙镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000116000",
+      "cc": "4420",
+      "n": "大涌镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000117000",
+      "cc": "4420",
+      "n": "神湾镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "442000118000",
+      "cc": "4420",
+      "n": "小榄镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400001000",
+      "cc": "4604",
+      "n": "三都街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400100000",
+      "cc": "4604",
+      "n": "那大镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400101000",
+      "cc": "4604",
+      "n": "和庆镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400102000",
+      "cc": "4604",
+      "n": "南丰镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400103000",
+      "cc": "4604",
+      "n": "大成镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400104000",
+      "cc": "4604",
+      "n": "雅星镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400105000",
+      "cc": "4604",
+      "n": "兰洋镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400106000",
+      "cc": "4604",
+      "n": "光村镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400107000",
+      "cc": "4604",
+      "n": "木棠镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400108000",
+      "cc": "4604",
+      "n": "海头镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400109000",
+      "cc": "4604",
+      "n": "峨蔓镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400111000",
+      "cc": "4604",
+      "n": "王五镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400112000",
+      "cc": "4604",
+      "n": "白马井镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400113000",
+      "cc": "4604",
+      "n": "中和镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400114000",
+      "cc": "4604",
+      "n": "排浦镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400115000",
+      "cc": "4604",
+      "n": "东成镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400116000",
+      "cc": "4604",
+      "n": "新州镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "620200001000",
+      "cc": "6202",
+      "n": "第一街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "620200002000",
+      "cc": "6202",
+      "n": "雄关街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "620200003000",
+      "cc": "6202",
+      "n": "钢城街道"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "620200100000",
+      "cc": "6202",
+      "n": "峪泉镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "620200101000",
+      "cc": "6202",
+      "n": "新城镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "620200102000",
+      "cc": "6202",
+      "n": "文殊镇"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900401000",
+      "cc": "4419",
+      "n": "松山湖"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900402000",
+      "cc": "4419",
+      "n": "东莞港"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900403000",
+      "cc": "4419",
+      "n": "东莞生态园"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "441900404000",
+      "cc": "4419",
+      "n": "东莞滨海湾新区"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400499000",
+      "cc": "4604",
+      "n": "洋浦经济开发区"
+    },
+    "reason": "unsupported_township_or_street"
+  },
+  {
+    "original": {
+      "c": "460400500000",
+      "cc": "4604",
+      "n": "华南热作学院"
+    },
+    "reason": "unsupported_township_or_street"
+  }
+]

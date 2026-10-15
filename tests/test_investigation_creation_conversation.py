@@ -1319,7 +1319,7 @@ def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
     manager = service.resource_management
     selected_rule = manager.read('ruleset', ruleset.ruleset_id, principal=principal)
     selected_lexicon = manager.read('lexicon', 'gambling', principal=principal)
-    create_arguments = {'operation': 'create', 'title': 'Hermes middleware identity',
+    create_arguments = {'operation': 'create', 'scope_decision': 'none', 'title': 'Hermes middleware identity',
         'objective': 'prove real registry dispatch executes each mutation once', 'platform': 'xhs',
         'ruleset_ref': selected_rule['resource_ref'], 'lexicon_ref': selected_lexicon['resource_ref']}
     configure_hermes_investigation_creation_tools(

@@ -112,7 +112,34 @@ export interface DraftLexiconContent {
   entries: DraftLexiconEntry[];
 }
 
+export type RelevanceSelectionPolicy = "local_only" | "local_first_with_supplement";
+
+export interface RelevanceScope {
+  schema_version: "geo-scope-v1";
+  target: { name: string; aliases: string[] };
+  province: { name: string; aliases: string[] };
+  topic: null;
+  selection_policy: RelevanceSelectionPolicy;
+  content_unit: "parent_post_event";
+}
+
+/** Public display projection only; provenance remains on the server. */
+export interface RelevanceScopeState {
+  status: "resolved" | "pending" | "cleared";
+  target_text?: string | null;
+  reason?: string;
+  candidates: Array<{
+    name: string;
+    level: string;
+    kind: string;
+    province_name: string;
+  }>;
+  selection_policy?: RelevanceSelectionPolicy | null;
+}
+
 export interface InvestigationDraftConfiguration {
+  relevance_scope?: RelevanceScope | null;
+  relevance_scope_state?: RelevanceScopeState;
   task_parameters?: InvestigationTaskParameters;
   schema_version: "investigation-draft-config-v4";
   platform: InvestigationPlatform;
@@ -156,6 +183,8 @@ export interface PublicInvestigationDraft {
 }
 
 export interface ConfirmationPreview {
+  relevance_scope?: RelevanceScope | null;
+  relevance_scope_state?: RelevanceScopeState;
   max_post_limit?: number;
   task_settings_revision?: number;
   requested_parameters?: InvestigationTaskParameters;

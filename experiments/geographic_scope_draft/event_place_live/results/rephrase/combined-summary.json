@@ -1,0 +1,274 @@
+{
+  "total_expected_runs": 4,
+  "completed": 4,
+  "passed": 3,
+  "failed": 1,
+  "llm_calls": 32,
+  "total_tokens": 336554,
+  "records": [
+    {
+      "id": "H01",
+      "pass": true,
+      "errors": [],
+      "observed_status": "resolved",
+      "observed_target": "宁波市",
+      "scope": {
+        "content_unit": "parent_post_event",
+        "province": {
+          "aliases": [
+            "浙江"
+          ],
+          "name": "浙江省"
+        },
+        "schema_version": "geo-scope-v1",
+        "selection_policy": "local_first_with_supplement",
+        "target": {
+          "aliases": [
+            "宁波"
+          ],
+          "name": "宁波市"
+        },
+        "topic": null
+      },
+      "scope_state": {
+        "application_turn_id": "investigation-turn:a29460b7f56c4ea483e2b781f33623f2",
+        "candidates": [
+          {
+            "kind": "地级市",
+            "level": "prefecture",
+            "name": "宁波市",
+            "province_name": "浙江省"
+          }
+        ],
+        "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+        "copied_from_draft_id": "",
+        "draft_id": "investigation-draft:1da730c0c72c471ea323dc57974e2522",
+        "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+        "province": {
+          "aliases": [
+            "浙江"
+          ],
+          "name": "浙江省"
+        },
+        "province_code": "330000",
+        "reason": "",
+        "selection_policy": "local_first_with_supplement",
+        "session_id": "investigation-session:0a30848c17c14bf6954b6215b7b9be91",
+        "source_quote": "帮我看看宁波住房投诉",
+        "source_sequence": 1,
+        "source_turn_id": "investigation-turn:8ade3c6646024b0ca0256f1313802cfe",
+        "source_user_message_id": "investigation-message:d9b0b9c4727447a39ae92d503d3a5207",
+        "status": "resolved",
+        "target": {
+          "aliases": [
+            "宁波"
+          ],
+          "name": "宁波市"
+        },
+        "target_code": "330200",
+        "target_level": "prefecture",
+        "target_text": "宁波",
+        "task_anchor_turn_id": "investigation-turn:8ade3c6646024b0ca0256f1313802cfe"
+      }
+    },
+    {
+      "id": "H02",
+      "pass": true,
+      "errors": [],
+      "observed_status": "resolved",
+      "observed_target": "重庆市",
+      "scope": {
+        "content_unit": "parent_post_event",
+        "province": {
+          "aliases": [
+            "重庆"
+          ],
+          "name": "重庆市"
+        },
+        "schema_version": "geo-scope-v1",
+        "selection_policy": "local_first_with_supplement",
+        "target": {
+          "aliases": [
+            "重庆"
+          ],
+          "name": "重庆市"
+        },
+        "topic": null
+      },
+      "scope_state": {
+        "application_turn_id": "investigation-turn:6273c8eaaa48438aa014c1c138313284",
+        "candidates": [
+          {
+            "kind": "直辖市",
+            "level": "province",
+            "name": "重庆市",
+            "province_name": "重庆市"
+          }
+        ],
+        "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+        "copied_from_draft_id": "",
+        "draft_id": "investigation-draft:fd4837b3f7f24c108a950743621820b4",
+        "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+        "province": {
+          "aliases": [
+            "重庆"
+          ],
+          "name": "重庆市"
+        },
+        "province_code": "500000",
+        "reason": "",
+        "selection_policy": "local_first_with_supplement",
+        "session_id": "investigation-session:1bac3657ab3d4c2385e9e74e241b18fc",
+        "source_quote": "想了解重庆暴雨这事的讨论",
+        "source_sequence": 1,
+        "source_turn_id": "investigation-turn:398c0ea1b98048a29c4d6063836a304f",
+        "source_user_message_id": "investigation-message:f1a95c07ad564115891b6ddda20a90ab",
+        "status": "resolved",
+        "target": {
+          "aliases": [
+            "重庆"
+          ],
+          "name": "重庆市"
+        },
+        "target_code": "500000",
+        "target_level": "province",
+        "target_text": "重庆",
+        "task_anchor_turn_id": "investigation-turn:398c0ea1b98048a29c4d6063836a304f"
+      }
+    },
+    {
+      "id": "H03",
+      "pass": true,
+      "errors": [],
+      "observed_status": "resolved",
+      "observed_target": "内蒙古自治区",
+      "scope": {
+        "content_unit": "parent_post_event",
+        "province": {
+          "aliases": [
+            "内蒙古"
+          ],
+          "name": "内蒙古自治区"
+        },
+        "schema_version": "geo-scope-v1",
+        "selection_policy": "local_first_with_supplement",
+        "target": {
+          "aliases": [
+            "内蒙古"
+          ],
+          "name": "内蒙古自治区"
+        },
+        "topic": null
+      },
+      "scope_state": {
+        "application_turn_id": "investigation-turn:96abaab674f54dbaab8308b3662ac405",
+        "candidates": [
+          {
+            "kind": "自治区",
+            "level": "province",
+            "name": "内蒙古自治区",
+            "province_name": "内蒙古自治区"
+          }
+        ],
+        "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+        "copied_from_draft_id": "",
+        "draft_id": "investigation-draft:6337ff363ae54d45a9e5fb233474f4ea",
+        "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+        "province": {
+          "aliases": [
+            "内蒙古"
+          ],
+          "name": "内蒙古自治区"
+        },
+        "province_code": "150000",
+        "reason": "",
+        "selection_policy": "local_first_with_supplement",
+        "session_id": "investigation-session:6e4869d075e34a8f8ab4417d5caf9542",
+        "source_quote": "调查内蒙古草原旅游投诉",
+        "source_sequence": 1,
+        "source_turn_id": "investigation-turn:e49d30ebdbe74242bcab41133ddeda72",
+        "source_user_message_id": "investigation-message:9c14d85ab94a425590ec8f445349a50e",
+        "status": "resolved",
+        "target": {
+          "aliases": [
+            "内蒙古"
+          ],
+          "name": "内蒙古自治区"
+        },
+        "target_code": "150000",
+        "target_level": "province",
+        "target_text": "内蒙古",
+        "task_anchor_turn_id": "investigation-turn:e49d30ebdbe74242bcab41133ddeda72"
+      }
+    },
+    {
+      "id": "H04",
+      "pass": false,
+      "errors": [
+        "status expected absent, got resolved",
+        "target expected None, got 杭州市",
+        "expected explicit model create decision absent"
+      ],
+      "observed_status": "resolved",
+      "observed_target": "杭州市",
+      "scope": {
+        "content_unit": "parent_post_event",
+        "province": {
+          "aliases": [
+            "浙江"
+          ],
+          "name": "浙江省"
+        },
+        "schema_version": "geo-scope-v1",
+        "selection_policy": "local_first_with_supplement",
+        "target": {
+          "aliases": [
+            "杭州"
+          ],
+          "name": "杭州市"
+        },
+        "topic": null
+      },
+      "scope_state": {
+        "application_turn_id": "investigation-turn:95b8fd593e364c87bdf8135579b04f92",
+        "candidates": [
+          {
+            "kind": "地级市",
+            "level": "prefecture",
+            "name": "杭州市",
+            "province_name": "浙江省"
+          }
+        ],
+        "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+        "copied_from_draft_id": "",
+        "draft_id": "investigation-draft:f406967cd4514c1f89ece0f74675d266",
+        "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+        "province": {
+          "aliases": [
+            "浙江"
+          ],
+          "name": "浙江省"
+        },
+        "province_code": "330000",
+        "reason": "",
+        "selection_policy": "local_first_with_supplement",
+        "session_id": "investigation-session:b09d3cecc4234804a94f06615b949c75",
+        "source_quote": "账号资料写着杭州，核查它的招聘广告违规风险",
+        "source_sequence": 1,
+        "source_turn_id": "investigation-turn:13ae59a9083b4eed8d047bcca4f2c5fd",
+        "source_user_message_id": "investigation-message:5eadfffd001841ff88065721a4f6b70b",
+        "status": "resolved",
+        "target": {
+          "aliases": [
+            "杭州"
+          ],
+          "name": "杭州市"
+        },
+        "target_code": "330100",
+        "target_level": "prefecture",
+        "target_text": "杭州",
+        "task_anchor_turn_id": "investigation-turn:13ae59a9083b4eed8d047bcca4f2c5fd"
+      }
+    }
+  ]
+}

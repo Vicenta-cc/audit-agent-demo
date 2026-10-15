@@ -1,0 +1,201 @@
+..............FFFFFFFFFF..FFFFFF...FFF.................................. [ 45%]
+............................................................ [ 83%]
+...........................                                   [100%]
+=================================== FAILURES ===================================
+_ test_four_resource_combinations_set_preserve_and_resource_update[False-False] _
+tests/test_geographic_draft_configuration.py:61: in test_four_resource_combinations_set_preserve_and_resource_update
+    first, ctx, manager, rule, word, args, result, _ = setup_geo(stack, content,
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+_ test_four_resource_combinations_set_preserve_and_resource_update[False-True] _
+tests/test_geographic_draft_configuration.py:61: in test_four_resource_combinations_set_preserve_and_resource_update
+    first, ctx, manager, rule, word, args, result, _ = setup_geo(stack, content,
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+_ test_four_resource_combinations_set_preserve_and_resource_update[True-False] _
+tests/test_geographic_draft_configuration.py:61: in test_four_resource_combinations_set_preserve_and_resource_update
+    first, ctx, manager, rule, word, args, result, _ = setup_geo(stack, content,
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+_ test_four_resource_combinations_set_preserve_and_resource_update[True-True] __
+tests/test_geographic_draft_configuration.py:61: in test_four_resource_combinations_set_preserve_and_resource_update
+    first, ctx, manager, rule, word, args, result, _ = setup_geo(stack, content,
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+_________________ test_pending_clarification_clear_and_restart _________________
+tests/test_geographic_draft_configuration.py:85: in test_pending_clarification_clear_and_restart
+    first, _, _, _, _, _, result, _ = setup_geo(stack, content)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+________________ test_failed_combined_change_is_atomic[source] _________________
+tests/test_geographic_draft_configuration.py:114: in test_failed_combined_change_is_atomic
+    first, ctx, manager, _, word, _, result, _ = setup_geo(stack, content)
+                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+_______________ test_failed_combined_change_is_atomic[revision] ________________
+tests/test_geographic_draft_configuration.py:114: in test_failed_combined_change_is_atomic
+    first, ctx, manager, _, word, _, result, _ = setup_geo(stack, content)
+                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+________________ test_failed_combined_change_is_atomic[unshown] ________________
+tests/test_geographic_draft_configuration.py:114: in test_failed_combined_change_is_atomic
+    first, ctx, manager, _, word, _, result, _ = setup_geo(stack, content)
+                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+_______________ test_failed_combined_change_is_atomic[stale_ref] _______________
+tests/test_geographic_draft_configuration.py:114: in test_failed_combined_change_is_atomic
+    first, ctx, manager, _, word, _, result, _ = setup_geo(stack, content)
+                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+__________ test_first_request_can_be_bound_at_later_resource_adoption __________
+tests/test_geographic_draft_configuration.py:142: in test_first_request_can_be_bound_at_later_resource_adoption
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+_ test_direct_store_confirmation_rechecks_persisted_geography[\u514b\u62c9\u739b\u4f9d-dy] _
+tests/test_geographic_draft_configuration.py:176: in test_direct_store_confirmation_rechecks_persisted_geography
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+_ test_direct_store_confirmation_rechecks_persisted_geography[\u671d\u9633-dy] _
+tests/test_geographic_draft_configuration.py:176: in test_direct_store_confirmation_rechecks_persisted_geography
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+_ test_direct_store_confirmation_rechecks_persisted_geography[\u514b\u62c9\u739b\u4f9d-xhs] _
+tests/test_geographic_draft_configuration.py:176: in test_direct_store_confirmation_rechecks_persisted_geography
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+_____________ test_api_omission_unchanged_roundtrip_and_tampering ______________
+tests/test_geographic_draft_configuration.py:188: in test_api_omission_unchanged_roundtrip_and_tampering
+    first, _, _, _, _, _, result, _ = setup_geo(stack, content)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+_____________ test_sql_failure_rolls_back_scope_and_title_together _____________
+tests/test_geographic_draft_configuration.py:221: in test_sql_failure_rolls_back_scope_and_title_together
+    first, _, _, _, _, _, result, _ = setup_geo(stack, content)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+___________ test_copy_preserves_verified_source_and_records_lineage ____________
+tests/test_geographic_draft_configuration.py:238: in test_copy_preserves_verified_source_and_records_lineage
+    first, _, _, _, _, _, result, _ = setup_geo(stack, content)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_geographic_draft_configuration.py:37: in setup_geo
+    first, ctx, manager, rule, word, args = prepare(stack, content, **options)
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_unified_draft_configuration.py:19: in prepare
+    first = run(stack, body)
+            ^^^^^^^^^^^^^^^^
+tests/test_ruleset_proposal_presentation.py:23: in run
+    return _run_scripted_creation_turn(
+tests/test_investigation_creation_conversation.py:456: in _run_scripted_creation_turn
+    turn, idempotent_replay = conversation.accept_message(
+backend/investigation_creation/conversation.py:820: in accept_message
+    raise RuntimeError('多轮调查报告查询服务未配置。')
+E   RuntimeError: 多轮调查报告查询服务未配置。
+_________ test_old_configuration_omits_new_fields_and_null_is_rejected _________
+tests/test_geographic_draft_configuration.py:293: in test_old_configuration_omits_new_fields_and_null_is_rejected
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+______________ test_completed_sse_and_workspace_public_projection ______________
+tests/test_geographic_draft_configuration.py:311: in test_completed_sse_and_workspace_public_projection
+    first, _, _, _, _, _, result, completed = setup_geo(stack, content)
+                                              ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+__________ test_competing_updates_preserve_revision_and_atomic_scope ___________
+tests/test_geographic_draft_configuration.py:327: in test_competing_updates_preserve_revision_and_atomic_scope
+    first, _, _, _, _, _, result, _ = setup_geo(stack, content)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_geographic_draft_configuration.py:40: in setup_geo
+    assert result['status'] == 'ok', result
+           ^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/xhs-audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+tests/test_investigation_creation_m3.py::LegacyApiCompatibilityTest::test_old_post_jobs_accepts_existing_creator_url_and_legacy_id
+  /Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/backend/main.py:1361: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_investigation_creation_m3.py::LegacyApiCompatibilityTest::test_old_post_jobs_accepts_existing_creator_url_and_legacy_id
+tests/test_investigation_creation_m3.py::LegacyApiCompatibilityTest::test_old_post_jobs_accepts_existing_creator_url_and_legacy_id
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.venv/lib/python3.12/site-packages/fastapi/applications.py:4495: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+tests/test_investigation_creation_m3.py::LegacyApiCompatibilityTest::test_old_post_jobs_accepts_existing_creator_url_and_legacy_id
+  /Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/backend/main.py:1382: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_draft_configuration.py::test_four_resource_combinations_set_preserve_and_resource_update[False-False]
+FAILED tests/test_geographic_draft_configuration.py::test_four_resource_combinations_set_preserve_and_resource_update[False-True]
+FAILED tests/test_geographic_draft_configuration.py::test_four_resource_combinations_set_preserve_and_resource_update[True-False]
+FAILED tests/test_geographic_draft_configuration.py::test_four_resource_combinations_set_preserve_and_resource_update[True-True]
+FAILED tests/test_geographic_draft_configuration.py::test_pending_clarification_clear_and_restart
+FAILED tests/test_geographic_draft_configuration.py::test_failed_combined_change_is_atomic[source]
+FAILED tests/test_geographic_draft_configuration.py::test_failed_combined_change_is_atomic[revision]
+FAILED tests/test_geographic_draft_configuration.py::test_failed_combined_change_is_atomic[unshown]
+FAILED tests/test_geographic_draft_configuration.py::test_failed_combined_change_is_atomic[stale_ref]
+FAILED tests/test_geographic_draft_configuration.py::test_first_request_can_be_bound_at_later_resource_adoption
+FAILED tests/test_geographic_draft_configuration.py::test_direct_store_confirmation_rechecks_persisted_geography[\u514b\u62c9\u739b\u4f9d-dy]
+FAILED tests/test_geographic_draft_configuration.py::test_direct_store_confirmation_rechecks_persisted_geography[\u671d\u9633-dy]
+FAILED tests/test_geographic_draft_configuration.py::test_direct_store_confirmation_rechecks_persisted_geography[\u514b\u62c9\u739b\u4f9d-xhs]
+FAILED tests/test_geographic_draft_configuration.py::test_api_omission_unchanged_roundtrip_and_tampering
+FAILED tests/test_geographic_draft_configuration.py::test_sql_failure_rolls_back_scope_and_title_together
+FAILED tests/test_geographic_draft_configuration.py::test_copy_preserves_verified_source_and_records_lineage
+FAILED tests/test_geographic_draft_configuration.py::test_old_configuration_omits_new_fields_and_null_is_rejected
+FAILED tests/test_geographic_draft_configuration.py::test_completed_sse_and_workspace_public_projection
+FAILED tests/test_geographic_draft_configuration.py::test_competing_updates_preserve_revision_and_atomic_scope
+19 failed, 140 passed, 5 warnings, 23 subtests passed in 17.79s

@@ -1,0 +1,5 @@
+{
+  "capture_kind": "web_tool_extract_not_raw_http",
+  "retrieved_date": "2026-10-15",
+  "result": "Internal Error ()\nciteturn54view0 [wordlim: 200] Source: open({\"ref_id\":\"https://mzt.xizang.gov.cn/zxzx/tzgg/202607/t20260729_551733.html\",\"lineno\":null}); Total lines: 1\nL0: Failed to fetch https://mzt.xizang.gov.cn/zxzx/tzgg/202607/t20260729_551733.html: (400) Timeout fetching\n--------------------------------------------------------------------------------\nInternal Error ()\nciteturn54view1 [wordlim: 200] Source: find({\"ref_id\":\"https://mzt.xizang.gov.cn/zxzx/tzgg/202607/t20260729_551733.html\",\"pattern\":\"那曲市\"}); Total lines: 1\nNo matching text found for \"那曲市\""
+}

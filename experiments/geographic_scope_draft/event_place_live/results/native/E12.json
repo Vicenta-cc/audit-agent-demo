@@ -1,0 +1,525 @@
+{
+  "id": "E12",
+  "expectation": {
+    "decision": "apply",
+    "status": "pending",
+    "target": null
+  },
+  "sessions": [
+    "investigation-session:ee0f00c8f3bc4a12b14787c47e7b9632"
+  ],
+  "setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references",
+  "started_at": "2026-10-15T08:57:02.565296+00:00",
+  "snapshot": {
+    "session_id": "investigation-session:ee0f00c8f3bc4a12b14787c47e7b9632",
+    "draft": {
+      "id": "investigation-draft:3cb652ed0f0347febdfde7741d3a4940",
+      "current_revision": 1,
+      "title": "深圳和宁波住房问题舆情调查",
+      "objective": "调查深圳和宁波住房问题相关的舆情讨论",
+      "configuration": {
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "enabled_main_terms": [
+              "舆情事件"
+            ],
+            "expected_runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+            "lexicon_id": "custom_f43c26f2445a4a0e",
+            "strategy": "existing_lexicon"
+          }
+        },
+        "judgement": {
+          "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+          "expected_ruleset_version": 1,
+          "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+          "strategy": "existing_ruleset"
+        },
+        "platform": "dy",
+        "relevance_scope_state": {
+          "application_turn_id": "investigation-turn:ce279531d3954bc9b9895ea74a11c7d3",
+          "candidates": [],
+          "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+          "copied_from_draft_id": "",
+          "draft_id": "investigation-draft:3cb652ed0f0347febdfde7741d3a4940",
+          "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+          "province": null,
+          "province_code": "",
+          "reason": "未找到该地域，请核对名称或补充完整名称；当前支持单一省级地域或地级市。",
+          "selection_policy": "local_first_with_supplement",
+          "session_id": "investigation-session:ee0f00c8f3bc4a12b14787c47e7b9632",
+          "source_quote": "调查深圳和宁波住房问题",
+          "source_sequence": 1,
+          "source_turn_id": "investigation-turn:235b5e9213f442aaa2793452edacde10",
+          "source_user_message_id": "investigation-message:8a892b8617eb40d483291c60b0caf380",
+          "status": "pending",
+          "target": null,
+          "target_code": "",
+          "target_level": null,
+          "target_text": "深圳、宁波",
+          "task_anchor_turn_id": "investigation-turn:235b5e9213f442aaa2793452edacde10"
+        },
+        "schema_version": "investigation-draft-config-v4"
+      }
+    },
+    "public_draft": {
+      "id": "investigation-draft:3cb652ed0f0347febdfde7741d3a4940",
+      "status": "DRAFT",
+      "current_revision": 1,
+      "title": "深圳和宁波住房问题舆情调查",
+      "objective": "调查深圳和宁波住房问题相关的舆情讨论",
+      "configuration": {
+        "schema_version": "investigation-draft-config-v4",
+        "platform": "dy",
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "strategy": "existing_lexicon",
+            "lexicon_id": "custom_f43c26f2445a4a0e",
+            "expected_runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+            "enabled_main_terms": [
+              "舆情事件"
+            ]
+          }
+        },
+        "judgement": {
+          "strategy": "existing_ruleset",
+          "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+          "expected_ruleset_version": 1,
+          "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1"
+        },
+        "relevance_scope_state": {
+          "status": "pending",
+          "target_text": "深圳、宁波",
+          "selection_policy": "local_first_with_supplement",
+          "reason": "未找到该地域，请核对名称或补充完整名称；当前支持单一省级地域或地级市。",
+          "candidates": [],
+          "target": null,
+          "province": null
+        }
+      },
+      "created_at": "2026-10-15T08:57:47.236212+00:00",
+      "updated_at": "2026-10-15T08:57:47.236212+00:00",
+      "confirmed_revision": null,
+      "confirmed_at": ""
+    },
+    "preview": {
+      "relevance_scope_state": {
+        "status": "pending",
+        "target_text": "深圳、宁波",
+        "selection_policy": "local_first_with_supplement",
+        "reason": "未找到该地域，请核对名称或补充完整名称；当前支持单一省级地域或地级市。",
+        "candidates": [],
+        "target": null,
+        "province": null
+      },
+      "max_post_limit": 10,
+      "task_settings_revision": 0,
+      "requested_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 1,
+        "analysis_batch_size": 5
+      },
+      "effective_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 10,
+        "analysis_batch_size": 5
+      },
+      "estimated_max_contents": 1,
+      "draft_id": "investigation-draft:3cb652ed0f0347febdfde7741d3a4940",
+      "draft_revision": 1,
+      "title": "深圳和宁波住房问题舆情调查",
+      "objective": "调查深圳和宁波住房问题相关的舆情讨论",
+      "mode": "search",
+      "platform": "dy",
+      "resolved_search_terms": [
+        "舆情事件"
+      ],
+      "unused_search_terms": [],
+      "search_terms_notice": "",
+      "creator_url": "",
+      "recall_plan": {
+        "strategy": "existing_lexicon",
+        "lexicon_id": "custom_f43c26f2445a4a0e",
+        "lexicon_title": "独立测试通用舆情词库",
+        "runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+        "enabled_main_term_count": 1,
+        "enabled_main_terms": [
+          "舆情事件"
+        ],
+        "temporary_terms": [],
+        "source_lexicon_ids": [],
+        "lexicon_content": {
+          "title": "独立测试通用舆情词库",
+          "risk_label": "",
+          "description": "",
+          "entries": [
+            {
+              "id": "generic-topic",
+              "term": "舆情事件",
+              "kind": "main",
+              "parent_id": "",
+              "enabled": true,
+              "platform": "全平台",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": ""
+            }
+          ]
+        }
+      },
+      "ruleset_revision": {
+        "id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+        "ruleset_id": "ruleset.72b79ad82ad3",
+        "name": "独立测试通用舆情规则",
+        "domain": "public_opinion",
+        "version": 1,
+        "content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+        "enabled_rule_count": 1,
+        "available": true
+      },
+      "temporary_ruleset": null,
+      "max_notes": 1,
+      "max_posts_per_keyword": 1,
+      "max_comments_per_post": 300,
+      "get_sub_comment": false,
+      "blockers": [
+        {
+          "code": "collection_service_unavailable",
+          "message": "抖音采集服务当前不可用，请稍后重试。",
+          "resource_type": "",
+          "resource_id": "",
+          "latest_safe_summary": {},
+          "management_url": ""
+        },
+        {
+          "code": "RELEVANCE_SCOPE_PENDING",
+          "message": "调查城市待澄清，请核对名称或提供完整地级市、直辖市名称。",
+          "resource_type": "",
+          "resource_id": "",
+          "latest_safe_summary": {},
+          "management_url": ""
+        }
+      ],
+      "can_confirm": false
+    },
+    "receipts": [
+      {
+        "tool_name": "configure_investigation_draft",
+        "status": "SUCCEEDED",
+        "is_mutation": 1,
+        "turn_id": "investigation-session:ee0f00c8f3bc4a12b14787c47e7b9632:investigation-turn:ce279531d3954bc9b9895ea74a11c7d3:297688f1"
+      }
+    ]
+  },
+  "evaluation": {
+    "pass": true,
+    "errors": [],
+    "observed_status": "pending",
+    "observed_target": null,
+    "scope": null,
+    "scope_state": {
+      "application_turn_id": "investigation-turn:ce279531d3954bc9b9895ea74a11c7d3",
+      "candidates": [],
+      "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+      "copied_from_draft_id": "",
+      "draft_id": "investigation-draft:3cb652ed0f0347febdfde7741d3a4940",
+      "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+      "province": null,
+      "province_code": "",
+      "reason": "未找到该地域，请核对名称或补充完整名称；当前支持单一省级地域或地级市。",
+      "selection_policy": "local_first_with_supplement",
+      "session_id": "investigation-session:ee0f00c8f3bc4a12b14787c47e7b9632",
+      "source_quote": "调查深圳和宁波住房问题",
+      "source_sequence": 1,
+      "source_turn_id": "investigation-turn:235b5e9213f442aaa2793452edacde10",
+      "source_user_message_id": "investigation-message:8a892b8617eb40d483291c60b0caf380",
+      "status": "pending",
+      "target": null,
+      "target_code": "",
+      "target_level": null,
+      "target_text": "深圳、宁波",
+      "task_anchor_turn_id": "investigation-turn:235b5e9213f442aaa2793452edacde10"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "investigation-turn:235b5e9213f442aaa2793452edacde10",
+      "session_id": "investigation-session:ee0f00c8f3bc4a12b14787c47e7b9632",
+      "user": "调查深圳和宁波住房问题",
+      "status": "completed",
+      "answer": "我查一下现有资源能否覆盖\"住房问题\"这个主题。\n\n当前可用的词库和规则里，没有专门针对住房、房产或楼市的资源。现有最接近的是：\n\n- **独立测试通用舆情词库**：只含一个主词\"舆情事件\"，搜索词是\"舆情事件\"，无法覆盖深圳/宁波住房话题的具体讨论。\n- **独立测试通用舆情规则**：只有一条\"未经证实断言\"通用规则，可用于住房问题的研判，但不含住房领域的具体条款。\n\n也就是说，**规则方面有一条通用规则勉强可用，但召回词库完全不匹配**——它搜的是\"舆情事件\"，而不是住房相关的内容，无法找到目标讨论。\n\n我可以为这次调查**临时生成一套针对\"深圳和宁波住房问题\"的搜索词**，用于抓取相关讨论；规则可沿用通用舆情规则。\n\n需要我生成这套临时搜索词吗？（生成本身只是会话内临时使用，不会直接保存到黑话库，也不会启动采集。）",
+      "safe_message": "",
+      "seconds": 31.82,
+      "accounting": {
+        "id": "investigation-turn:235b5e9213f442aaa2793452edacde10",
+        "status": "completed",
+        "input_tokens": 5389,
+        "output_tokens": 923,
+        "total_tokens": 62632,
+        "llm_call_count": 7,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "query_investigation_options"
+        },
+        {
+          "name": "tool_search"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 6760,
+            "output_tokens": 90,
+            "total_tokens": 6850,
+            "latency_seconds": 3.0
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 8402,
+            "output_tokens": 91,
+            "total_tokens": 8493,
+            "latency_seconds": 3.5
+          },
+          {
+            "number": 3,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 8526,
+            "output_tokens": 59,
+            "total_tokens": 8585,
+            "latency_seconds": 2.8
+          },
+          {
+            "number": 4,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 8955,
+            "output_tokens": 133,
+            "total_tokens": 9088,
+            "latency_seconds": 4.2
+          },
+          {
+            "number": 5,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 9150,
+            "output_tokens": 190,
+            "total_tokens": 9340,
+            "latency_seconds": 4.5
+          },
+          {
+            "number": 6,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 9524,
+            "output_tokens": 154,
+            "total_tokens": 9678,
+            "latency_seconds": 3.2
+          },
+          {
+            "number": 7,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 10392,
+            "output_tokens": 206,
+            "total_tokens": 10598,
+            "latency_seconds": 6.5
+          }
+        ],
+        "llm_call_count": 7,
+        "total_tokens": 62632,
+        "tool_lifecycle_and_exit": [
+          "tool query_investigation_options completed (0.02s, 3974 chars)",
+          "tool tool_describe completed (0.00s, 1010 chars)",
+          "tool read_resource completed (0.01s, 58 chars)",
+          "tool read_resource completed (0.00s, 58 chars)",
+          "tool read_resource completed (0.01s, 58 chars)",
+          "tool read_resource completed (0.01s, 58 chars)",
+          "tool read_resource completed (0.00s, 251 chars)",
+          "tool read_resource completed (0.01s, 624 chars)",
+          "tool read_resource completed (0.01s, 1194 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=7/12 budget=7/12 tool_turns=6 last_msg_role=assistant response_len=364 session=investigation-session:ee0f00c8f3bc4a12b14787c47e7b9632"
+        ]
+      }
+    },
+    {
+      "turn_id": "investigation-turn:ce279531d3954bc9b9895ea74a11c7d3",
+      "session_id": "investigation-session:ee0f00c8f3bc4a12b14787c47e7b9632",
+      "user": "在抖音调查，使用现有“独立测试通用舆情规则”和“独立测试通用舆情词库”。这些测试资源按原样使用即可。请生成调查草案，不启动采集，不正式保存新资源。",
+      "status": "completed",
+      "answer": "调查草案已生成，但有两个问题需要你确认：\n\n**1. 地域待澄清**\n\n调查范围目前只支持**单一省级地域或地级市**，而\"深圳、宁波\"是两个不同城市，无法合并为一个地域。请选择其一，或改为只调查其中一个城市：\n\n- 只调查**深圳**住房问题\n- 只调查**宁波**住房问题\n- 放弃地域限定（做全国范围）\n\n**2. 抖音采集服务当前不可用**\n\n平台提示抖音采集服务暂时不可用，需稍后重试。这不影响草案保存，但当前无法启动采集（你本来就要求不启动，这点无影响）。\n\n另外提醒一句：你指定的\"独立测试通用舆情词库\"实际搜索词只有\"舆情事件\"这一个词，无法真正搜到住房相关讨论。不过你已明确要求按原样使用，我按此配置了，这里仅作提示。\n\n请告诉我地域如何处理，我继续更新草案。",
+      "safe_message": "",
+      "seconds": 19.65,
+      "accounting": {
+        "id": "investigation-turn:ce279531d3954bc9b9895ea74a11c7d3",
+        "status": "completed",
+        "input_tokens": 3973,
+        "output_tokens": 564,
+        "total_tokens": 37305,
+        "llm_call_count": 3,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "lexicon_ref": "resource-ref:249595165fe9479380e0cbce87898527",
+            "objective": "调查深圳和宁波住房问题相关的舆情讨论",
+            "operation": "create",
+            "platform": "dy",
+            "relevance_scope_change": {
+              "action": "set",
+              "selection_policy": "local_first_with_supplement",
+              "source_quote": "调查深圳和宁波住房问题",
+              "target_text": "深圳、宁波"
+            },
+            "ruleset_ref": "resource-ref:6afacaf1bfc74ecc827d1a3792cbc4cc",
+            "scope_decision": "apply",
+            "title": "深圳和宁波住房问题舆情调查"
+          }
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [
+        "{\"name\": \"configure_investigation_draft\", \"description\": \"创建或局部更新调查草案的唯一配置入口。operation 明确为 create 或 update。create 提供标题、目标、平台、ruleset_ref，以及 lexicon_ref（关键词调查）或 creator_url（账号调查）。create 必须明确传 scope_decision：apply 同时传 relevance_scope_change.action=set；none 必须省略 relevance_scope_change。缺失或矛盾会在写入前拒绝。update 提供 draft_id/expected_revision，只传变化字段，省略的内容由后台原样保留；不传 null 或整份 configuration。update 不传 create 专用的 scope_decision；地域沿用省略保留、set 修改、clear 取消。正式和临时规则都填 ruleset_ref，正式和临时词库都填 lexicon_ref；引用从 read_resource/get_resource_edit 取得，不能猜测引用或抄写内容、hash、presentation_id。临时规则仍须先完整展示，等待后续用户明确采用；引用不是同意凭证。多个字段一起校验、一起提交。词库按其主词、变体与启用状态计算搜索词；改词条或启用状态先 update_resource_edit，再取新引用。本工具不修改资源正文、不保存资源、不启动任务；启动仍使用现有确认工具。版本冲突先读草案并核对，不强行替换版本重试。本次调查对象、议题或事件名称包含地域时默认采用该地域，无需用户另说某地的舆情或明确限定。例如调查克拉玛依大火、深圳楼市、新疆棉花争议，分别采用克拉玛依、深圳、新疆；议题与地域分别保存，不能只写入标题、目标或词库。设置或换地域时，relevance_scope_change传action=set、用户原始地名target_text、真实用户原话source_quote和selection_policy。同任务用户最新明确更换、取消或要求全国且不限制地域优先；关注全国网友讨论该事件不等于取消事件地域。资源齐备并获采用授权时，回看同任务真实用户历史中的调查对象和后续变更或取消；本轮只说采用资源不表示放弃此前地域，创建时引用原要求并一并配置，不要求用户重复。明确只要当地、不补充选local_only，其余有地域的调查选local_first_with_supplement，无需为默认策略重复确认。创建前明确取消地域时选scope_decision=none；已有草案取消时只传action=clear和source_quote；只改资源或标题时省略地域变化保留原地域，不能传null。不要从账号背景、资源名称、引用举例、否定、助手建议或仅修改标题推断地域；用户没提地名时不靠事件常识补地点；不填行政代码、身份或来源ID。调查目标支持单一省级地域或地级市（含直辖市）；地域简称直接传原文解析，解析成功直接报告。省市同名简称、下级地域、未知名或指代不明也传原文解析，仅按真实pending回执及候选提示澄清；区县同名不阻断明确城市别名，不自行猜测纠错或扩大范围。已有草案不能只口头澄清而保留可启动状态。条件齐备且用户已明确要求时直接修改草案，成功后报告，无需再问是否应用；资源展示和后续采用授权仍须满足。地域仅保存和展示，执行尚未接通，不能声称已经限定采集或可以启动地域调查。\", \"parameters\": {\"$defs\": {\"Platform\": {\"enum\": [\"xhs\", \"dy\", \"ks\"], \"title\": \"Platform\", \"type\": \"string\"}, \"RelevanceScopeChange\": {\"additionalProperties\": false, \"properties\": {\"action\": {\"enum\": [\"set\", \"clear\"], \"title\": \"Action\", \"type\": \"string\"}, \"source_quote\": {\"maxLength\": 4000, \"minLength\": 1, \"title\": \"Source Quote\", \"type\": \"string\"}, \"target_text\": {\"maxLength\": 300, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Target Text\", \"default\": null}, \"selection_policy\": {\"enum\": [\"local_only\", \"local_first_with_supplement\"], \"type\": \"string\", \"nullable\": true, \"title\": \"Selection Policy\", \"default\": null}}, \"required\": [\"action\", \"source_quote\"], \"title\": \"RelevanceScopeChange\", \"type\": \"object\"}}, \"additionalProperties\": false, \"properties\": {\"operation\": {\"enum\": [\"create\", \"update\"], \"title\": \"Operation\", \"type\": \"string\"}, \"draft_id\": {\"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Draft Id\", \"default\": null}, \"expected_revision\": {\"minimum\": 1, \"type\": \"integer\", \"nullable\": true, \"title\": \"Expected Revision\", \"default\": null}, \"title\": {\"maxLength\": 300, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Title\", \"default\": null}, \"objective\": {\"maxLength\": 4000, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Objective\", \"default\": null}, \"platform\": {\"$ref\": \"#/$defs/Platform\", \"nullable\": true}, \"ruleset_ref\": {\"pattern\": \"^resource-ref:[0-9a-f]{32}$\", \"type\": \"string\", \"nullable\": true, \"title\": \"Ruleset Ref\", \"default\": null}, \"lexicon_ref\": {\"pattern\": \"^resource-ref:[0-9a-f]{32}$\", \"type\": \"string\", \"nullable\": true, \"title\": \"Lexicon Ref\", \"default\": null}, \"creator_url\": {\"maxLength\": 2000, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Creator Url\", \"default\": null}, \"scope_decision\": {\"enum\": [\"apply\", \"none\"], \"type\": \"string\", \"nullable\": true, \"title\": \"Scope Decision\", \"description\": \"仅 create 必填：调查对象/事件名称包含地域选 apply 并传 set；无地域或已明确取消选 none 且不传 change。update 省略。\", \"default\": null}, \"relevance_scope_change\": {\"$ref\": \"#/$defs/RelevanceScopeChange\", \"nullable\": true}}, \"required\": [\"operation\"], \"title\": \"ConfigureDraftInput\", \"type\": \"object\"}}"
+      ],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 10648,
+            "output_tokens": 110,
+            "total_tokens": 10758,
+            "latency_seconds": 4.7
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 12178,
+            "output_tokens": 252,
+            "total_tokens": 12430,
+            "latency_seconds": 5.4
+          },
+          {
+            "number": 3,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 13915,
+            "output_tokens": 202,
+            "total_tokens": 14117,
+            "latency_seconds": 5.8
+          }
+        ],
+        "llm_call_count": 3,
+        "total_tokens": 37305,
+        "tool_lifecycle_and_exit": [
+          "tool tool_describe completed (0.01s, 3682 chars)",
+          "tool configure_investigation_draft completed (0.04s, 3943 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=3/12 budget=3/12 tool_turns=8 last_msg_role=assistant response_len=339 session=investigation-session:ee0f00c8f3bc4a12b14787c47e7b9632"
+        ]
+      }
+    }
+  ],
+  "ended_at": "2026-10-15T08:57:54.155086+00:00",
+  "session_tool_receipts": []
+}

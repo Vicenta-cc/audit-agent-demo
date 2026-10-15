@@ -1,5 +1,5 @@
 import type { TaskDraft } from "../../types/investigation";
-import type { ConfirmationPreview } from "../../types/investigationCreation";
+import type { ConfirmationPreview, RelevanceScope, RelevanceScopeState } from "../../types/investigationCreation";
 
 const platformLabels = {
   dy: "抖音",
@@ -10,6 +10,34 @@ const platformLabels = {
   multi: "多平台"
 } as const;
 
+export function buildRelevanceScopeView(source?: {
+  relevance_scope?: RelevanceScope | null;
+  relevance_scope_state?: RelevanceScopeState;
+}) {
+  const scope = source?.relevance_scope;
+  const state = source?.relevance_scope_state;
+  if (state?.status === "cleared" || (!scope && state?.status !== "pending")) return null;
+  const pending = state?.status === "pending";
+  const policy = pending ? state.selection_policy : scope?.selection_policy;
+  const province = scope?.province.name;
+  return {
+    pending,
+    target: pending
+      ? state.target_text || "待明确地域"
+      : `${scope!.target.name}${province && province !== scope!.target.name ? `（${province}）` : ""}`,
+    policy: policy === "local_only"
+      ? "仅本地，不补充其他地区"
+      : policy === "local_first_with_supplement" ? "本地优先，不足时按已确认策略补充" : "",
+    reason: pending ? state.reason || "地域尚未明确，请在对话中提供省级、地级市或直辖市名称。" : "",
+    candidates: pending ? state.candidates.map((candidate) => (
+      `${candidate.name}${candidate.province_name && candidate.province_name !== candidate.name ? `（${candidate.province_name}）` : ""}`
+    )).join("、") : "",
+    notice: pending
+      ? "地域要求待澄清，当前不能启动。请在对话中补充或修改地域。"
+      : "地域执行能力尚未接通，当前不能启动。"
+  };
+}
+
 export function buildConfirmationCardView(
   draft: TaskDraft,
   preview?: ConfirmationPreview
@@ -18,6 +46,7 @@ export function buildConfirmationCardView(
     (blocker) => blocker.code === "NO_PUBLISHED_RULESET"
   )?.management_url;
   return {
+    relevanceScope: buildRelevanceScopeView(preview),
     title: preview?.title || draft.taskName,
     platform: preview
       ? platformLabels[preview.platform]
@@ -74,7 +103,15 @@ export function formatConfirmationBlockerMessage(code: string, message: string) 
   if (code === "NO_CRAWLER_ACCOUNT" || code === "collection_service_unavailable") {
     return "当前平台采集账号暂不可用，请稍后重试。";
   }
-  void message;
+  if (code === "RELEVANCE_SCOPE_PENDING") {
+    return message.trim() ? message : "地域要求待澄清，当前不能启动。请在对话中提供省级、地级市或直辖市名称。";
+  }
+  if (code === "RELEVANCE_SCOPE_EXECUTION_UNAVAILABLE") {
+    return message.trim() ? message : "地域执行能力尚未接通，当前不能启动。";
+  }
+  if (code === "RELEVANCE_SCOPE_MODE_UNSUPPORTED") {
+    return message.trim() ? message : "当前模式暂不支持地域调查。";
+  }
   return "当前配置暂时无法继续，请调整相关设置后重试。";
 }
 
