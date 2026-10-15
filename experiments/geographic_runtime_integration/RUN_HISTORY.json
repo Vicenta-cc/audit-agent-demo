@@ -1,0 +1,441 @@
+{
+  "note": "Separate runs, not additive acceptance totals; historical failures preserved. See REPORT for external baseline failure and frontend logs.",
+  "runs": [
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-auth-green-01/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 14.53,
+        "pytest": {
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-auth-red-01/summary.json",
+      "result": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 9.09,
+        "pytest": {
+          "tests": 1,
+          "failures": 1,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-auth-red-02/summary.json",
+      "result": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 14.23,
+        "pytest": {
+          "tests": 1,
+          "failures": 1,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-bridge-green-01/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 20.74,
+        "pytest": {
+          "tests": 14,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-bridge-green-02/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 50.36,
+        "pytest": {
+          "tests": 18,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-bridge-red-01/summary.json",
+      "result": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 0.96,
+        "pytest": {
+          "tests": 14,
+          "failures": 14,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-formal-final-01/summary.json",
+      "result": {
+        "pytest_exit_code": 4,
+        "exit_code": 4,
+        "elapsed_seconds": 0.03,
+        "pytest": {
+          "tests": 0,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-formal-final-02/summary.json",
+      "result": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 161.74,
+        "pytest": {
+          "tests": 126,
+          "failures": 1,
+          "errors": 0,
+          "skipped": 13
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [
+          {
+            "pid": 33783,
+            "kind": "process",
+            "target": "['/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python', '-c', \"import json,sys\\nfrom pathlib import Path\\nfrom audit_agent.ingestion import IngestionStore\\nfrom audit_agent.geographic_delivery import delivery_basis_for_job\\ns=IngestionStore(Path(sys.argv[1]))\\nprint(json.dumps({'refs':s.pending_for_task('job'),'basis':delivery_basis_for_job(s,'job')}))\\n\", '/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-1jdd0okn/pytest/test_new_process_recovers_only0/ingestion.sqlite']",
+            "blocked": true,
+            "actual_succeeded": false,
+            "expected_probe": false,
+            "test": "tests/test_geographic_runtime_delivery.py::test_new_process_recovers_only_current_evidence (call)"
+          }
+        ],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-joint-final-01/summary.json",
+      "result": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 43.7,
+        "pytest": {
+          "tests": 70,
+          "failures": 56,
+          "errors": 13,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-original-p4-01/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 417.08,
+        "pytest": {
+          "tests": 284,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-pipeline-green-01/summary.json",
+      "result": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 32.21,
+        "pytest": {
+          "tests": 4,
+          "failures": 1,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-pipeline-green-02/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 33.09,
+        "pytest": {
+          "tests": 40,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-pipeline-red-01/summary.json",
+      "result": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 11.78,
+        "pytest": {
+          "tests": 4,
+          "failures": 4,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-report-green-01/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 3.24,
+        "pytest": {
+          "tests": 31,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-report-green-02/summary.json",
+      "result": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 16.13,
+        "pytest": {
+          "tests": 32,
+          "failures": 1,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-report-green-03/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 15.43,
+        "pytest": {
+          "tests": 32,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-report-green-04/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 15.66,
+        "pytest": {
+          "tests": 32,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_joint_integration/artifacts/runtime-report-red-01/summary.json",
+      "result": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 0.88,
+        "pytest": {
+          "tests": 3,
+          "failures": 2,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      }
+    },
+    {
+      "artifact": "experiments/geographic_runtime_integration/artifacts/gateway-guarded-20261015-02/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 0.35,
+        "pytest": {
+          "tests": 18,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "source_unchanged": true,
+        "guard_attempts": [],
+        "network_model_collection_dispatch_succeeded": 0
+      }
+    },
+    {
+      "artifact": "experiments/geographic_runtime_integration/artifacts/runtime-claim-guard-01/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 3.37,
+        "pytest": {
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "source_unchanged": true,
+        "guard_attempts": [],
+        "network_model_collection_dispatch_succeeded": 0
+      }
+    },
+    {
+      "artifact": "experiments/geographic_runtime_integration/artifacts/runtime-final-20261015-01/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 172.29,
+        "pytest": {
+          "tests": 231,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 13
+        },
+        "source_unchanged": true,
+        "guard_attempts": [],
+        "network_model_collection_dispatch_succeeded": 0
+      }
+    },
+    {
+      "artifact": "experiments/geographic_runtime_integration/artifacts/runtime-formal-green-01/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 1,
+        "elapsed_seconds": 159.16,
+        "pytest": {
+          "tests": 126,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 13
+        },
+        "source_unchanged": false,
+        "guard_attempts": [],
+        "network_model_collection_dispatch_succeeded": 0
+      }
+    },
+    {
+      "artifact": "experiments/geographic_runtime_integration/artifacts/runtime-gateway-green-01/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 0.32,
+        "pytest": {
+          "tests": 18,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "source_unchanged": true,
+        "guard_attempts": [],
+        "network_model_collection_dispatch_succeeded": 0
+      }
+    },
+    {
+      "artifact": "experiments/geographic_runtime_integration/artifacts/runtime-replay-green-01/summary.json",
+      "result": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 0.22,
+        "pytest": {
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "source_unchanged": true,
+        "guard_attempts": [],
+        "network_model_collection_dispatch_succeeded": 0
+      }
+    }
+  ]
+}

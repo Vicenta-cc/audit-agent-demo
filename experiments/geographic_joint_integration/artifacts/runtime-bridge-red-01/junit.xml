@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="14" skipped="0" tests="14" time="0.904" timestamp="2026-10-15T22:54:54.409529+08:00" hostname="ZBMac-M59XV50W0H"><testcase classname="tests.test_geographic_runtime_bridge" name="test_p3_production_origin_changes_only_envelope[650200-\u514b\u62c9\u739b\u4f9d\u5e02\u6536\u8d39-raw0-extra0]" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'">code = '650200', title = '克拉玛依市收费'
+raw = {'status': 'located', 'locations': [{'field': 'title', 'place': '克拉玛依市'}]}
+extra = {}
+
+    @pytest.mark.parametrize('code,title,raw,extra', [
+        ('650200', '克拉玛依市收费', response(), {}),
+        ('440300', '克拉玛依市收费', response(), {}),
+        ('650000', '克拉玛依市收费', response(), {}),
+        ('110000', '北京市收费', response('北京市'), {}),
+        ('650200', '新疆收费', response('新疆'), {}),
+        ('650200', '新疆乌鲁木齐收费', {'status': 'located', 'locations': [
+            {'field': 'title', 'place': '新疆'}, {'field': 'title', 'place': '乌鲁木齐'}]}, {}),
+        ('440300', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '广东'}),
+        ('650200', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {'status': 'insufficient_context', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {}, {'author_ip_location': '新疆'}),
+    ])
+    def test_p3_production_origin_changes_only_envelope(code, title, raw, extra):
+&gt;       from backend.audit_agent.geographic_p3_runtime import prepare, consume
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'
+
+tests/test_geographic_runtime_bridge.py:41: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_p3_production_origin_changes_only_envelope[440300-\u514b\u62c9\u739b\u4f9d\u5e02\u6536\u8d39-raw1-extra1]" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'">code = '440300', title = '克拉玛依市收费'
+raw = {'status': 'located', 'locations': [{'field': 'title', 'place': '克拉玛依市'}]}
+extra = {}
+
+    @pytest.mark.parametrize('code,title,raw,extra', [
+        ('650200', '克拉玛依市收费', response(), {}),
+        ('440300', '克拉玛依市收费', response(), {}),
+        ('650000', '克拉玛依市收费', response(), {}),
+        ('110000', '北京市收费', response('北京市'), {}),
+        ('650200', '新疆收费', response('新疆'), {}),
+        ('650200', '新疆乌鲁木齐收费', {'status': 'located', 'locations': [
+            {'field': 'title', 'place': '新疆'}, {'field': 'title', 'place': '乌鲁木齐'}]}, {}),
+        ('440300', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '广东'}),
+        ('650200', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {'status': 'insufficient_context', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {}, {'author_ip_location': '新疆'}),
+    ])
+    def test_p3_production_origin_changes_only_envelope(code, title, raw, extra):
+&gt;       from backend.audit_agent.geographic_p3_runtime import prepare, consume
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'
+
+tests/test_geographic_runtime_bridge.py:41: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_p3_production_origin_changes_only_envelope[650000-\u514b\u62c9\u739b\u4f9d\u5e02\u6536\u8d39-raw2-extra2]" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'">code = '650000', title = '克拉玛依市收费'
+raw = {'status': 'located', 'locations': [{'field': 'title', 'place': '克拉玛依市'}]}
+extra = {}
+
+    @pytest.mark.parametrize('code,title,raw,extra', [
+        ('650200', '克拉玛依市收费', response(), {}),
+        ('440300', '克拉玛依市收费', response(), {}),
+        ('650000', '克拉玛依市收费', response(), {}),
+        ('110000', '北京市收费', response('北京市'), {}),
+        ('650200', '新疆收费', response('新疆'), {}),
+        ('650200', '新疆乌鲁木齐收费', {'status': 'located', 'locations': [
+            {'field': 'title', 'place': '新疆'}, {'field': 'title', 'place': '乌鲁木齐'}]}, {}),
+        ('440300', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '广东'}),
+        ('650200', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {'status': 'insufficient_context', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {}, {'author_ip_location': '新疆'}),
+    ])
+    def test_p3_production_origin_changes_only_envelope(code, title, raw, extra):
+&gt;       from backend.audit_agent.geographic_p3_runtime import prepare, consume
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'
+
+tests/test_geographic_runtime_bridge.py:41: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_p3_production_origin_changes_only_envelope[110000-\u5317\u4eac\u5e02\u6536\u8d39-raw3-extra3]" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'">code = '110000', title = '北京市收费'
+raw = {'status': 'located', 'locations': [{'field': 'title', 'place': '北京市'}]}
+extra = {}
+
+    @pytest.mark.parametrize('code,title,raw,extra', [
+        ('650200', '克拉玛依市收费', response(), {}),
+        ('440300', '克拉玛依市收费', response(), {}),
+        ('650000', '克拉玛依市收费', response(), {}),
+        ('110000', '北京市收费', response('北京市'), {}),
+        ('650200', '新疆收费', response('新疆'), {}),
+        ('650200', '新疆乌鲁木齐收费', {'status': 'located', 'locations': [
+            {'field': 'title', 'place': '新疆'}, {'field': 'title', 'place': '乌鲁木齐'}]}, {}),
+        ('440300', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '广东'}),
+        ('650200', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {'status': 'insufficient_context', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {}, {'author_ip_location': '新疆'}),
+    ])
+    def test_p3_production_origin_changes_only_envelope(code, title, raw, extra):
+&gt;       from backend.audit_agent.geographic_p3_runtime import prepare, consume
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'
+
+tests/test_geographic_runtime_bridge.py:41: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_p3_production_origin_changes_only_envelope[650200-\u65b0\u7586\u6536\u8d39-raw4-extra4]" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'">code = '650200', title = '新疆收费'
+raw = {'status': 'located', 'locations': [{'field': 'title', 'place': '新疆'}]}
+extra = {}
+
+    @pytest.mark.parametrize('code,title,raw,extra', [
+        ('650200', '克拉玛依市收费', response(), {}),
+        ('440300', '克拉玛依市收费', response(), {}),
+        ('650000', '克拉玛依市收费', response(), {}),
+        ('110000', '北京市收费', response('北京市'), {}),
+        ('650200', '新疆收费', response('新疆'), {}),
+        ('650200', '新疆乌鲁木齐收费', {'status': 'located', 'locations': [
+            {'field': 'title', 'place': '新疆'}, {'field': 'title', 'place': '乌鲁木齐'}]}, {}),
+        ('440300', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '广东'}),
+        ('650200', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {'status': 'insufficient_context', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {}, {'author_ip_location': '新疆'}),
+    ])
+    def test_p3_production_origin_changes_only_envelope(code, title, raw, extra):
+&gt;       from backend.audit_agent.geographic_p3_runtime import prepare, consume
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'
+
+tests/test_geographic_runtime_bridge.py:41: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_p3_production_origin_changes_only_envelope[650200-\u65b0\u7586\u4e4c\u9c81\u6728\u9f50\u6536\u8d39-raw5-extra5]" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'">code = '650200', title = '新疆乌鲁木齐收费'
+raw = {'status': 'located', 'locations': [{'field': 'title', 'place': '新疆'}, {'field': 'title', 'place': '乌鲁木齐'}]}
+extra = {}
+
+    @pytest.mark.parametrize('code,title,raw,extra', [
+        ('650200', '克拉玛依市收费', response(), {}),
+        ('440300', '克拉玛依市收费', response(), {}),
+        ('650000', '克拉玛依市收费', response(), {}),
+        ('110000', '北京市收费', response('北京市'), {}),
+        ('650200', '新疆收费', response('新疆'), {}),
+        ('650200', '新疆乌鲁木齐收费', {'status': 'located', 'locations': [
+            {'field': 'title', 'place': '新疆'}, {'field': 'title', 'place': '乌鲁木齐'}]}, {}),
+        ('440300', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '广东'}),
+        ('650200', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {'status': 'insufficient_context', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {}, {'author_ip_location': '新疆'}),
+    ])
+    def test_p3_production_origin_changes_only_envelope(code, title, raw, extra):
+&gt;       from backend.audit_agent.geographic_p3_runtime import prepare, consume
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'
+
+tests/test_geographic_runtime_bridge.py:41: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_p3_production_origin_changes_only_envelope[440300-\u6536\u8d39\u54a8\u8be2-raw6-extra6]" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'">code = '440300', title = '收费咨询'
+raw = {'status': 'no_location', 'locations': []}
+extra = {'author_ip_location': '广东'}
+
+    @pytest.mark.parametrize('code,title,raw,extra', [
+        ('650200', '克拉玛依市收费', response(), {}),
+        ('440300', '克拉玛依市收费', response(), {}),
+        ('650000', '克拉玛依市收费', response(), {}),
+        ('110000', '北京市收费', response('北京市'), {}),
+        ('650200', '新疆收费', response('新疆'), {}),
+        ('650200', '新疆乌鲁木齐收费', {'status': 'located', 'locations': [
+            {'field': 'title', 'place': '新疆'}, {'field': 'title', 'place': '乌鲁木齐'}]}, {}),
+        ('440300', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '广东'}),
+        ('650200', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {'status': 'insufficient_context', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {}, {'author_ip_location': '新疆'}),
+    ])
+    def test_p3_production_origin_changes_only_envelope(code, title, raw, extra):
+&gt;       from backend.audit_agent.geographic_p3_runtime import prepare, consume
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'
+
+tests/test_geographic_runtime_bridge.py:41: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_p3_production_origin_changes_only_envelope[650200-\u6536\u8d39\u54a8\u8be2-raw7-extra7]" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'">code = '650200', title = '收费咨询'
+raw = {'status': 'no_location', 'locations': []}
+extra = {'author_ip_location': '新疆'}
+
+    @pytest.mark.parametrize('code,title,raw,extra', [
+        ('650200', '克拉玛依市收费', response(), {}),
+        ('440300', '克拉玛依市收费', response(), {}),
+        ('650000', '克拉玛依市收费', response(), {}),
+        ('110000', '北京市收费', response('北京市'), {}),
+        ('650200', '新疆收费', response('新疆'), {}),
+        ('650200', '新疆乌鲁木齐收费', {'status': 'located', 'locations': [
+            {'field': 'title', 'place': '新疆'}, {'field': 'title', 'place': '乌鲁木齐'}]}, {}),
+        ('440300', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '广东'}),
+        ('650200', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {'status': 'insufficient_context', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {}, {'author_ip_location': '新疆'}),
+    ])
+    def test_p3_production_origin_changes_only_envelope(code, title, raw, extra):
+&gt;       from backend.audit_agent.geographic_p3_runtime import prepare, consume
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'
+
+tests/test_geographic_runtime_bridge.py:41: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_p3_production_origin_changes_only_envelope[650200-\u6536\u8d39\u54a8\u8be2-raw8-extra8]" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'">code = '650200', title = '收费咨询'
+raw = {'status': 'insufficient_context', 'locations': []}
+extra = {'author_ip_location': '新疆'}
+
+    @pytest.mark.parametrize('code,title,raw,extra', [
+        ('650200', '克拉玛依市收费', response(), {}),
+        ('440300', '克拉玛依市收费', response(), {}),
+        ('650000', '克拉玛依市收费', response(), {}),
+        ('110000', '北京市收费', response('北京市'), {}),
+        ('650200', '新疆收费', response('新疆'), {}),
+        ('650200', '新疆乌鲁木齐收费', {'status': 'located', 'locations': [
+            {'field': 'title', 'place': '新疆'}, {'field': 'title', 'place': '乌鲁木齐'}]}, {}),
+        ('440300', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '广东'}),
+        ('650200', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {'status': 'insufficient_context', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {}, {'author_ip_location': '新疆'}),
+    ])
+    def test_p3_production_origin_changes_only_envelope(code, title, raw, extra):
+&gt;       from backend.audit_agent.geographic_p3_runtime import prepare, consume
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'
+
+tests/test_geographic_runtime_bridge.py:41: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_p3_production_origin_changes_only_envelope[650200-\u6536\u8d39\u54a8\u8be2-raw9-extra9]" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'">code = '650200', title = '收费咨询', raw = {}, extra = {'author_ip_location': '新疆'}
+
+    @pytest.mark.parametrize('code,title,raw,extra', [
+        ('650200', '克拉玛依市收费', response(), {}),
+        ('440300', '克拉玛依市收费', response(), {}),
+        ('650000', '克拉玛依市收费', response(), {}),
+        ('110000', '北京市收费', response('北京市'), {}),
+        ('650200', '新疆收费', response('新疆'), {}),
+        ('650200', '新疆乌鲁木齐收费', {'status': 'located', 'locations': [
+            {'field': 'title', 'place': '新疆'}, {'field': 'title', 'place': '乌鲁木齐'}]}, {}),
+        ('440300', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '广东'}),
+        ('650200', '收费咨询', {'status': 'no_location', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {'status': 'insufficient_context', 'locations': []}, {'author_ip_location': '新疆'}),
+        ('650200', '收费咨询', {}, {'author_ip_location': '新疆'}),
+    ])
+    def test_p3_production_origin_changes_only_envelope(code, title, raw, extra):
+&gt;       from backend.audit_agent.geographic_p3_runtime import prepare, consume
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'
+
+tests/test_geographic_runtime_bridge.py:41: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_runtime_source_manifest_and_semantic_code_are_exact" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'">def test_runtime_source_manifest_and_semantic_code_are_exact():
+&gt;       from backend.audit_agent.geographic_p3_runtime import verify_dependencies
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'
+
+tests/test_geographic_runtime_bridge.py:62: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_production_profile_rejects_fixture_origin_and_rehashed_drift" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'">def test_production_profile_rejects_fixture_origin_and_rehashed_drift():
+&gt;       from backend.audit_agent.geographic_p3_runtime import (
+            freeze_p3_inputs, validate_frozen_p3_inputs, derive_scope_context, shared, scope)
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_p3_runtime'
+
+tests/test_geographic_runtime_bridge.py:85: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_original_risk_inputs_requests_scores_and_sort_are_unchanged" time="0.001"><failure message="ModuleNotFoundError: No module named 'backend.audit_agent.frozen_risk'">def test_original_risk_inputs_requests_scores_and_sort_are_unchanged():
+&gt;       from backend.audit_agent.frozen_risk import build_frozen_engine, validate_risk_inputs
+E       ModuleNotFoundError: No module named 'backend.audit_agent.frozen_risk'
+
+tests/test_geographic_runtime_bridge.py:104: ModuleNotFoundError</failure></testcase><testcase classname="tests.test_geographic_runtime_bridge" name="test_product_modules_never_import_experiments" time="0.001"><failure message="FileNotFoundError: [Errno 2] No such file or directory: '/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/backend/audit_agent/geographic_p3_runtime/__init__.py'">def test_product_modules_never_import_experiments():
+        for path in [RUNTIME / '__init__.py', ROOT / 'backend/audit_agent/frozen_risk.py',
+                     ROOT / 'backend/audit_agent/geographic_bridge.py', *RUNTIME.glob('*.py')]:
+&gt;           for node in ast.walk(ast.parse(path.read_text())):
+                                           ^^^^^^^^^^^^^^^^
+
+tests/test_geographic_runtime_bridge.py:117: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1027: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/backend/audit_agent/geographic_p3_runtime/__init__.py')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/backend/audit_agent/geographic_p3_runtime/__init__.py'
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1013: FileNotFoundError</failure></testcase></testsuite></testsuites>

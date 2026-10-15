@@ -568,7 +568,7 @@ class InvestigationCreationService:
         draft_configuration = type(draft.configuration).model_validate(
             draft.configuration.model_dump(mode="json")
         )
-        scope_intent.ensure_execution_ready(draft_configuration)
+        scope_intent.ensure_execution_ready(draft_configuration, capability=getattr(self, 'geographic_capability', None))
         confirmation_resolution = None
         if isinstance(
             draft_configuration, LegacyInvestigationDraftConfigurationV3
@@ -606,16 +606,37 @@ class InvestigationCreationService:
                         principal=principal,
                         resource_connection=resource_connection,
                     )
-                    run = self._store_confirmation(
-                        command,
-                        principal=principal,
-                        resolved_model=resolution.execution,
-                        configuration_hash=resolution.config_hash,
-                        confirmation_resolution=resolution.model_dump(mode="json"),
-                        search_terms_resolver=lambda configuration: self.resource_service.execution_search_terms(
-                            configuration, resource_connection=resource_connection
-                        ),
-                    )
+                    from contextlib import nullcontext
+                    geographic_fence = nullcontext()
+                    if draft_configuration.relevance_scope is not None:
+                        from .geographic_runtime import capture_confirmed_authority
+                        from .scope_search_plan import build_confirmed_scope_search_plan
+                        def freeze(current):
+                            authority = capture_confirmed_authority(self, current, principal=principal,
+                                resource_connection=resource_connection)
+                            return build_confirmed_scope_search_plan(authority,
+                                expected_identity=authority['identity']).model_dump(mode='json')
+                        plan = freeze(draft)
+                        payload = resolution.model_dump(mode='json')
+                        payload['execution']['geographic_plan'] = plan
+                        payload['config_hash'] = confirmed_configuration_hash({k: payload[k] for k in (
+                            'mode', 'platform', 'resolved_search_terms', 'creator_url', 'recall_plan', 'execution')}
+                            | resolution.source_payload())
+                        from .contracts import ConfirmationResolution
+                        resolution = ConfirmationResolution.model_validate(payload)
+                        geographic_fence = self.geographic_capability.confirmation(freeze)
+                    with geographic_fence:
+                        run = self._store_confirmation(
+                            command,
+                            principal=principal,
+                            resolved_model=resolution.execution,
+                            configuration_hash=resolution.config_hash,
+                            confirmation_resolution=resolution.model_dump(mode="json"),
+                            search_terms_resolver=lambda configuration: self.resource_service.execution_search_terms(
+                                configuration, resource_connection=resource_connection
+                            ),
+                        )
+
             return self._prepare_run(run)
         else:
             resolved_model = ResolvedExecutionConfiguration.model_validate(

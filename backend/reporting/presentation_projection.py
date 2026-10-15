@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 from typing import Any, Iterable
 
 from backend.domain.identity import stable_hash
@@ -117,6 +119,10 @@ def build_presentation_projection(
         investigation_findings=investigation_findings,
         comment_statistics=comment_statistics,
     )
+    if "geographic_coverage" in source_statistics:
+        statistics["geographic_coverage"] = deepcopy(source_statistics["geographic_coverage"])
+        statistics["selection_basis"] = [deepcopy(post["selection_basis"]) for post in posts
+                                         if "selection_basis" in post]
     summary = _investigation_summary(statistics)
     template_kind = str(document.get("template_kind") or "")
     if template_kind in {"all_pass", "single_risk_post"}:
@@ -1110,6 +1116,7 @@ def _public_post(
         "source_url": str(post.get("source_url") or ""),
         "original_text": str(post.get("original_text") or ""),
         "transcripts": list(post.get("transcripts") or []),
+        **({"selection_basis": deepcopy(post["selection_basis"])} if "selection_basis" in post else {}),
     }
 
 

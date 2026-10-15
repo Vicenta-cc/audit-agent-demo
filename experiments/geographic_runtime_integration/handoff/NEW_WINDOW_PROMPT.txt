@@ -1,0 +1,31 @@
+请接续克拉玛依地域调查的前端全流程验证。当前用户额度不足，本次交接没有进行真实模型/采集测试；先只读复核并准备环境，待可用账号/额度与准入条件具备，再执行已经授权的有限功能冒烟。不要反复询问是否继续本地只读核验、隔离准备和离线验证。
+
+首先完整读取：
+/Users/ext.wanghongtao6/Documents/Codex/handoffs/geographic-runtime-frontend-20261015/ENVIRONMENT_AND_VALIDATION.md
+
+实施与验收依据：
+/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.omx/plans/geographic-relevance-runtime-integration-plan.md
+/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_runtime_integration/REPORT.md
+同目录SOURCE_MANIFEST.json、INTERFACE_MAPPING.md、CASE_EVIDENCE.md、RUN_HISTORY.json，以及artifacts/runtime-final-20261015-01的summary、commands、source-before和source-after。
+P4原验收：/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo/experiments/geographic_selection/ACCEPTANCE-20261015.md；同时读P4返修REPORT并查原会话明确复验结论。
+
+核心边界：
+1. 工作源码是geographic-integration独立worktree，分支codex/geographic-integration，接入前基线HEAD为9b36fbc2b5b3341bf7eb88bc8495ba08e8b4c363。本轮代码、测试和这份交接已经保存为同一新提交，准确提交见交接目录CODE_CHECKPOINT.json或本文件Git历史；不要用旧基线替代。保留他人修改，不reset/clean。
+2. 当前3993/8993运行旧P1，当前实际代理8996，8994无监听。旧P1没有采集账号且爬虫被禁用。它可以只读查看，不能当新地域路径验收。不要改其源码、运行库、profile，不要--seed。
+3. 用户同意必要的非语义接口适配，但旧精选风险筛选逻辑是重点不变量。不要改评分、阈值、权重、豁免、排序、模型提示或搜索词，不优化本轮精选质量；固定P3原导出和判定逻辑保留。
+4. 离线最终218通过/13历史报告跳过不等于P4原会话复验或真实流程通过。按计划R0，查到明确原会话复验且源码相符后才能开放R6。缺该证据时继续可做的只读/隔离准备/离线验证，并明确阻塞，不能删启动blocker。
+5. 用户已授权本地保存交接提交；未推送或部署。接续验证不自行合并、推送、部署；默认生产地域启动阻断保留。
+
+请顺序执行：
+A. 只读核对端口、进程工作目录、模型启动器安全配置、当前源码与验收摘要；旧origin不是应用main目标，不推送。记录日期、真实状态，不复用过时PID。
+B. 确认额度不足指Codex/API/采集哪一种；可从现有信息判断的不要重复询问。新模型凭据仅在本地隔离profile使用，不展示秘密、不改旧共享profile。
+C. 只读核对已找到的账号源库：/Users/ext.wanghongtao6/Documents/Codex/runtime/independent-retest-20261013/business/data/audit_index.sqlite3。发现过1条dy active不代表当前有效；核对归属/权限后按现有接口准备隔离账号，不能混拷不同key的密文，不改public属性，不覆盖源库。
+D. 核对/Users/ext.wanghongtao6/Documents/Codex/projects/MediaCrawler的现状及适配兼容性。它有本地修改，不能重置；保持原采集逻辑。
+E. 在新专属临时根准备独立后端/前端/DB/输出/profile；实现并验证独立启动器，复用现有Python与依赖。候选端口3995/8995/8997必须先查占用，strictPort且只监听127.0.0.1。不要把旧P1启动器当现成R6启动器。
+F. 对话、资源、风险、地域、审核、报告、内部重试与Python子进程必须统一经过持久原子预算门；上限30次，发送前扣额，失败不退、重启不清零。现有model_gateway仅chat/completions、SSE缓冲、默认不使用环境代理，先审计全部路由和测试专用香港出口。TLS保留，全局TUN/其他应用不改；任何角色绕过预算则真实测试尚未就绪。
+G. 准入与环境都满足后，用新隔离前端输入“调查克拉玛依大火”，明确克拉玛依市，核对dy/search/select与有效账号。最多2个原样查询词，每词最多3候选，总精采最多2，候选评论最多10，实际使用resolver较小限额。不能自动加词、补采或重试直到成功。
+H. 逐段记录会话/草案/revision/Run/Job/execution/摘要，验证全词捕获屏障、原风险与P3、预算、精采地域复核、持久交付、本次原始证据、正式审核和可打开报告。地域解析正确、精选开启和本地精采实际发生需要分别证明。
+I. 原风险逻辑用同原始输入/冻结规则/已保存模型响应回放比较，不重复消耗模型。检查旧RiskRecord不能用于原文/评论/认证已变的首次捕获；精采同档正常变化仍保留首次风险。默认无地域路径与原风险统计保持。
+J. 在相同独立DB/输出/预算DB下重启验证恢复。至少1条真实合法内容走到报告才能写正向链成功；零入选只写正确结束，省级/IP补充不能写成本地成功。真实没有命中就如实记录，不塞fixture、不改规则。
+
+交付新REPORT、安全环境清单、源码摘要、逐段证据、预算/交付对账和未验证项。保留全部失败，不用自测代替原会话验收。新窗口只需要继续当前任务，不必另建任务或修改现有P1服务。

@@ -1,0 +1,71 @@
+..............................................F......................... [ 57%]
+.........................................sssssssssssss                   [100%]
+=================================== FAILURES ===================================
+_______________ test_new_process_recovers_only_current_evidence ________________
+
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-1jdd0okn/pytest/test_new_process_recovers_only0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1190aa420>
+
+    def test_new_process_recovers_only_current_evidence(tmp_path,monkeypatch):
+        import os
+        from pathlib import Path
+        import subprocess
+        import sys
+        d,ing,s,c,b,key=setup_delivery(tmp_path,monkeypatch)
+        receipt=d.deliver(c,idempotency_key=key,binding=b)
+        result=subprocess.run([sys.executable,'-m','experiments.geographic_runtime_integration.replay_delivery',str(ing.db_path)],
+                              capture_output=True,text=True,check=True,env=dict(os.environ))
+        recovered=json.loads(result.stdout)
+        assert recovered['refs'][0]['item']['desc']=='current'
+        assert recovered['basis']==[receipt['selection_basis']]
+        # Durable ingestion can be reconciled before P4's mark_delivery was saved.
+        assert s.load('e',s.expected_plan_digest)['deliveries']=={}
+>       assert d.deliver(c,idempotency_key=key,binding=b)==receipt
+
+tests/test_geographic_runtime_delivery.py:85: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+experiments/geographic_joint_integration/run_offline.py:87: in audit
+    guard.block('process', argv)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <experiments.geographic_joint_integration.run_offline.bootstrap.<locals>.JointGuard object at 0x1047d1f40>
+kind = 'process'
+target = ['/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python', '-c', "import json,sys\nfrom pa...ers/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-1jdd0okn/pytest/test_new_process_recovers_only0/ingestion.sqlite']
+
+    def block(self, kind, target):
+        expected = (kind == 'sqlite' and str(target) == '/Users/offline-forbidden-child.sqlite3'
+                    and sys.argv[0] == '-c')
+        expected = expected or (kind == 'sqlite' and str(target) == '/Users/offline-forbidden-bound.sqlite3'
+            and os.environ.get('PYTEST_CURRENT_TEST') in {
+                'tests/test_geographic_execution_plan_guards.py::test_bound_attach_validated_per_execution[connection] (call)',
+                'tests/test_geographic_execution_plan_guards.py::test_bound_attach_validated_per_execution[cursor] (call)'})
+        event = {'pid': os.getpid(), 'kind': kind, 'target': str(target), 'blocked': True,
+                 'actual_succeeded': False, 'expected_probe': expected,
+                 'test': os.environ.get('PYTEST_CURRENT_TEST')}
+        self.attempts.append(event)
+        with self.event_log.open('a') as stream:
+            stream.write(json.dumps(event, ensure_ascii=False) + '\n')
+>       raise upstream.OfflineAccessBlocked('JOINT_OFFLINE_BLOCKED:' + kind + ':' + str(target))
+E       experiments.geographic_execution_plan.offline_guards.OfflineAccessBlocked: JOINT_OFFLINE_BLOCKED:process:['/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python', '-c', "import json,sys\nfrom pathlib import Path\nfrom audit_agent.ingestion import IngestionStore\nfrom audit_agent.geographic_delivery import delivery_basis_for_job\ns=IngestionStore(Path(sys.argv[1]))\nprint(json.dumps({'refs':s.pending_for_task('job'),'basis':delivery_basis_for_job(s,'job')}))\n", '/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-1jdd0okn/pytest/test_new_process_recovers_only0/ingestion.sqlite']
+
+experiments/geographic_joint_integration/run_offline.py:68: OfflineAccessBlocked
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_runtime_delivery.py::test_new_process_recovers_only_current_evidence
+1 failed, 112 passed, 13 skipped, 2 warnings in 161.66s (0:02:41)

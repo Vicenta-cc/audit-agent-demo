@@ -384,3 +384,33 @@ export interface InvestigationWorkspaceState {
   creation_answer_draft?: import("./investigations").InvestigationAnswerDraft | null;
   report_answer_draft?: import("./investigations").InvestigationAnswerDraft | null;
 }
+
+export type GeographicTier = 'local' | 'province_unknown' | 'ip_only' | 'other_region' | 'unresolved' | 'conflict';
+export interface GeographicSelectionPage {
+  run_id: string;
+  status: 'pending' | 'not_applicable' | 'ready' | 'empty' | 'incomplete';
+  reason?: string;
+  summary?: {
+    candidate_occurrences: number;
+    reserved: number;
+    collected: number;
+    handed_off: number;
+    collected_not_delivered: number;
+    unfinished_queries: string[];
+    reasons: string[];
+  };
+  items: Array<{
+    occurrence_id: string;
+    query_id: string;
+    content_key: string;
+    rank: number;
+    source_keyword: string;
+    geo_tier: GeographicTier | null;
+    geo_status: string | null;
+    risk_band: string | null;
+    risk_score: number | null;
+  }>;
+  total: number;
+  offset: number;
+  limit: number;
+}

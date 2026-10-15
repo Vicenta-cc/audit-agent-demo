@@ -9,6 +9,7 @@ import type {
 import { buildRelevanceScopeView } from "./confirmationView";
 import { InvestigationKeywordEditor } from "./InvestigationKeywordEditor";
 import { DraftResourceSave } from "./DraftResourceSave";
+import { GeographicSelectionPanel } from "./GeographicSelectionPanel";
 import { reportMetricTone, type ReportMetricTone } from "./reportMetricTone";
 
 const METRIC_TONE_COLORS: Record<ReportMetricTone, string> = {
@@ -30,6 +31,7 @@ export type DrawerType =
 
 interface InvestigationContextDrawerProps {
   isOpen: boolean;
+  geographicRunId?: string;
   type: DrawerType;
   onClose: () => void;
   draft?: TaskDraft;
@@ -68,6 +70,7 @@ export function buildDraftSuggestionPlanView(
 
 export function InvestigationContextDrawer({
   isOpen,
+  geographicRunId,
   type,
   onClose,
   draft,
@@ -160,6 +163,8 @@ export function InvestigationContextDrawer({
               {relevanceScope.candidates ? <div>候选地域：{relevanceScope.candidates}</div> : null}
               <p>{relevanceScope.notice}</p>
             </section> : null}
+
+            {relevanceScope && geographicRunId ? <GeographicSelectionPanel key={geographicRunId} runId={geographicRunId} /> : null}
 
             {draft.historyNotice ? <p style={{ fontSize: "12px", lineHeight: "1.7", color: "#64748b" }}>{draft.historyNotice}</p> : null}
             {draft.historicalConfiguration?.map((detail) => (

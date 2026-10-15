@@ -13,6 +13,7 @@ const platformLabels = {
 export function buildRelevanceScopeView(source?: {
   relevance_scope?: RelevanceScope | null;
   relevance_scope_state?: RelevanceScopeState;
+  blockers?: Array<{ code: string }>;
 }) {
   const scope = source?.relevance_scope;
   const state = source?.relevance_scope_state;
@@ -34,7 +35,9 @@ export function buildRelevanceScopeView(source?: {
     )).join("、") : "",
     notice: pending
       ? "地域要求待澄清，当前不能启动。请在对话中补充或修改地域。"
-      : "地域执行能力尚未接通，当前不能启动。"
+      : source?.blockers && !source.blockers.some(blocker => blocker.code === "RELEVANCE_SCOPE_EXECUTION_UNAVAILABLE")
+        ? "将按已确认地域与策略筛选内容。"
+        : "地域执行能力尚未接通，当前不能启动。"
   };
 }
 

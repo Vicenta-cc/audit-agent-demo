@@ -1,0 +1,702 @@
+{
+  "schema_version": "geographic-runtime-source-audit-v1",
+  "captured_at": "2026-10-15T15:11:12.842781+00:00",
+  "head": "9b36fbc2b5b3341bf7eb88bc8495ba08e8b4c363",
+  "application_baseline": "9b36fbc2b5b3341bf7eb88bc8495ba08e8b4c363",
+  "final_p1": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+  "fixed_p3_commit": "2120c53379d1b79c45e3cb8232b9c9b96657b183",
+  "fixed_p3_tag_resolved": "2120c53379d1b79c45e3cb8232b9c9b96657b183",
+  "scope": "Read-only source comparison; this manifest does not certify tests ran against identical bytes unless an artifact recorded source digests. Shared worktree may continue changing.",
+  "protected_full_files": [
+    {
+      "path": "backend/audit_agent/triage.py",
+      "bytes": 21679,
+      "sha256": "3a6cb0906064b458ef99ba0bb97fb1c3b57c0f4fb0ee69dfd25efb0160b7e2a3",
+      "equal_integration_base": true,
+      "equal_final_p1": true
+    },
+    {
+      "path": "backend/audit_agent/triage_matcher.py",
+      "bytes": 2787,
+      "sha256": "aa8c3d2bbfa46caea7220a34baa13b9db7a6dd132d06130a60af4fd28a265724",
+      "equal_integration_base": true,
+      "equal_final_p1": true
+    },
+    {
+      "path": "backend/audit_agent/crawler_adapter.py",
+      "bytes": 46084,
+      "sha256": "951dc5b43b763bd5ba631a07329e98fe6a305a0f297d7c8960d6cc62ce13a7a9",
+      "equal_integration_base": true,
+      "equal_final_p1": true
+    },
+    {
+      "path": "backend/investigation_creation/geographic_catalog.py",
+      "bytes": 19381,
+      "sha256": "8b8b3efef9cec6fedd2b17afda9d358c8fc8713b19a3f9a07fde144206b4f6a9",
+      "equal_integration_base": true,
+      "equal_final_p1": true
+    },
+    {
+      "path": "backend/investigation_creation/data/geographic_catalog.json",
+      "bytes": 677345,
+      "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "equal_integration_base": true,
+      "equal_final_p1": true
+    },
+    {
+      "path": "backend/investigation_creation/scope_selection.py",
+      "bytes": 11134,
+      "sha256": "fcded0f2d72ada12d952cababa1666046ca8a9beaccc5575b6221c4c37f53240",
+      "equal_integration_base": true,
+      "equal_final_p1": true
+    }
+  ],
+  "legacy_search_ast": [
+    {
+      "baseline": "9b36fbc2b5b3341bf7eb88bc8495ba08e8b4c363",
+      "symbol": "AuditPipeline._run_triaged_search",
+      "ast_sha256": "1faa1bc6ab1bbc599d233c2bb32376bc3bbd31e8ca7c4f982097ca31b9ec36a7",
+      "equal": true
+    },
+    {
+      "baseline": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+      "symbol": "AuditPipeline._run_triaged_search",
+      "ast_sha256": "1faa1bc6ab1bbc599d233c2bb32376bc3bbd31e8ca7c4f982097ca31b9ec36a7",
+      "equal": true
+    }
+  ],
+  "p1_scope_intent_ast": {
+    "path": "backend/investigation_creation/scope_intent.py",
+    "baseline": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+    "unchanged_functions": [
+      "_catalog",
+      "_reject",
+      "_source",
+      "bind_draft_state",
+      "combination",
+      "prepare_change",
+      "project_state",
+      "resolve_region",
+      "source_identity",
+      "strip_text"
+    ],
+    "changed_functions": [
+      "ensure_execution_ready",
+      "scope_blockers"
+    ],
+    "change_boundary": "Only scope_blockers/ensure_execution_ready accept explicit server capability; geographic parsing/selection functions remain AST identical. Default no capability remains blocked."
+  },
+  "fixed_p3_exports": [
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance.py",
+      "bytes": 63341,
+      "sha256": "6be6a45edf64f4896be3dbe28ab8b9115e3eea1148225076c10c3d617a52df1e",
+      "upstream_source": "backend/audit_agent/relevance.py",
+      "upstream_sha256": "6be6a45edf64f4896be3dbe28ab8b9115e3eea1148225076c10c3d617a52df1e",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_ip.py",
+      "bytes": 9940,
+      "sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb",
+      "upstream_source": "backend/audit_agent/relevance_ip.py",
+      "upstream_sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_scope.py",
+      "bytes": 8625,
+      "sha256": "6980b5ecdb00bbbbba68c0dcc1aafc007b2f88fd3b8674e405ff1e9703c82eff",
+      "upstream_source": "backend/audit_agent/relevance_scope.py",
+      "upstream_sha256": "6980b5ecdb00bbbbba68c0dcc1aafc007b2f88fd3b8674e405ff1e9703c82eff",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only.py",
+      "bytes": 14781,
+      "sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5",
+      "upstream_source": "backend/audit_agent/relevance_post_only.py",
+      "upstream_sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_v2.py",
+      "bytes": 14006,
+      "sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607",
+      "upstream_source": "backend/audit_agent/relevance_post_only_v2.py",
+      "upstream_sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_simple.py",
+      "bytes": 7558,
+      "sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9",
+      "upstream_source": "backend/audit_agent/relevance_post_only_simple.py",
+      "upstream_sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_names.py",
+      "bytes": 6354,
+      "sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e",
+      "upstream_source": "backend/audit_agent/relevance_post_only_names.py",
+      "upstream_sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_names_v2.py",
+      "bytes": 8739,
+      "sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907",
+      "upstream_source": "backend/audit_agent/relevance_post_only_names_v2.py",
+      "upstream_sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/admin_catalog/geographic_catalog.json",
+      "bytes": 677345,
+      "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "upstream_source": "experiments/geographic_relevance/admin_catalog/geographic_catalog.json",
+      "upstream_sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/admin_catalog/SOURCE_MANIFEST.json",
+      "bytes": 3053,
+      "sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9",
+      "upstream_source": "experiments/geographic_relevance/admin_catalog/SOURCE_MANIFEST.json",
+      "upstream_sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/location_catalog.json",
+      "bytes": 11323,
+      "sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d",
+      "upstream_source": "experiments/geographic_relevance/location_catalog.json",
+      "upstream_sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance.py",
+      "bytes": 63341,
+      "sha256": "6be6a45edf64f4896be3dbe28ab8b9115e3eea1148225076c10c3d617a52df1e",
+      "upstream_source": "backend/audit_agent/relevance.py",
+      "upstream_sha256": "6be6a45edf64f4896be3dbe28ab8b9115e3eea1148225076c10c3d617a52df1e",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_ip.py",
+      "bytes": 9940,
+      "sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb",
+      "upstream_source": "backend/audit_agent/relevance_ip.py",
+      "upstream_sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_scope.py",
+      "bytes": 8625,
+      "sha256": "6980b5ecdb00bbbbba68c0dcc1aafc007b2f88fd3b8674e405ff1e9703c82eff",
+      "upstream_source": "backend/audit_agent/relevance_scope.py",
+      "upstream_sha256": "6980b5ecdb00bbbbba68c0dcc1aafc007b2f88fd3b8674e405ff1e9703c82eff",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only.py",
+      "bytes": 14781,
+      "sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5",
+      "upstream_source": "backend/audit_agent/relevance_post_only.py",
+      "upstream_sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_v2.py",
+      "bytes": 14006,
+      "sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607",
+      "upstream_source": "backend/audit_agent/relevance_post_only_v2.py",
+      "upstream_sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_simple.py",
+      "bytes": 7558,
+      "sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9",
+      "upstream_source": "backend/audit_agent/relevance_post_only_simple.py",
+      "upstream_sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_names.py",
+      "bytes": 6354,
+      "sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e",
+      "upstream_source": "backend/audit_agent/relevance_post_only_names.py",
+      "upstream_sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_names_v2.py",
+      "bytes": 8739,
+      "sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907",
+      "upstream_source": "backend/audit_agent/relevance_post_only_names_v2.py",
+      "upstream_sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/experiments/geographic_relevance/admin_catalog/geographic_catalog.json",
+      "bytes": 677345,
+      "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "upstream_source": "experiments/geographic_relevance/admin_catalog/geographic_catalog.json",
+      "upstream_sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/experiments/geographic_relevance/admin_catalog/SOURCE_MANIFEST.json",
+      "bytes": 3053,
+      "sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9",
+      "upstream_source": "experiments/geographic_relevance/admin_catalog/SOURCE_MANIFEST.json",
+      "upstream_sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9",
+      "equal_fixed_tag": true
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/experiments/geographic_relevance/location_catalog.json",
+      "bytes": 11323,
+      "sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d",
+      "upstream_source": "experiments/geographic_relevance/location_catalog.json",
+      "upstream_sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d",
+      "equal_fixed_tag": true
+    }
+  ],
+  "runtime_p3_derivatives": [
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance.py",
+      "bytes": 63371,
+      "sha256": "e6393ec99e564f77342db0d633e1190cb1bed4c1f17fb67add9aee622f1623cb",
+      "upstream_sha256": "6be6a45edf64f4896be3dbe28ab8b9115e3eea1148225076c10c3d617a52df1e",
+      "byte_identical": false,
+      "only_exact_origin_literal_substitutions": true,
+      "substitutions": {
+        "fixture": "confirmed_run",
+        "SCOPE_MUST_BE_FIXTURE": "SCOPE_MUST_BE_CONFIRMED_RUN"
+      }
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_ip.py",
+      "bytes": 9940,
+      "sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb",
+      "upstream_sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_scope.py",
+      "bytes": 8661,
+      "sha256": "aeed4f634c39253e157e481c39c80f8caa497d37cff2a75822505c745b44b8e8",
+      "upstream_sha256": "6980b5ecdb00bbbbba68c0dcc1aafc007b2f88fd3b8674e405ff1e9703c82eff",
+      "byte_identical": false,
+      "only_exact_origin_literal_substitutions": true,
+      "substitutions": {
+        "fixture": "confirmed_run",
+        "SCOPE_MUST_BE_FIXTURE": "SCOPE_MUST_BE_CONFIRMED_RUN"
+      }
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_post_only.py",
+      "bytes": 14781,
+      "sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5",
+      "upstream_sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_post_only_v2.py",
+      "bytes": 14006,
+      "sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607",
+      "upstream_sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_post_only_simple.py",
+      "bytes": 7558,
+      "sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9",
+      "upstream_sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_post_only_names.py",
+      "bytes": 6354,
+      "sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e",
+      "upstream_sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_post_only_names_v2.py",
+      "bytes": 8739,
+      "sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907",
+      "upstream_sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/admin_catalog/geographic_catalog.json",
+      "bytes": 677345,
+      "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "upstream_sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/admin_catalog/SOURCE_MANIFEST.json",
+      "bytes": 3053,
+      "sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9",
+      "upstream_sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/location_catalog.json",
+      "bytes": 11323,
+      "sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d",
+      "upstream_sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d",
+      "byte_identical": true
+    }
+  ],
+  "runtime_wrapper": {
+    "path": "backend/audit_agent/geographic_p3_runtime/__init__.py",
+    "bytes": 6726,
+    "sha256": "8427588ae2b06268c14bc29c2893a2ff7297f2d48a23586cb94e9d04ef82e651"
+  },
+  "working_changes": [
+    {
+      "path": "Audit_assistant/playwright.logic.config.ts",
+      "bytes": 418,
+      "sha256": "d42facc54c405e67ec45089ef41b061e9ec90cc9ce4c6c02d862ef63f11c7035"
+    },
+    {
+      "path": "Audit_assistant/src/features/investigation/GeographicReportEvidence.tsx",
+      "bytes": 2701,
+      "sha256": "59cc2e32b077136a9ce7a10f3735fee44ee93a7298a417688136aded0e24f25f"
+    },
+    {
+      "path": "Audit_assistant/src/features/investigation/GeographicSelectionPanel.tsx",
+      "bytes": 4863,
+      "sha256": "b555ce532b81ea78c54c297cd5e5873909fd21251970edb641d51a8095514881"
+    },
+    {
+      "path": "Audit_assistant/src/features/investigation/InvestigationContextDrawer.tsx",
+      "bytes": 25973,
+      "sha256": "253d95d145c58e3cfb73f27b0e5310d80fd8637119bda1b547c3f44fe2259c11"
+    },
+    {
+      "path": "Audit_assistant/src/features/investigation/InvestigationPage.tsx",
+      "bytes": 114561,
+      "sha256": "cfa91fd845e2ea042e6aefa201cbbdba77385d1df0da1acdaa8b8d06b3590bb2"
+    },
+    {
+      "path": "Audit_assistant/src/features/investigation/InvestigationReportPage.tsx",
+      "bytes": 56864,
+      "sha256": "ba6e7ecc7564dc60631085b00e40b7adca3025527a9acab4d9cf0f170c799650"
+    },
+    {
+      "path": "Audit_assistant/src/features/investigation/confirmationView.ts",
+      "bytes": 7887,
+      "sha256": "627186d4ea410fc608acdaa3ffea06ca51ecd4118c9f69c92c2fc557fde33a26"
+    },
+    {
+      "path": "Audit_assistant/src/services/investigationCreation.ts",
+      "bytes": 9420,
+      "sha256": "0ec33f99110fca787ad5295f012d059d3ea36058636a4f83dc5dc06faca6df70"
+    },
+    {
+      "path": "Audit_assistant/src/types/investigationCreation.ts",
+      "bytes": 11644,
+      "sha256": "c3124b5e07e3cd8f09791b6284eafd29df115fffd23e528424e10f9cc256dd79"
+    },
+    {
+      "path": "Audit_assistant/src/types/reports.ts",
+      "bytes": 9888,
+      "sha256": "cde5169f6e5c15f2aa7a58339bbca681083c407591e5a0f2c5386920e7afd15c"
+    },
+    {
+      "path": "Audit_assistant/tests/geographicRuntimePresentation.spec.tsx",
+      "bytes": 5139,
+      "sha256": "aa551eea2e009f0796014102fc7caa25b389ea3ef0be867810aeb41a3a65a0c0"
+    },
+    {
+      "path": "backend/api/investigation_creation.py",
+      "bytes": 13151,
+      "sha256": "fd9cb727b96c6e504052e7056230e32796f56f22805d611e7ea93e44c73c8acf"
+    },
+    {
+      "path": "backend/audit_agent/frozen_risk.py",
+      "bytes": 7349,
+      "sha256": "745d3aa7aa83adde71ffda9aee0941b3cab8b911318cd20fbff7834098cc7098"
+    },
+    {
+      "path": "backend/audit_agent/geographic_bridge.py",
+      "bytes": 11188,
+      "sha256": "c1cdc71b4f9e7359be7520712cbd556fb694b3bee90a7e237821baf8df9bd9ef"
+    },
+    {
+      "path": "backend/audit_agent/geographic_delivery.py",
+      "bytes": 11539,
+      "sha256": "a48716fc9518c765ba9bdf14c47c49b8837596ebd824f5ce336ce306fc1f035c"
+    },
+    {
+      "path": "backend/audit_agent/geographic_execution_store.py",
+      "bytes": 1411,
+      "sha256": "a3e14d5e6ea751e451995c7c56c67554dc15f3910134a40d57feeb775ac5f8c4"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/SOURCE_MANIFEST.json",
+      "bytes": 4295,
+      "sha256": "fd8b705df947bb98b814c9c1aa11c05435aedef286863e8fcd30d2eec3d18192"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/__init__.py",
+      "bytes": 6726,
+      "sha256": "8427588ae2b06268c14bc29c2893a2ff7297f2d48a23586cb94e9d04ef82e651"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/admin_catalog/SOURCE_MANIFEST.json",
+      "bytes": 3053,
+      "sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/admin_catalog/geographic_catalog.json",
+      "bytes": 677345,
+      "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/location_catalog.json",
+      "bytes": 11323,
+      "sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance.py",
+      "bytes": 63371,
+      "sha256": "e6393ec99e564f77342db0d633e1190cb1bed4c1f17fb67add9aee622f1623cb"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_ip.py",
+      "bytes": 9940,
+      "sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_post_only.py",
+      "bytes": 14781,
+      "sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_post_only_names.py",
+      "bytes": 6354,
+      "sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_post_only_names_v2.py",
+      "bytes": 8739,
+      "sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_post_only_simple.py",
+      "bytes": 7558,
+      "sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_post_only_v2.py",
+      "bytes": 14006,
+      "sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607"
+    },
+    {
+      "path": "backend/audit_agent/geographic_p3_runtime/relevance_scope.py",
+      "bytes": 8661,
+      "sha256": "aeed4f634c39253e157e481c39c80f8caa497d37cff2a75822505c745b44b8e8"
+    },
+    {
+      "path": "backend/audit_agent/geographic_pipeline.py",
+      "bytes": 10578,
+      "sha256": "6f1ed5a31443b535d72d2d919c4505be6216d6ea72b360529403f9f93cb09246"
+    },
+    {
+      "path": "backend/audit_agent/geographic_status.py",
+      "bytes": 6124,
+      "sha256": "ff2885288735d045add7e046b406e2c0738934ce4fdbabc9f13e376ae5c8e568"
+    },
+    {
+      "path": "backend/audit_agent/ingestion.py",
+      "bytes": 61516,
+      "sha256": "69cb127eef95552005ca145b2c501c3f872898ba148fc430ed770a9f27a14953"
+    },
+    {
+      "path": "backend/audit_agent/job_store.py",
+      "bytes": 67010,
+      "sha256": "0429911ee6ff7940b4a27845139c9fee012a24b4cfeee99b8644e3ff950725f3"
+    },
+    {
+      "path": "backend/audit_agent/pipeline.py",
+      "bytes": 494701,
+      "sha256": "3b0ecf5306c9189906188a8c56fd915836d32816b1a39761df2ad38c4a816ae5"
+    },
+    {
+      "path": "backend/audit_agent/scoped_execution.py",
+      "bytes": 17563,
+      "sha256": "1577c4ed782476db7c875c168803630219fb3baa85430b0b980ebf0d852cff17"
+    },
+    {
+      "path": "backend/audit_agent/scoped_selection.py",
+      "bytes": 20261,
+      "sha256": "4a3ea546b236f55802344c128c00e3987a3b44d419943255c7df716d8e66c96f"
+    },
+    {
+      "path": "backend/audit_agent/scoped_selection_store.py",
+      "bytes": 26224,
+      "sha256": "cac7bb5ba7d93cfdda86650b10dc20a0ed0bc7da9718a01382acf5ba02e45dc0"
+    },
+    {
+      "path": "backend/investigation_creation/adapters.py",
+      "bytes": 53165,
+      "sha256": "9046ca4036bf3c09c41cc19a7480ba68effcc3e31a8fe348c69b8c1cd85cec8b"
+    },
+    {
+      "path": "backend/investigation_creation/contracts.py",
+      "bytes": 47800,
+      "sha256": "a6c685ce945183206c18abbf117749f9995d7550026687eca87256f7cd88a4d9"
+    },
+    {
+      "path": "backend/investigation_creation/frozen.py",
+      "bytes": 6914,
+      "sha256": "116ead1d6661aece484ab2e45a6ffa07b5ae758416699e17c51b60a7a731a313"
+    },
+    {
+      "path": "backend/investigation_creation/geographic_runtime.py",
+      "bytes": 16728,
+      "sha256": "1b4c6bbe82af1e056d4f710d564d4ec7138957b39f996faf7907d327194e02ef"
+    },
+    {
+      "path": "backend/investigation_creation/resources.py",
+      "bytes": 53217,
+      "sha256": "d0465f58788eb49eb63d6b0263ca75baa38e4111e901dac4154c807690a4e31a"
+    },
+    {
+      "path": "backend/investigation_creation/scope_intent.py",
+      "bytes": 13533,
+      "sha256": "11f1a0caae93914994628267e844ad68bdb84b4e3660ee21c85fb2c8cfcc895f"
+    },
+    {
+      "path": "backend/investigation_creation/scope_search_plan.py",
+      "bytes": 39780,
+      "sha256": "f7c2d8338e992d203862c7a48b703712cb3497f3af27b14630f8468f6225dc67"
+    },
+    {
+      "path": "backend/investigation_creation/service.py",
+      "bytes": 38521,
+      "sha256": "a32bfda5844bb64f23c292d3baded65c09872e878601be0772225811fbb6f4b0"
+    },
+    {
+      "path": "backend/investigation_creation/store.py",
+      "bytes": 113626,
+      "sha256": "e9486f8049741f6a8092f9c6d1770d9af7b6f53170b36441e1d55567e56a3ed2"
+    },
+    {
+      "path": "backend/investigation_creation/worker.py",
+      "bytes": 36314,
+      "sha256": "bda4470140d8f95defb09e153c1c3a85617fced5d8c6e0cf93e32f8d7946db39"
+    },
+    {
+      "path": "backend/reporting/integration_source.py",
+      "bytes": 30285,
+      "sha256": "bd34735dee00550cf05615d6d95a65db67defdfd5786f3e390f30dc5eb72d3ef"
+    },
+    {
+      "path": "backend/reporting/presentation_projection.py",
+      "bytes": 47315,
+      "sha256": "e5c85ddac8cc25ade3dc3ad43a5844526190404a390251b633205381f1608490"
+    },
+    {
+      "path": "backend/reporting/r3_graph.py",
+      "bytes": 17443,
+      "sha256": "a02e2c809291124700cf7a4e836b2f6d44d76a2932c04f8be752bba660389a5c"
+    },
+    {
+      "path": "backend/reporting/store.py",
+      "bytes": 110528,
+      "sha256": "bfaab720244983b6fceeeee51c3713602a0f79cfaf7e0a37db3951b178ae37a2"
+    },
+    {
+      "path": "tests/test_geographic_reporting.py",
+      "bytes": 4696,
+      "sha256": "9784f91da063fbd43c8167e75edcc9c7a33f11d673dba9099f435607eab9f42a"
+    },
+    {
+      "path": "tests/test_geographic_runtime_bridge.py",
+      "bytes": 12642,
+      "sha256": "04bcd8a3ce52134ae634012c7726433f76fcd286b0d7c8cdb850b464801b68ac"
+    },
+    {
+      "path": "tests/test_geographic_runtime_delivery.py",
+      "bytes": 6133,
+      "sha256": "2f714c134cc1597838aa02d7e7763a2063dc3a2c2cae12a4f55c901f7a899599"
+    },
+    {
+      "path": "tests/test_geographic_runtime_freeze.py",
+      "bytes": 13138,
+      "sha256": "c6cd591a58f5464d5f41dc10f352ee0f95244e00b96e3f20def6cbcc8c3c502c"
+    },
+    {
+      "path": "tests/test_geographic_runtime_pipeline.py",
+      "bytes": 6155,
+      "sha256": "9aec182c54f10dc3eeebfdfab7ac7ee9e16c4f96f06e7aab229cd113bd117e43"
+    },
+    {
+      "path": "tests/test_geographic_runtime_status.py",
+      "bytes": 5361,
+      "sha256": "d702c768643e190e39554a9bccefdfc7abb3ac6512c01dfbe56f321b56471352"
+    },
+    {
+      "path": "tests/test_geographic_runtime_store.py",
+      "bytes": 2402,
+      "sha256": "b87de8821b1f0f29bd3957d84dff6d602aa2f8111b0f5458f53a5e1b05ab4dc1"
+    },
+    {
+      "path": "tests/test_geographic_runtime_worker.py",
+      "bytes": 4130,
+      "sha256": "dda4da7a389d3a7a1cdd11b658ad2e038026b97651bac671589639ea2cc8625f"
+    }
+  ],
+  "mediacrawler": {
+    "repository_tracked_source_paths": [],
+    "adapter_checked_above": true,
+    "external_checkout_inspected": false,
+    "claim": "No tracked MediaCrawler source exists in this checkout; no external checkout/version or running environment assertion."
+  },
+  "p4_original_session_reacceptance": "missing/pending; implementation self-tests are not original-session acceptance",
+  "r6": "not executed",
+  "plan": {
+    "path": "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.omx/plans/geographic-relevance-runtime-integration-plan.md",
+    "sha256": "f2c25d630ac3356ad7af9a6bc5c3aedcdc8b35b92bea333de7ed06255e492d23"
+  },
+  "external_validation_log_snapshots": [
+    {
+      "path": "/tmp/geographic-r1-r4-validation-20261015-01/freeze.log",
+      "bytes": 112,
+      "sha256": "e346e3472bb23a6d886c312940f182c283ce8a1c35a22693ac8c73ad30708ad5",
+      "caveat": "Log summary only; no invented per-node JUnit, exit code or guard metadata."
+    },
+    {
+      "path": "/tmp/geographic-r1-r4-validation-20261015-01/typecheck.log",
+      "bytes": 63,
+      "sha256": "6e7f3fdc8a04cb309a2e07fb3d39c091bb7a911514c3556dd43422d3a62bb26d",
+      "caveat": "Log summary only; no invented per-node JUnit, exit code or guard metadata."
+    },
+    {
+      "path": "/tmp/geographic-r1-r4-validation-20261015-01/build.log",
+      "bytes": 744,
+      "sha256": "d99e17b74db21f954e7f6d9530ffc52defb78ee9d83106c2a8ba55514a6ac939",
+      "caveat": "Log summary only; no invented per-node JUnit, exit code or guard metadata."
+    },
+    {
+      "path": "/tmp/geographic-r1-r4-validation-20261015-01/logic.log",
+      "bytes": 4318,
+      "sha256": "5bea3b34b0956bbe89b5e0c4c872291c0c206a36d90a38ebe3faba936d7974b9",
+      "caveat": "Log summary only; no invented per-node JUnit, exit code or guard metadata."
+    },
+    {
+      "path": "/tmp/geographic-runtime-store-delivery-status-m3.log",
+      "bytes": 2791,
+      "sha256": "ec49262cabac8530ee90fb304aa0aea0b7255fdc0b25498bd0f2885eda6effc2",
+      "caveat": "Log summary only; no invented per-node JUnit, exit code or guard metadata."
+    }
+  ]
+}

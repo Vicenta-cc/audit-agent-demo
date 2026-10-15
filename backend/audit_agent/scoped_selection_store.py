@@ -15,6 +15,16 @@ from .scoped_selection import digest, select_next_batch, validate_plan, validate
 
 
 class Store:
+    _table = "scoped_selection_executions"
+
+    def _fence(self, db):
+        pass
+
+    def _validate_plan(self, plan):
+        validate_plan(plan)
+        if plan.get("validation_origin") != "fixture":
+            raise ValueError("experiment store requires fixture plan")
+
     def __init__(self, path):
         self.path = Path(path).resolve()
         temporary = self.path.is_relative_to(Path(tempfile.gettempdir()).resolve())
@@ -45,7 +55,8 @@ class Store:
         with self._connection() as db:
             db.execute('BEGIN IMMEDIATE')
             try:
-                row = db.execute('SELECT snapshot FROM scoped_selection_executions WHERE execution_id=?',
+                self._fence(db)
+                row = db.execute(f'SELECT snapshot FROM {self._table} WHERE execution_id=?',
                                  (execution_id,)).fetchone()
                 if not row:
                     raise ValueError('unknown execution')
@@ -65,20 +76,20 @@ class Store:
                                        'payload': deepcopy(payload)})
                 snap['operations'][operation_id] = {'digest': fingerprint, 'result': deepcopy(result)}
                 snap['snapshot_digest'] = digest({k: v for k, v in snap.items() if k != 'snapshot_digest'})
-                db.execute('UPDATE scoped_selection_executions SET snapshot=? WHERE execution_id=?',
+                db.execute(f'UPDATE {self._table} SET snapshot=? WHERE execution_id=?',
                            (json.dumps(snap, ensure_ascii=False), execution_id))
+                self._fence(db)
                 self._commit(db)
                 return deepcopy(result)
             except BaseException:
                 db.rollback()
                 raise
 
-    @staticmethod
-    def _validate_snapshot(snap, execution_id):
+    def _validate_snapshot(self, snap, execution_id):
         if (snap['plan']['execution_id'] != execution_id or
                 snap.get('snapshot_digest') != digest({k: v for k, v in snap.items() if k != 'snapshot_digest'})):
             raise ValueError('snapshot binding or integrity mismatch')
-        validate_plan(snap['plan'])
+        self._validate_plan(snap['plan'])
         for qid, query in snap['queries'].items():
             if query['evaluations']:
                 captured = Store._capture_index(query)
@@ -135,7 +146,7 @@ class Store:
                           excluded_occurrences=s['excluded_occurrences'])
 
     def create(self, plan):
-        validate_plan(plan)
+        self._validate_plan(plan)
         plan = deepcopy(plan)
         snap = dict(plan=plan, queries={q['query_id']: dict(status='pending', occurrences=[], closure=None,
                     auth_retries=0, auth_pending=False, capture_account=None, detail_account=None, capture=None, error=None, evaluations={}) for q in plan['queries']}, revision=0,
@@ -147,14 +158,17 @@ class Store:
         with self._connection() as db:
             db.execute('BEGIN IMMEDIATE')
             try:
-                old = db.execute('SELECT snapshot FROM scoped_selection_executions WHERE execution_id=?',
+                self._fence(db)
+                old = db.execute(f'SELECT snapshot FROM {self._table} WHERE execution_id=?',
                                  (plan['execution_id'],)).fetchone()
                 if old:
+                    self._validate_snapshot(json.loads(old[0]), plan['execution_id'])
                     if json.loads(old[0])['plan'] != plan:
                         raise ValueError('immutable execution plan conflict')
                 else:
-                    db.execute('INSERT INTO scoped_selection_executions VALUES (?, ?)',
+                    db.execute(f'INSERT INTO {self._table} VALUES (?, ?)',
                                (plan['execution_id'], json.dumps(snap, ensure_ascii=False)))
+                self._fence(db)
                 self._commit(db)
             except BaseException:
                 db.rollback()
@@ -163,15 +177,23 @@ class Store:
 
     def load(self, execution_id, expected_plan_digest):
         with self._connection() as db:
-            row = db.execute('SELECT snapshot FROM scoped_selection_executions WHERE execution_id=?',
-                             (execution_id,)).fetchone()
-        if not row:
-            raise ValueError('unknown execution')
-        snap = json.loads(row[0])
-        self._validate_snapshot(snap, execution_id)
-        if snap['plan']['plan_digest'] != expected_plan_digest:
-            raise ValueError('plan digest mismatch')
-        return snap
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                self._fence(db)
+                row = db.execute(f'SELECT snapshot FROM {self._table} WHERE execution_id=?',
+                                 (execution_id,)).fetchone()
+                if not row:
+                    raise ValueError('unknown execution')
+                snap = json.loads(row[0])
+                self._validate_snapshot(snap, execution_id)
+                if snap['plan']['plan_digest'] != expected_plan_digest:
+                    raise ValueError('plan digest mismatch')
+                self._fence(db)
+                db.commit()
+                return snap
+            except BaseException:
+                db.rollback()
+                raise
 
     def record_query(self, execution_id, query_id, status, occurrences, operation_id, capture_account=None, capture=None, error=None):
         payload = dict(kind='query', query_id=query_id, status=status, occurrences=occurrences,

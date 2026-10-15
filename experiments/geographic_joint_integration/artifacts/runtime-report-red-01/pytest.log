@@ -1,0 +1,58 @@
+F.F                                                                      [100%]
+=================================== FAILURES ===================================
+_________ test_geographic_snapshot_freezes_basis_and_keeps_risk_counts _________
+
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-9ag9qrny/pytest/test_geographic_snapshot_freez0')
+
+    def test_geographic_snapshot_freezes_basis_and_keeps_risk_counts(tmp_path):
+        source, store = seed_audit(tmp_path)
+        original = build_immutable_snapshot(source, 'new-search-task')
+        context = {'coverage': {'source_job_id': 'new-search-task', 'candidate_occurrences': 9,
+                                'collected': 2, 'handed_off': 1, 'collected_not_delivered': 1},
+                   'selection_basis': {'source_job_id': 'new-search-task', 'content_key': '10001',
+                                       'geo_tier': 'local', 'risk_band': 'weak', 'detail_review': 'same_tier_eligible'}}
+        source.geographic_context = lambda row: deepcopy(context)
+        frozen = build_immutable_snapshot(source, 'new-search-task')
+>       assert frozen.posts[0].payload['selection_basis'] == context['selection_basis']
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'selection_basis'
+
+tests/test_geographic_reporting.py:18: KeyError
+_______________ test_geographic_report_refuses_missing_delivery ________________
+
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-9ag9qrny/pytest/test_geographic_report_refuses0')
+
+    def test_geographic_report_refuses_missing_delivery(tmp_path):
+        source, _ = seed_audit(tmp_path)
+        with source.connect() as db:
+>           db.execute('UPDATE jobs SET control=? WHERE id=?',
+                       (json.dumps({'geographic_selection': {'execution_id': 'missing'}}), 'new-search-task'))
+
+tests/test_geographic_reporting.py:42: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+connection = <experiments.geographic_execution_plan.offline_guards.OfflineGuards.install.<locals>.guarded_connection_type.<locals>.GuardedConnection object at 0x10908b650>
+sql = 'UPDATE jobs SET control=? WHERE id=?'
+parameters = ('{"geographic_selection": {"execution_id": "missing"}}', 'new-search-task')
+
+    def execute(connection,sql,parameters=()):
+        with bound_attachment(connection,sql,parameters):
+>           return super().execute(sql,parameters)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           sqlite3.OperationalError: attempt to write a readonly database
+
+experiments/geographic_execution_plan/offline_guards.py:128: OperationalError
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_reporting.py::test_geographic_snapshot_freezes_basis_and_keeps_risk_counts
+FAILED tests/test_geographic_reporting.py::test_geographic_report_refuses_missing_delivery
+2 failed, 1 passed, 2 warnings in 0.82s

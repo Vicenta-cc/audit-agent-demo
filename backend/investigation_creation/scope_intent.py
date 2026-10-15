@@ -228,14 +228,19 @@ def prepare_change(change: RelevanceScopeChange, *, application, principal, sess
     return scope, state
 
 
-def scope_blockers(configuration) -> list[dict]:
+def scope_blockers(configuration, *, capability=None) -> list[dict]:
     state = getattr(configuration, 'relevance_scope_state', None)
     scope = getattr(configuration, 'relevance_scope', None)
     if state is not None and state.status == 'pending':
         return [{'code': 'RELEVANCE_SCOPE_PENDING', 'message': '调查地域待澄清，请核对名称或提供完整省级地域、地级市或直辖市名称。'}]
     if scope is None and (state is None or state.status != 'resolved'):
         return []
-    blockers = [{'code': 'RELEVANCE_SCOPE_EXECUTION_UNAVAILABLE',
+    available = False
+    if capability is not None:
+        from .geographic_runtime import IsolatedGeographicCapability
+        from backend.audit_agent.config import settings
+        available = type(capability) is IsolatedGeographicCapability and settings.triage_mode == 'select'
+    blockers = [] if available else [{'code': 'RELEVANCE_SCOPE_EXECUTION_UNAVAILABLE',
                  'message': '地域执行能力尚未接通，当前不能启动。'}]
     if configuration.platform != 'dy' or configuration.investigation.mode != 'search':
         blockers.append({'code': 'RELEVANCE_SCOPE_MODE_UNSUPPORTED',
@@ -243,8 +248,8 @@ def scope_blockers(configuration) -> list[dict]:
     return blockers
 
 
-def ensure_execution_ready(configuration) -> None:
-    blockers = scope_blockers(configuration)
+def ensure_execution_ready(configuration, *, capability=None) -> None:
+    blockers = scope_blockers(configuration, capability=capability)
     if blockers:
         _reject(blockers[0]['code'], blockers[0]['message'])
 

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="3" time="0.819" timestamp="2026-10-15T23:03:45.983841+08:00" hostname="ZBMac-M59XV50W0H"><testcase classname="tests.test_geographic_reporting" name="test_geographic_snapshot_freezes_basis_and_keeps_risk_counts" time="0.056"><failure message="KeyError: 'selection_basis'">tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-9ag9qrny/pytest/test_geographic_snapshot_freez0')
+
+    def test_geographic_snapshot_freezes_basis_and_keeps_risk_counts(tmp_path):
+        source, store = seed_audit(tmp_path)
+        original = build_immutable_snapshot(source, 'new-search-task')
+        context = {'coverage': {'source_job_id': 'new-search-task', 'candidate_occurrences': 9,
+                                'collected': 2, 'handed_off': 1, 'collected_not_delivered': 1},
+                   'selection_basis': {'source_job_id': 'new-search-task', 'content_key': '10001',
+                                       'geo_tier': 'local', 'risk_band': 'weak', 'detail_review': 'same_tier_eligible'}}
+        source.geographic_context = lambda row: deepcopy(context)
+        frozen = build_immutable_snapshot(source, 'new-search-task')
+&gt;       assert frozen.posts[0].payload['selection_basis'] == context['selection_basis']
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'selection_basis'
+
+tests/test_geographic_reporting.py:18: KeyError</failure></testcase><testcase classname="tests.test_geographic_reporting" name="test_non_geographic_snapshot_omits_new_fields" time="0.052" /><testcase classname="tests.test_geographic_reporting" name="test_geographic_report_refuses_missing_delivery" time="0.052"><failure message="sqlite3.OperationalError: attempt to write a readonly database">tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-9ag9qrny/pytest/test_geographic_report_refuses0')
+
+    def test_geographic_report_refuses_missing_delivery(tmp_path):
+        source, _ = seed_audit(tmp_path)
+        with source.connect() as db:
+&gt;           db.execute('UPDATE jobs SET control=? WHERE id=?',
+                       (json.dumps({'geographic_selection': {'execution_id': 'missing'}}), 'new-search-task'))
+
+tests/test_geographic_reporting.py:42: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+connection = &lt;experiments.geographic_execution_plan.offline_guards.OfflineGuards.install.&lt;locals&gt;.guarded_connection_type.&lt;locals&gt;.GuardedConnection object at 0x10908b650&gt;
+sql = 'UPDATE jobs SET control=? WHERE id=?'
+parameters = ('{"geographic_selection": {"execution_id": "missing"}}', 'new-search-task')
+
+    def execute(connection,sql,parameters=()):
+        with bound_attachment(connection,sql,parameters):
+&gt;           return super().execute(sql,parameters)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           sqlite3.OperationalError: attempt to write a readonly database
+
+experiments/geographic_execution_plan/offline_guards.py:128: OperationalError</failure></testcase></testsuite></testsuites>

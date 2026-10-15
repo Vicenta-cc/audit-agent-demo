@@ -1129,6 +1129,7 @@ class IngestionStore:
             if not raw_path.exists():
                 continue
             payload = json.loads(raw_path.read_text(encoding="utf-8"))
+            self._verify_geographic_evidence(task_id, int(row["id"]), raw_path, payload)
             queued.append({
                 "content_id": int(row["id"]),
                 "platform": str(row["platform"]),
@@ -1148,6 +1149,7 @@ class IngestionStore:
             if not raw_path.exists():
                 continue
             payload = json.loads(raw_path.read_text(encoding="utf-8"))
+            self._verify_geographic_evidence(task_id, membership["content_id"], raw_path, payload)
             refs.append(self._ref_from_payload(membership, payload, raw_path))
         return refs
 
@@ -1249,8 +1251,14 @@ class IngestionStore:
                 raise SelectedContentPayloadUnavailableError(
                     task_content_id, "raw payload identity does not match SQL selection"
                 )
+            self._verify_geographic_evidence(task_id, membership["content_id"], raw_path, payload)
             refs.append(self._ref_from_payload(membership, payload, raw_path))
         return memberships, refs
+
+    def _verify_geographic_evidence(self, task_id, content_id, path, payload):
+        from .geographic_delivery import verify_geographic_evidence
+        with self._lock, self._connect() as conn:
+            verify_geographic_evidence(conn, task_id, content_id, path, payload)
 
     @staticmethod
     def _ref_from_payload(membership: dict, payload: dict, raw_path: Path) -> dict:

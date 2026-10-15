@@ -1,0 +1,165 @@
+F...............................                                         [100%]
+=================================== FAILURES ===================================
+_________ test_geographic_snapshot_freezes_basis_and_keeps_risk_counts _________
+
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-45pw91hq/pytest/test_geographic_snapshot_freez0')
+
+    def test_geographic_snapshot_freezes_basis_and_keeps_risk_counts(tmp_path):
+        source, store = seed_audit(tmp_path)
+        original = build_immutable_snapshot(source, 'new-search-task')
+        context = {'coverage': {'source_job_id': 'new-search-task', 'candidate_occurrences': 9,
+                                'collected': 2, 'handed_off': 1, 'collected_not_delivered': 1},
+                   'selection_basis': {'source_job_id': 'new-search-task', 'content_key': '10001',
+                                       'geo_tier': 'local', 'risk_band': 'weak', 'detail_review': 'same_tier_eligible'}}
+        source.geographic_context = lambda row: deepcopy(context)
+        frozen = build_immutable_snapshot(source, 'new-search-task')
+        assert frozen.posts[0].payload['selection_basis'] == context['selection_basis']
+        assert frozen.statistics['geographic_coverage'] == [context['coverage']]
+        assert frozen.statistics['risk_level'] == original.statistics['risk_level']
+        assert frozen.statistics['canonical_posts'] == original.statistics['canonical_posts']
+        assert frozen.snapshot_hash != original.snapshot_hash
+        result = legacy_pass_runtime(store).generate('new-search-task', source=source,
+            model_client=None, checkpoint_path=tmp_path / 'checkpoint.sqlite3')
+        context['selection_basis']['geo_tier'] = 'conflict'
+        with sqlite3.connect(store.db_path) as db:
+            payload = json.loads(db.execute('SELECT payload_json FROM report_snapshot_posts WHERE report_version_id=?',
+                                           (result.report_version_id,)).fetchone()[0])
+        assert payload['selection_basis']['geo_tier'] == 'local'
+>       view = store.get_presentation_projection(result.report_version_id)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_geographic_reporting.py:31: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/reporting/store.py:2072: in get_presentation_projection
+    snapshot=self.load_immutable_snapshot(report_version_id),
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <backend.reporting.store.ReportStore object at 0x11c4eeae0>
+report_version_id = 'report-version:f37c4982ba6947018c07176b4e681b78'
+
+    def load_immutable_snapshot(self, report_version_id: str) -> Any:
+        """Rehydrate the frozen report Snapshot without consulting live domain data."""
+        from backend.reporting.integration_source import (
+            ImmutableReportSnapshot,
+            SnapshotEvidence,
+            SnapshotFinding,
+            SnapshotPost,
+        )
+    
+        manifest = self.get_source_snapshot(report_version_id)
+        if manifest is None:
+            raise ReportGenerationError("report source snapshot is missing")
+        payloads = self.list_snapshot_payloads(report_version_id)
+        if not payloads["posts"] or not payloads["findings"]:
+            raise ReportGenerationError("report source snapshot payloads are incomplete")
+        posts = tuple(
+            SnapshotPost(
+                ref=str(row["post_ref"]),
+                canonical_key=str(row["canonical_key"]),
+                revision=str(row["revision"]),
+                payload=row["payload"],
+                payload_hash=str(row["payload_hash"]),
+            )
+            for row in payloads["posts"]
+        )
+        findings = tuple(
+            SnapshotFinding(
+                ref=str(row["finding_ref"]),
+                audit_result_id=int(row["audit_result_id"]),
+                post_ref=str(row["post_ref"]),
+                payload=row["payload"],
+                payload_hash=str(row["payload_hash"]),
+            )
+            for row in payloads["findings"]
+        )
+        evidence = tuple(
+            SnapshotEvidence(
+                ref=str(row["evidence_ref"]),
+                audit_result_id=int(row["audit_result_id"]),
+                post_ref=str(row["post_ref"]),
+                finding_ref=str(row["finding_ref"]),
+                support_type=str(row["support_type"]),
+                source_formats=tuple(row.get("source_formats") or []),
+                payload=row["payload"],
+                payload_hash=str(row["payload_hash"]),
+            )
+            for row in payloads["evidence"]
+        )
+        if len({item.ref for item in posts}) != len(posts):
+            raise ReportGenerationError("frozen Snapshot contains duplicate Post refs")
+        if len({item.ref for item in findings}) != len(findings):
+            raise ReportGenerationError("frozen Snapshot contains duplicate Finding refs")
+        if len({item.ref for item in evidence}) != len(evidence):
+            raise ReportGenerationError("frozen Snapshot contains duplicate Evidence refs")
+        for item in (*posts, *findings, *evidence):
+            if stable_hash(item.payload) != item.payload_hash:
+                raise ReportGenerationError(f"frozen Snapshot payload hash mismatch: {item.ref}")
+        if tuple(manifest.get("finding_ids") or ()) != tuple(item.ref for item in findings):
+            raise ReportGenerationError("frozen Snapshot Finding order does not match manifest")
+        if tuple(manifest.get("evidence_ids") or ()) != tuple(item.ref for item in evidence):
+            raise ReportGenerationError("frozen Snapshot Evidence order does not match manifest")
+        post_refs = {item.ref for item in posts}
+        finding_refs = {item.ref for item in findings}
+        for finding in findings:
+            if finding.post_ref not in post_refs:
+                raise ReportGenerationError(f"frozen Finding has unknown Post: {finding.ref}")
+        for item in evidence:
+            if item.post_ref not in post_refs or item.finding_ref not in finding_refs:
+                raise ReportGenerationError(f"frozen Evidence has invalid parent: {item.ref}")
+            owner = next(finding for finding in findings if finding.ref == item.finding_ref)
+            if owner.post_ref != item.post_ref:
+                raise ReportGenerationError(f"frozen Evidence crosses Post parent: {item.ref}")
+        relation_hash = stable_hash(
+            [
+                {"post_ref": item.post_ref, "finding_ref": item.finding_ref, "evidence_ref": item.ref}
+                for item in evidence
+            ]
+        )
+        if manifest.get("relation_hash") and manifest["relation_hash"] != relation_hash:
+            raise ReportGenerationError("frozen Snapshot relation hash does not match payloads")
+        source_revision = str(manifest.get("source_revision") or stable_hash(
+            [(item.ref, item.revision, item.payload_hash) for item in posts]
+        ))
+        statistics = manifest.get("statistics") or {
+            "canonical_posts": len(posts),
+            "findings": len(findings),
+            "direct_evidence": len(evidence),
+            "direct_legacy_risk_image": sum(
+                "legacy_risk_image" in item.source_formats for item in evidence
+            ),
+            "decision": dict(sorted(Counter(item.payload.get("decision", "") for item in findings).items())),
+            "risk_level": dict(sorted(Counter(item.payload.get("risk_level", "") for item in findings).items())),
+        }
+        snapshot_body = {
+            "task_id": manifest["task_id"],
+            "display_name": manifest.get("display_name") or manifest["task_id"],
+            "source_db_sha256": manifest["source_hash"],
+            "source_revision": source_revision,
+            "audit_config_revision_id": manifest["configuration_revision_id"],
+            "posts": [item.payload_hash for item in posts],
+            "findings": [item.payload_hash for item in findings],
+            "evidence": [item.payload_hash for item in evidence],
+            "relations": relation_hash,
+        }
+        if statistics.get("source_configuration"):
+            snapshot_body["source_configuration_hash"] = stable_hash(statistics["source_configuration"])
+        snapshot_hash = stable_hash(snapshot_body)
+        if manifest.get("snapshot_hash") and manifest["snapshot_hash"] != snapshot_hash:
+>           raise ReportGenerationError("frozen Snapshot hash does not match payloads")
+E           backend.reporting.errors.ReportGenerationError: frozen Snapshot hash does not match payloads
+
+backend/reporting/store.py:987: ReportGenerationError
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_reporting.py::test_geographic_snapshot_freezes_basis_and_keeps_risk_counts
+1 failed, 31 passed, 2 warnings in 16.04s

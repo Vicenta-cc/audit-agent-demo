@@ -448,7 +448,7 @@ class InvestigationResourceService:
         effective_configuration, settings_revision = self.task_configuration(effective_configuration, resource_connection)
         parameters = effective_task_parameters(effective_configuration)
         from .scope_intent import scope_blockers, project_state
-        blockers.extend(InvestigationBlocker(**item) for item in scope_blockers(effective_configuration))
+        blockers.extend(InvestigationBlocker(**item) for item in scope_blockers(effective_configuration, capability=getattr(self, 'geographic_capability', None)))
         planned_content_count = planned_contents(parameters, mode, resolved_terms)
         blockers = self._dedupe_blockers(blockers)
         return ConfirmationPreview(

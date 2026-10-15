@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="4" time="32.049" timestamp="2026-10-15T23:03:42.462374+08:00" hostname="ZBMac-M59XV50W0H"><testcase classname="tests.test_geographic_runtime_pipeline" name="test_formal_capture_barrier_detail_review_durable_delivery_and_restart" time="13.747" /><testcase classname="tests.test_geographic_runtime_pipeline" name="test_runtime_uses_frozen_parameters_and_rejects_stale_fence" time="3.183" /><testcase classname="tests.test_geographic_runtime_pipeline" name="test_partial_stopped_capture_never_reaches_detail" time="3.231" /><testcase classname="tests.test_geographic_runtime_pipeline" name="test_detail_changed_outside_region_never_creates_membership" time="10.973"><failure message="ValueError: geo_evaluation_failed">confirmed = (&lt;backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x123a508f0&gt;, {'geographic_plan': {'...:57843276ffea4492bba13ad5247465ca'}, ...}, 'auto_analyze': True, 'collect_comments': True, 'collect_media': True, ...})
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-dowk1neu/pytest/test_detail_changed_outside_re0')
+
+    def test_detail_changed_outside_region_never_creates_membership(confirmed, tmp_path):
+        events=[]
+        class Outside(Crawler):
+            def run_detail(self, **kw):
+                result = super().run_detail(**kw)
+                result.contents[0]['title'] = '北京市欠薪'
+                return result
+        runner, _, _ = runtime(confirmed, tmp_path, events=events, crawler=Outside(events))
+&gt;       report, output = runner.run()
+                         ^^^^^^^^^^^^
+
+tests/test_geographic_runtime_pipeline.py:119: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/audit_agent/geographic_pipeline.py:164: in run
+    report = self.execution.run()
+             ^^^^^^^^^^^^^^^^^^^^
+backend/audit_agent/scoped_execution.py:249: in run
+    self._pending_receipts()
+backend/audit_agent/scoped_execution.py:181: in _pending_receipts
+    self._finish_collection(attempt)
+backend/audit_agent/scoped_execution.py:147: in _finish_collection
+    tier = eligible_tier(self.plan, updated, risk_candidate=occurrence['candidate'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/audit_agent/scoped_selection.py:237: in eligible_tier
+    _validate_occurrence(plan, query, occurrence, risk_candidate=risk_candidate)
+backend/audit_agent/scoped_selection.py:198: in _validate_occurrence
+    _require(result.get('schema_version') == 'post-only-simple-names-v2' and
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+condition = False, reason = 'geo_evaluation_failed'
+
+    def _require(condition, reason):
+        if not condition:
+&gt;           raise ValueError(reason)
+E           ValueError: geo_evaluation_failed
+
+backend/audit_agent/scoped_selection.py:25: ValueError</failure></testcase></testsuite></testsuites>

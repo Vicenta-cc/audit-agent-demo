@@ -1,0 +1,70 @@
+{
+  "python_ast_parse_count": 50,
+  "python_ast_parse_files": [
+    "backend/api/investigation_creation.py",
+    "backend/audit_agent/frozen_risk.py",
+    "backend/audit_agent/geographic_bridge.py",
+    "backend/audit_agent/geographic_delivery.py",
+    "backend/audit_agent/geographic_execution_store.py",
+    "backend/audit_agent/geographic_p3_runtime/__init__.py",
+    "backend/audit_agent/geographic_p3_runtime/relevance.py",
+    "backend/audit_agent/geographic_p3_runtime/relevance_ip.py",
+    "backend/audit_agent/geographic_p3_runtime/relevance_post_only.py",
+    "backend/audit_agent/geographic_p3_runtime/relevance_post_only_names.py",
+    "backend/audit_agent/geographic_p3_runtime/relevance_post_only_names_v2.py",
+    "backend/audit_agent/geographic_p3_runtime/relevance_post_only_simple.py",
+    "backend/audit_agent/geographic_p3_runtime/relevance_post_only_v2.py",
+    "backend/audit_agent/geographic_p3_runtime/relevance_scope.py",
+    "backend/audit_agent/geographic_pipeline.py",
+    "backend/audit_agent/geographic_status.py",
+    "backend/audit_agent/ingestion.py",
+    "backend/audit_agent/job_store.py",
+    "backend/audit_agent/pipeline.py",
+    "backend/audit_agent/scoped_execution.py",
+    "backend/audit_agent/scoped_selection.py",
+    "backend/audit_agent/scoped_selection_store.py",
+    "backend/investigation_creation/adapters.py",
+    "backend/investigation_creation/contracts.py",
+    "backend/investigation_creation/frozen.py",
+    "backend/investigation_creation/geographic_runtime.py",
+    "backend/investigation_creation/resources.py",
+    "backend/investigation_creation/scope_intent.py",
+    "backend/investigation_creation/scope_search_plan.py",
+    "backend/investigation_creation/service.py",
+    "backend/investigation_creation/store.py",
+    "backend/investigation_creation/worker.py",
+    "backend/reporting/integration_source.py",
+    "backend/reporting/presentation_projection.py",
+    "backend/reporting/r3_graph.py",
+    "backend/reporting/store.py",
+    "experiments/geographic_runtime_integration/model_gateway.py",
+    "experiments/geographic_runtime_integration/replay_delivery.py",
+    "experiments/geographic_runtime_integration/replay_gateway_budget.py",
+    "experiments/geographic_runtime_integration/run_offline.py",
+    "tests/test_geographic_model_gateway.py",
+    "tests/test_geographic_reporting.py",
+    "tests/test_geographic_runtime_bridge.py",
+    "tests/test_geographic_runtime_delivery.py",
+    "tests/test_geographic_runtime_freeze.py",
+    "tests/test_geographic_runtime_lease.py",
+    "tests/test_geographic_runtime_pipeline.py",
+    "tests/test_geographic_runtime_status.py",
+    "tests/test_geographic_runtime_store.py",
+    "tests/test_geographic_runtime_worker.py"
+  ],
+  "protected_files": {
+    "backend/audit_agent/triage.py": {
+      "sha256": "3a6cb0906064b458ef99ba0bb97fb1c3b57c0f4fb0ee69dfd25efb0160b7e2a3",
+      "equals_final_p1": true
+    },
+    "backend/audit_agent/triage_matcher.py": {
+      "sha256": "aa8c3d2bbfa46caea7220a34baa13b9db7a6dd132d06130a60af4fd28a265724",
+      "equals_final_p1": true
+    },
+    "backend/audit_agent/crawler_adapter.py": {
+      "sha256": "951dc5b43b763bd5ba631a07329e98fe6a305a0f297d7c8960d6cc62ce13a7a9",
+      "equals_final_p1": true
+    }
+  },
+  "original_search_ast_equal": true
+}

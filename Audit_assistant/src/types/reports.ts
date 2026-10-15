@@ -203,6 +203,8 @@ export interface ReportPresentationProjection {
     scope: ReportScopeProjection;
   };
   statistics: {
+    geographic_coverage?: GeographicCoverage[];
+    selection_basis?: GeographicSelectionBasis[];
     canonical_posts: number;
     investigation_finding_count: number;
     independently_reviewed_comments: number | null;
@@ -325,6 +327,7 @@ export interface ReportAccountDetail {
 }
 
 export interface ReportPostDetail extends ReportPostPresentation {
+  selection_basis?: GeographicSelectionBasis;
   audit_source?: { task_id: string; output_id: string } | null;
   investigation_finding_refs: string[];
   direct_evidence: ReportEvidencePresentation[];
@@ -345,4 +348,39 @@ export interface ReportAppendixPage {
   matched_count: number;
   has_more: boolean;
   cursor: string | null;
+}
+
+export interface GeographicCoverage {
+  source_job_id: string;
+  candidate_occurrences: number;
+  excluded_occurrences: number;
+  ineligible_occurrences: number;
+  geographic_pending_or_conflict: number;
+  reserved: number;
+  collected: number;
+  handed_off: number;
+  collected_not_delivered: number;
+  unfinished_queries: string[];
+  reasons: string[];
+}
+export interface GeographicSelectionBasis {
+  target_name?: string;
+  province_name?: string;
+  source_job_id: string;
+  content_key: string;
+  occurrence_id: string;
+  query_id: string;
+  source_keyword: string;
+  rank: number;
+  risk_band: string;
+  risk_score: number;
+  geo_tier: string;
+  initial_geo_tier: string;
+  scope_digest: string;
+  policy_digest: string;
+  plan_digest: string;
+  initial_evidence_digest: string;
+  detail_evidence_digest: string;
+  selection_policy: string;
+  target_level: string;
 }

@@ -1,0 +1,186 @@
+FFFFFF                                                                   [100%]
+=================================== FAILURES ===================================
+____________________ test_stale_claim_cannot_persist_audit _____________________
+
+stale_pipeline = <backend.audit_agent.pipeline.AuditPipeline object at 0x110294560>
+
+    def test_stale_claim_cannot_persist_audit(stale_pipeline):
+>       with pytest.raises(LeaseLostError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE LeaseLostError
+
+tests/test_geographic_runtime_lease.py:25: Failed
+_________________ test_stale_claim_cannot_mark_subject_failed __________________
+
+stale_pipeline = <backend.audit_agent.pipeline.AuditPipeline object at 0x110296c60>
+
+    def test_stale_claim_cannot_mark_subject_failed(stale_pipeline):
+        with pytest.raises(LeaseLostError):
+>           stale_pipeline._record_subject_failure('dy', 'same', None, RuntimeError('old failure'))
+
+tests/test_geographic_runtime_lease.py:33: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <backend.audit_agent.pipeline.AuditPipeline object at 0x110296c60>
+platform = 'dy', content_key = 'same', subject = None
+exc = RuntimeError('old failure')
+
+    def _record_subject_failure(self, platform, content_key, subject, exc) -> None:
+        if content_key:
+            self.ingestion.mark_content_status(platform, content_key, "failed", task_id=self.job_id)
+        chain = []
+        cause = exc
+        while cause is not None and id(cause) not in {id(e) for e in chain}:
+            chain.append(cause)
+            cause = cause.__cause__ or cause.__context__
+        provider_failure = bool(getattr(getattr(self, "qwen", None), "provider_failure", "")) or any(
+            isinstance(e, (QwenProviderError, AuditProviderUnavailableError)) for e in chain)
+        if isinstance(exc, AuditProviderCallError) and any(
+            isinstance(e, (requests.RequestException, TimeoutError)) for e in chain
+        ):
+            provider_failure = True
+        # Preserve error types/status only: raw network errors can contain credentials.
+        statuses = [e.response.status_code for e in chain
+                    if isinstance(e, requests.HTTPError) and e.response is not None]
+        # Per-post failures never issue user controls or impose a failure-count
+        # circuit breaker. Drain the selected posts so valid results can report.
+        messages = [str(e).lower() for e in chain]
+        messages.extend(e.response.text.lower() for e in chain
+                        if isinstance(e, requests.HTTPError) and e.response is not None)
+        oom = any(isinstance(e, ASROutOfMemoryError) or is_asr_oom(e) for e in chain) or any(is_asr_oom(m) for m in messages)
+        content_blocked = is_content_blocked(exc)
+        self._begin_subject_audit()
+        folder = settings.outputs_dir / self.job_id / "post_failures"
+        folder.mkdir(parents=True, exist_ok=True)
+        if oom:
+            reason = "语音转写 GPU 显存不足，当前帖子未完成审核"
+            error_code = "asr_gpu_out_of_memory"
+        elif content_blocked:
+            reason = "模型供应商内容安全检查拦截，本帖审核未完成，不代表已判定违规"
+            error_code = "audit_content_blocked"
+        elif any(isinstance(e, AuditProviderUnavailableError) for e in chain):
+            reason = "审核服务未配置或不可用，当前帖子未完成审核"
+            error_code = "audit_provider_unavailable"
+        elif statuses:
+            reason = f"审核接口返回 HTTP {statuses[-1]}"
+            error_code = f"audit_http_{statuses[-1]}"
+        elif any(isinstance(e, (QwenTimeoutError, requests.Timeout, TimeoutError)) for e in chain):
+            reason = "审核请求超时，当前请求补试已结束"
+            error_code = "audit_timeout"
+        elif any(isinstance(e, AudioExtractionError) for e in chain):
+            reason = "视频音频抽取失败；详见 ffmpeg 诊断"
+            error_code = "audio_extraction_failed"
+        elif any(isinstance(e, FusionAuditContractError) for e in chain):
+            reason = "审核输出不满足证据或格式合同；详见阶段诊断"
+            error_code = "fusion_contract_invalid"
+        else:
+            reason = "审核步骤执行异常；详见阶段诊断"
+            error_code = "post_audit_failed"
+>       record = {"note_id": subject.note_id, "content_key": content_key, "reason": reason,
+                             ^^^^^^^^^^^^^^^
+                  "error_code": error_code,
+                  "stage": getattr(self, "_current_audit_stage", "post_audit"),
+                  "error_type": type(exc).__name__, "cause_types": [type(e).__name__ for e in chain],
+                  "http_statuses": statuses, "action": "skip_post"}
+E       AttributeError: 'NoneType' object has no attribute 'note_id'
+
+backend/audit_agent/pipeline.py:1506: AttributeError
+__________________ test_stale_claim_cannot_write_result_file ___________________
+
+stale_pipeline = <backend.audit_agent.pipeline.AuditPipeline object at 0x110297830>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x110297a40>
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/pytest-of-ext.wanghongtao6/pytest-800/test_stale_claim_cannot_write_0')
+
+    def test_stale_claim_cannot_write_result_file(stale_pipeline, monkeypatch, tmp_path):
+        monkeypatch.setattr(module.settings, 'outputs_dir', tmp_path)
+>       with pytest.raises(LeaseLostError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE LeaseLostError
+
+tests/test_geographic_runtime_lease.py:39: Failed
+________ test_claim_replaced_same_epoch_does_not_overwrite_job[error0] _________
+
+stale_pipeline = <backend.audit_agent.pipeline.AuditPipeline object at 0x1102d1190>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x110297f50>
+error = RuntimeError('old failure')
+
+    @pytest.mark.parametrize('error', [RuntimeError('old failure'),
+        module.AuditProviderUnavailableError('old provider'), module.AuditProviderCallError('old call')])
+    def test_claim_replaced_same_epoch_does_not_overwrite_job(stale_pipeline, monkeypatch, error):
+        store = Mock()
+        store.get.return_value = {'control': {'crawl_epoch': 7}}
+        store.control.return_value = {'crawl_epoch': 7}
+        monkeypatch.setattr(module, 'job_store', store)
+        stale_pipeline._geographic_lease_fence.side_effect = None
+        def replace_claim():
+            store.reset_mock()
+            stale_pipeline._geographic_lease_fence.side_effect = LeaseLostError('claim replaced')
+            raise error
+        stale_pipeline._verified_m3_snapshot = replace_claim
+>       with pytest.raises(LeaseLostError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE LeaseLostError
+
+tests/test_geographic_runtime_lease.py:57: Failed
+________ test_claim_replaced_same_epoch_does_not_overwrite_job[error1] _________
+
+stale_pipeline = <backend.audit_agent.pipeline.AuditPipeline object at 0x1102d2000>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1102d23c0>
+error = AuditProviderUnavailableError('old provider')
+
+    @pytest.mark.parametrize('error', [RuntimeError('old failure'),
+        module.AuditProviderUnavailableError('old provider'), module.AuditProviderCallError('old call')])
+    def test_claim_replaced_same_epoch_does_not_overwrite_job(stale_pipeline, monkeypatch, error):
+        store = Mock()
+        store.get.return_value = {'control': {'crawl_epoch': 7}}
+        store.control.return_value = {'crawl_epoch': 7}
+        monkeypatch.setattr(module, 'job_store', store)
+        stale_pipeline._geographic_lease_fence.side_effect = None
+        def replace_claim():
+            store.reset_mock()
+            stale_pipeline._geographic_lease_fence.side_effect = LeaseLostError('claim replaced')
+            raise error
+        stale_pipeline._verified_m3_snapshot = replace_claim
+>       with pytest.raises(LeaseLostError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE LeaseLostError
+
+tests/test_geographic_runtime_lease.py:57: Failed
+________ test_claim_replaced_same_epoch_does_not_overwrite_job[error2] _________
+
+stale_pipeline = <backend.audit_agent.pipeline.AuditPipeline object at 0x1102d3e90>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1102d3fb0>
+error = AuditProviderCallError('old call')
+
+    @pytest.mark.parametrize('error', [RuntimeError('old failure'),
+        module.AuditProviderUnavailableError('old provider'), module.AuditProviderCallError('old call')])
+    def test_claim_replaced_same_epoch_does_not_overwrite_job(stale_pipeline, monkeypatch, error):
+        store = Mock()
+        store.get.return_value = {'control': {'crawl_epoch': 7}}
+        store.control.return_value = {'crawl_epoch': 7}
+        monkeypatch.setattr(module, 'job_store', store)
+        stale_pipeline._geographic_lease_fence.side_effect = None
+        def replace_claim():
+            store.reset_mock()
+            stale_pipeline._geographic_lease_fence.side_effect = LeaseLostError('claim replaced')
+            raise error
+        stale_pipeline._verified_m3_snapshot = replace_claim
+>       with pytest.raises(LeaseLostError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE LeaseLostError
+
+tests/test_geographic_runtime_lease.py:57: Failed
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_runtime_lease.py::test_stale_claim_cannot_persist_audit
+FAILED tests/test_geographic_runtime_lease.py::test_stale_claim_cannot_mark_subject_failed
+FAILED tests/test_geographic_runtime_lease.py::test_stale_claim_cannot_write_result_file
+FAILED tests/test_geographic_runtime_lease.py::test_claim_replaced_same_epoch_does_not_overwrite_job[error0]
+FAILED tests/test_geographic_runtime_lease.py::test_claim_replaced_same_epoch_does_not_overwrite_job[error1]
+FAILED tests/test_geographic_runtime_lease.py::test_claim_replaced_same_epoch_does_not_overwrite_job[error2]
+6 failed, 1 warning in 0.30s

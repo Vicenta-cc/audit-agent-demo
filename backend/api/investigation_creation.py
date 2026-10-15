@@ -275,6 +275,20 @@ def create_investigation_creation_router(
         except Exception as exc:
             _raise_public_error(exc)
 
+    @router.get("/api/investigation-runs/{run_id}/geographic-selection")
+    def geographic_selection(
+        run_id: str,
+        offset: int = Query(default=0, ge=0),
+        limit: int = Query(default=50, ge=1, le=100),
+        tier: Literal["local", "province_unknown", "ip_only", "other_region", "unresolved", "conflict"] | None = None,
+        principal: Principal = Depends(provide_principal),
+    ):
+        from backend.audit_agent.geographic_status import selection_page
+        try:
+            return selection_page(service, run_id, principal, offset=offset, limit=limit, tier=tier)
+        except Exception as exc:
+            _raise_public_error(exc)
+
     return router
 
 

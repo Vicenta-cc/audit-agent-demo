@@ -104,8 +104,7 @@ class CopyLink(FrozenModel):
     target_configuration: InvestigationDraftConfiguration
 
 
-class FixtureProvenance(FrozenModel):
-    fixture_id: StrictStr = Field(pattern=r'^fixture:.+')
+class Provenance(FrozenModel):
     identity: PlanIdentity
     session_owner: StrictStr
     session_scope_type: Literal['creation']
@@ -119,6 +118,14 @@ class FixtureProvenance(FrozenModel):
     message: UserMessage | None
     application_message: UserMessage | None
     anchor_message: UserMessage | None
+
+
+class FixtureProvenance(Provenance):
+    fixture_id: StrictStr = Field(pattern=r'^fixture:.+')
+
+
+class ConfirmedProvenance(Provenance):
+    authority_origin: Literal['confirmed_run']
 
 
 class RuntimeLimits(FrozenModel):
@@ -227,6 +234,27 @@ class ScopeSearchPlan(FrozenModel):
     plan_digest: StrictStr = Field(pattern=r'^[0-9a-f]{64}$')
 
 
+class ConfirmedSettingsSnapshot(SettingsSnapshot):
+    configuration_source: Literal['confirmed_run:unified-task-settings']
+
+
+class ConfirmedPlanInputs(PlanInputs):
+    provenance: ConfirmedProvenance
+    settings: ConfirmedSettingsSnapshot
+
+
+class ConfirmedGeographicPolicy(GeographicPolicy):
+    version: Literal['geo-select-confirmed-v1']
+    selection_strategy: Literal['p4-geographic-selection']
+
+
+class ConfirmedScopeSearchPlan(ScopeSearchPlan):
+    policy: ConfirmedGeographicPolicy
+    schema_version: Literal['geo-confirmed-execution-plan-v1']
+    validation_origin: Literal['confirmed_run']
+    inputs: ConfirmedPlanInputs
+
+
 def _scope_key(configuration):
     body = configuration.model_dump(mode='json')
     state = dict(body.get('relevance_scope_state', {}))
@@ -332,49 +360,53 @@ def _integer(value, minimum, label):
 
 
 def _validate_profiles(inputs):
-    p3=inputs.p3_inputs
-    _keys(p3, {'schema_version','validation_origin','code_version','p3_schema_version','prompt_version',
-        'prompt_snapshot','model','use_place_aliases','use_role_prompt','admin_catalog','location_catalog',
-        'place_alias_overlay','ip_policy','profile_digest'}, 'P3 profile')
-    require(p3['schema_version']=='p2-p3-fixture-profile-v1' and p3['validation_origin']=='fixture',
-            'unknown P3 fixture schema/origin')
-    require(type(p3['use_place_aliases']) is bool and type(p3['use_role_prompt']) is bool,
-            'P3 flags must be explicit bools')
-    require(p3['profile_digest']==digest({k:v for k,v in p3.items() if k!='profile_digest'}),
-            'P3 profile digest mismatch')
-    # Bind exact immutable dependency contents without importing an experiment or
-    # reading the filesystem. Digests derive from the pinned input manifest.
-    require(digest(p3['code_version'])=='c339dab1f55c3f0a4da3ea0b115ca44d9b2580a174dceeaa080601dd6c697442',
-            'wrong P3 dependency contents')
-    require(p3['code_version']['commit']==P3_COMMIT and p3['p3_schema_version']=='post-only-simple-names-v2',
-            'wrong P3 protocol/version')
-    for key, expected in {
-        'admin_catalog': '0b0a106d5a770c8334b319d5af1c68a923d9b7b9f49737c7e9adf9d7d4556eb8',
-        'location_catalog': '89a13f1b0928da9e6f809cccc069274e7e57b50e01ef9c96d8fc8d3664ddc021',
-        'place_alias_overlay': '011394adde02e8b780a0dc02d0ec7a8bcb240591b4f43887ce6236f10f28bc4a',
-    }.items():
-        snapshot=p3[key]
-        _keys(snapshot, {'version','snapshot','digest'}, key)
-        require(snapshot['digest']==digest(snapshot['snapshot'])==expected
-                and snapshot['version']==snapshot['snapshot'].get('version'), 'wrong '+key+' snapshot')
-    expected_prompt=(('post-only-source-role-v1','3b2e99c0e027eb96ea7ade888358679cc8d0c2b06d3331c0a4444fd17e9c2e77')
-        if p3['use_role_prompt'] else ('post-only-simple-v1','fd788184c1f9f40c5d970beb8fd2c893b4893fc9294467ae5be9a5c2cdf2bef9'))
-    require((p3['prompt_version'],digest(p3['prompt_snapshot']))==expected_prompt, 'P3 prompt/switch mismatch')
-    model=p3['model']; _keys(model, {'identifier','config_source','invocation_config'}, 'P3 model')
-    require(type(model['identifier']) is str and bool(model['identifier'].strip()), 'missing P3 model identity')
-    _keys(model['config_source'], {'origin','reference'}, 'P3 model source')
-    require(model['config_source']['origin']=='fixture' and type(model['config_source']['reference']) is str
-            and bool(model['config_source']['reference'].strip()), 'missing fixture model source')
-    call=model['invocation_config']
-    require(canonical(call)==canonical({'max_tokens':3000,'enable_thinking':False,'request_timeout':60,'invocation_mode':'single'}),
-            'P3 invocation configuration mismatch')
-    ip=p3['ip_policy']; _keys(ip, {'version','fixture_only','thresholds'}, 'IP profile')
-    require(ip['version']=='p2-comment-ip-fixture-v1' and ip['fixture_only'] is True, 'invalid fixture IP policy')
-    thresholds=ip['thresholds'];_keys(thresholds, {'min_valid_users','min_valid_coverage','min_target_share','province_aliases'}, 'IP thresholds')
-    _integer(thresholds['min_valid_users'],1,'min_valid_users')
-    for key in ('min_valid_coverage','min_target_share'):
-        require(type(thresholds[key]) in (int,float) and 0<thresholds[key]<=1, 'invalid IP threshold '+key)
-    require(thresholds['province_aliases']=={}, 'unreviewed IP aliases')
+    if isinstance(inputs, ConfirmedPlanInputs):
+        from backend.audit_agent.geographic_p3_runtime import validate_frozen_p3_inputs
+        validate_frozen_p3_inputs(inputs.p3_inputs)
+    else:
+        p3=inputs.p3_inputs
+        _keys(p3, {'schema_version','validation_origin','code_version','p3_schema_version','prompt_version',
+            'prompt_snapshot','model','use_place_aliases','use_role_prompt','admin_catalog','location_catalog',
+            'place_alias_overlay','ip_policy','profile_digest'}, 'P3 profile')
+        require(p3['schema_version']=='p2-p3-fixture-profile-v1' and p3['validation_origin']=='fixture',
+                'unknown P3 fixture schema/origin')
+        require(type(p3['use_place_aliases']) is bool and type(p3['use_role_prompt']) is bool,
+                'P3 flags must be explicit bools')
+        require(p3['profile_digest']==digest({k:v for k,v in p3.items() if k!='profile_digest'}),
+                'P3 profile digest mismatch')
+        # Bind exact immutable dependency contents without importing an experiment or
+        # reading the filesystem. Digests derive from the pinned input manifest.
+        require(digest(p3['code_version'])=='c339dab1f55c3f0a4da3ea0b115ca44d9b2580a174dceeaa080601dd6c697442',
+                'wrong P3 dependency contents')
+        require(p3['code_version']['commit']==P3_COMMIT and p3['p3_schema_version']=='post-only-simple-names-v2',
+                'wrong P3 protocol/version')
+        for key, expected in {
+            'admin_catalog': '0b0a106d5a770c8334b319d5af1c68a923d9b7b9f49737c7e9adf9d7d4556eb8',
+            'location_catalog': '89a13f1b0928da9e6f809cccc069274e7e57b50e01ef9c96d8fc8d3664ddc021',
+            'place_alias_overlay': '011394adde02e8b780a0dc02d0ec7a8bcb240591b4f43887ce6236f10f28bc4a',
+        }.items():
+            snapshot=p3[key]
+            _keys(snapshot, {'version','snapshot','digest'}, key)
+            require(snapshot['digest']==digest(snapshot['snapshot'])==expected
+                    and snapshot['version']==snapshot['snapshot'].get('version'), 'wrong '+key+' snapshot')
+        expected_prompt=(('post-only-source-role-v1','3b2e99c0e027eb96ea7ade888358679cc8d0c2b06d3331c0a4444fd17e9c2e77')
+            if p3['use_role_prompt'] else ('post-only-simple-v1','fd788184c1f9f40c5d970beb8fd2c893b4893fc9294467ae5be9a5c2cdf2bef9'))
+        require((p3['prompt_version'],digest(p3['prompt_snapshot']))==expected_prompt, 'P3 prompt/switch mismatch')
+        model=p3['model']; _keys(model, {'identifier','config_source','invocation_config'}, 'P3 model')
+        require(type(model['identifier']) is str and bool(model['identifier'].strip()), 'missing P3 model identity')
+        _keys(model['config_source'], {'origin','reference'}, 'P3 model source')
+        require(model['config_source']['origin']=='fixture' and type(model['config_source']['reference']) is str
+                and bool(model['config_source']['reference'].strip()), 'missing fixture model source')
+        call=model['invocation_config']
+        require(canonical(call)==canonical({'max_tokens':3000,'enable_thinking':False,'request_timeout':60,'invocation_mode':'single'}),
+                'P3 invocation configuration mismatch')
+        ip=p3['ip_policy']; _keys(ip, {'version','fixture_only','thresholds'}, 'IP profile')
+        require(ip['version']=='p2-comment-ip-fixture-v1' and ip['fixture_only'] is True, 'invalid fixture IP policy')
+        thresholds=ip['thresholds'];_keys(thresholds, {'min_valid_users','min_valid_coverage','min_target_share','province_aliases'}, 'IP thresholds')
+        _integer(thresholds['min_valid_users'],1,'min_valid_users')
+        for key in ('min_valid_coverage','min_target_share'):
+            require(type(thresholds[key]) in (int,float) and 0<thresholds[key]<=1, 'invalid IP threshold '+key)
+        require(thresholds['province_aliases']=={}, 'unreviewed IP aliases')
     risk=inputs.risk_inputs
     _keys(risk, {'schema_version','category_ids','terms','search_groups','rules','model','prompt','scoring','identity','digest'}, 'risk inputs')
     require(risk['schema_version']=='geo-frozen-risk-v1', 'unknown frozen risk schema')
@@ -434,7 +466,7 @@ def _derive(inputs):
     # Execution level is supplied by the pinned P3 adapter, not inferred from names.
     context=inputs.scope_context
     _keys(context, {'schema_version','scope_origin','target_level','administrative_target','scope','policy','model','invocation_mode'}, 'P3 context')
-    require(context['schema_version']=='post-only-v2' and context['scope_origin']=='fixture'
+    require(context['schema_version']=='post-only-v2' and context['scope_origin']==('confirmed_run' if isinstance(inputs, ConfirmedPlanInputs) else 'fixture')
         and context['model']==inputs.p3_inputs['model']['identifier'] and context['invocation_mode']=='single',
         'P3 context protocol/model mismatch')
     require(context['scope']=={'target':{'name':target['name'],'aliases':sorted(target['aliases'])},
@@ -498,9 +530,10 @@ def _derive(inputs):
         max_total_notes=max_total,effective_parameters=parameters,triage_mode=lim.triage_mode,
         derivation_version='p1-collection-031e0cd')
     tiers=['local','province_unknown','ip_only'] if scope.selection_policy=='local_first_with_supplement' and execution_level=='city' else ['local']
-    policy=GeographicPolicy(version='geo-select-fixture-v1',selection_policy=scope.selection_policy,tier_order=tiers,
+    formal = isinstance(inputs, ConfirmedPlanInputs)
+    policy=(ConfirmedGeographicPolicy if formal else GeographicPolicy)(version='geo-select-confirmed-v1' if formal else 'geo-select-fixture-v1',selection_policy=scope.selection_policy,tier_order=tiers,
         ip_min_suspicion='strong',status_policy='successful-no-location-only-for-ip-v1',
-        selection_strategy='p4-future-geographic-selection',quota_settlement='actual-selected-query-after-detail-success')
+        selection_strategy='p4-geographic-selection' if formal else 'p4-future-geographic-selection',quota_settlement='actual-selected-query-after-detail-success')
     return queries,collection,policy
 
 
@@ -621,4 +654,30 @@ def parse_scope_search_plan(raw, *, expected_identity, expected_digest):
     plan=_parse_plan(raw)
     require(plan.identity==PlanIdentity.model_validate(expected_identity), 'restored identity mismatch')
     require(plan.plan_digest==expected_digest, 'restored expected digest mismatch')
+    return plan
+
+
+def build_confirmed_scope_search_plan(authority, *, expected_identity):
+    """Pure derivation; authorization is independently enforced at confirmation."""
+    raw = authority.model_dump(mode='json') if isinstance(authority, ConfirmedPlanInputs) else authority
+    canonical(raw)
+    inputs = ConfirmedPlanInputs.model_validate(raw)
+    require(inputs.identity == PlanIdentity.model_validate(expected_identity), 'expected identity mismatch')
+    require(inputs.resolution.execution.geographic_plan is None, 'recursive geographic plan')
+    require(inputs.settings.limits.triage_mode == 'select', 'geographic execution requires select')
+    queries, collection, policy = _derive(inputs)
+    body = dict(schema_version='geo-confirmed-execution-plan-v1', validation_origin='confirmed_run',
+        identity=inputs.identity.model_dump(mode='json'), inputs=inputs.model_dump(mode='json'),
+        configuration_digest=digest(inputs.configuration.model_dump(mode='json')),
+        input_digests={k: digest(v) for k,v in inputs.model_dump(mode='json').items()},
+        execution_queries=[q.model_dump(mode='json') for q in queries],
+        collection=collection.model_dump(mode='json'), policy=policy.model_dump(mode='json'))
+    return ConfirmedScopeSearchPlan.model_validate({**body, 'plan_digest': digest(body)})
+
+
+def parse_confirmed_scope_search_plan(raw, *, expected_identity, expected_digest):
+    canonical(raw)
+    plan = ConfirmedScopeSearchPlan.model_validate(raw)
+    rebuilt = build_confirmed_scope_search_plan(plan.inputs, expected_identity=expected_identity)
+    require(plan == rebuilt and plan.plan_digest == expected_digest, 'confirmed plan binding mismatch')
     return plan

@@ -286,3 +286,9 @@ export function updateInvestigationRelevanceScope(
       ...(request.clarificationTargetText ? { clarification_target_text: request.clarificationTargetText } : {}) }) }
   );
 }
+
+export function getGeographicSelection(runId: string, offset = 0, tier?: import('../types/investigationCreation').GeographicTier) {
+  return apiRequest<import('../types/investigationCreation').GeographicSelectionPage>(
+    withQuery(`/api/investigation-runs/${encodeURIComponent(runId)}/geographic-selection`, { offset, limit: 50, tier })
+  );
+}

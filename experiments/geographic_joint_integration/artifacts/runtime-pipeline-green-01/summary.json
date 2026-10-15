@@ -1,0 +1,15 @@
+{
+  "pytest_exit_code": 1,
+  "exit_code": 1,
+  "elapsed_seconds": 32.21,
+  "pytest": {
+    "tests": 4,
+    "failures": 1,
+    "errors": 0,
+    "skipped": 0
+  },
+  "guard_expected_probes": [],
+  "guard_unexpected_attempts": [],
+  "actual_network_model_collection_dispatch_succeeded": 0,
+  "fixture_only": true
+}

@@ -1,0 +1,42 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_detail_auth_failure_cannot_restart_outer_account_sweep __________
+
+confirmed = (<backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x12158ac00>, {'geographic_plan': {'...:87c90b4a10e34a6e96e8db2fa64ebc76'}, ...}, 'auto_analyze': True, 'collect_comments': True, 'collect_media': True, ...})
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-0chd3ivw/pytest/test_detail_auth_failure_canno0')
+
+    def test_detail_auth_failure_cannot_restart_outer_account_sweep(confirmed, tmp_path):
+        from backend.audit_agent.crawler_adapter import CrawlerAuthenticationError
+        events = []
+        retired = []
+        class Expired(Crawler):
+            def run_search(self, **kw):
+                result = super().run_search(**kw)
+                result.contents.append({**result.contents[0], 'aweme_id': 'second-content'})
+                return result
+            def run_detail(self, **kw):
+                events.append(('detail', kw))
+                raise CrawlerAuthenticationError('test-only expired account')
+        runner, _, _ = runtime(confirmed, tmp_path, events=events, crawler=Expired(events))
+        runner.accounts['second'] = dict(id='second', auth_state={})
+        runner.retire = lambda account, error: retired.append(account['id'])
+        with pytest.raises(CrawlerAuthenticationError) as caught:
+            runner.run()
+>       assert caught.value.triage_rotation_stop is True
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'CrawlerAuthenticationError' object has no attribute 'triage_rotation_stop'
+
+tests/test_geographic_runtime_pipeline.py:142: AttributeError
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_runtime_pipeline.py::test_detail_auth_failure_cannot_restart_outer_account_sweep
+1 failed, 2 warnings in 14.07s

@@ -23,6 +23,7 @@ from .contracts import (
     ConfirmationResolutionV3,
     ConfirmedConfigurationSnapshotV3,
     ConfirmedConfigurationSnapshotV4,
+    ConfirmedConfigurationSnapshotV5,
     DraftConfiguration,
     DraftStatus,
     InvestigationConfiguration,
@@ -1309,7 +1310,15 @@ class InvestigationCreationStore:
                     f"expected revision {expected_revision}, current revision is {current_revision}"
                 )
             from .scope_intent import ensure_execution_ready
-            ensure_execution_ready(self._draft(draft).configuration)
+            ensure_execution_ready(self._draft(draft).configuration, capability=getattr(self, 'geographic_capability', None))
+            raw_plan = resolved_configuration.get('geographic_plan')
+            if getattr(self._draft(draft).configuration, 'relevance_scope', None) is not None:
+                capability = getattr(self, 'geographic_capability', None)
+                if capability is None or not capability.allows_path(self.db_path):
+                    raise ValueError('geographic store capability unavailable')
+                capability.verify_confirmation(self._draft(draft), raw_plan)
+            elif raw_plan is not None:
+                raise ValueError('geographic plan on unscoped draft')
             existing = connection.execute(
                 """
                 SELECT * FROM investigation_runs
@@ -1373,9 +1382,9 @@ class InvestigationCreationStore:
                     resolution = ConfirmationResolution.model_validate(
                         confirmation_resolution
                     )
-                    snapshot = ConfirmedConfigurationSnapshotV4.model_validate(
+                    snapshot = (ConfirmedConfigurationSnapshotV5 if raw_plan else ConfirmedConfigurationSnapshotV4).model_validate(
                         {
-                            "schema_version": "investigation-run-config-v4",
+                            "schema_version": "investigation-run-config-v5" if raw_plan else "investigation-run-config-v4",
                             "draft_id": draft_id,
                             "draft_revision": expected_revision,
                             "title": str(draft["title"]),

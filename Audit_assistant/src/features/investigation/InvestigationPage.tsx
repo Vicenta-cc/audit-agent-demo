@@ -2703,6 +2703,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       {/* Column 3: Right Context Drawer (Overlay/Sliding) */}
       <InvestigationContextDrawer
         isOpen={activeDrawer !== null}
+        geographicRunId={drawerSnapshot ? undefined : activeSession.creationBinding?.run?.run_id}
         type={activeDrawer}
         onClose={() => { setActiveDrawer(null); setDrawerSnapshot(null); }}
         draft={drawerSnapshot?.draftData || activeSession.draft}

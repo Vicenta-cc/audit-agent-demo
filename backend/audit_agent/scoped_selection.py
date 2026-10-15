@@ -1,4 +1,4 @@
-"""Pure, fixture-bound geographic selection; never imported by product startup.
+"""Pure geographic selection for explicit fixture or confirmed-run contracts.
 
 The caller supplies the original per-query ``rank_candidates`` order. Geographic
 filtering preserves that order and does not score, sort, capture or persist data.
@@ -38,10 +38,17 @@ def _count(value):
 
 
 def validate_plan(plan, *, expected_execution_id=None, expected_plan_digest=None):
-    """Reject malformed, changed or unsupported fixture input with ValueError."""
+    """Reject malformed, changed or unsupported input with ValueError."""
     _require(isinstance(plan, dict), 'plan_not_object')
     _require(plan.get('schema_version') == 'p4-fixture-input-v1' and
-             plan.get('validation_origin') == 'fixture', 'fixture_projection_required')
+             plan.get('validation_origin') == 'fixture' or
+             plan.get('schema_version') == 'p4-confirmed-input-v1' and
+             plan.get('validation_origin') == 'confirmed_run', 'fixture_projection_required')
+    if plan.get('validation_origin') == 'confirmed_run':
+        runtime = plan.get('runtime_binding')
+        _require(isinstance(runtime, dict) and all(_text(runtime.get(k)) for k in ('run_id', 'job_id'))
+                 and all(_hash(runtime.get(k)) for k in ('config_hash', 'p2_plan_digest')),
+                 'invalid_runtime_binding')
     _require(_text(plan.get('execution_id')), 'missing_execution_id')
     _require(plan.get('platform') == 'dy' and plan.get('mode') == 'search', 'unsupported_platform_or_mode')
     if expected_execution_id is not None:

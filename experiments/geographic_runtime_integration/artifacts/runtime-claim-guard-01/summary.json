@@ -1,0 +1,14 @@
+{
+  "pytest_exit_code": 0,
+  "exit_code": 0,
+  "elapsed_seconds": 3.37,
+  "pytest": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "source_unchanged": true,
+  "guard_attempts": [],
+  "network_model_collection_dispatch_succeeded": 0
+}

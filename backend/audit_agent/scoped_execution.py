@@ -1,4 +1,4 @@
-"""Injected offline P4 coordinator. No product entry point or runtime services.
+"""Injected P4 coordinator shared by offline and confirmed-run adapters.
 
 Collection receipts and delivery receipts are separate. An in-flight attempt
 without a full receipt requires explicit reconciliation, never a timed retry.
@@ -275,7 +275,7 @@ class ScopedExecution:
         if any(o['geo']['result']['geo_tier'] in {'unresolved', 'conflict'} for o in rows):
             reasons.append('geographic_pending_or_conflict')
         return {'execution_id': self.execution_id, 'plan_digest': self.plan['plan_digest'],
-                'validation_origin': 'fixture', 'candidate_occurrences': len(rows),
+                'validation_origin': self.plan['validation_origin'], 'candidate_occurrences': len(rows),
                 'excluded_occurrences': len(saved['excluded_occurrences']),
                 'ineligible_occurrences': sum(tier is None for tier in eligible),
                 'geographic_pending_or_conflict': sum(o['geo']['result']['geo_tier'] in {'unresolved', 'conflict'}

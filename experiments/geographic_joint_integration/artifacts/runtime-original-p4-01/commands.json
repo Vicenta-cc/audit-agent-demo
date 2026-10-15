@@ -1,0 +1,25 @@
+{
+  "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+  "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo",
+  "pytest_argv": [
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-wlw4yhxd/pytest",
+    "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/runtime-original-p4-01/junit.xml",
+    "tests/test_triage_engine.py",
+    "tests/test_triage_matcher.py",
+    "tests/test_triaged_search.py",
+    "tests/test_triage_account_rotation.py",
+    "tests/test_geographic_draft_configuration.py",
+    "tests/test_scoped_bridge.py",
+    "tests/test_scoped_execution.py",
+    "tests/test_scoped_selection.py",
+    "tests/test_scoped_selection_store.py"
+  ],
+  "guard_installed_before_collection": true,
+  "allowed_database_roots": [
+    "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-wlw4yhxd",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/runtime-original-p4-01"
+  ]
+}

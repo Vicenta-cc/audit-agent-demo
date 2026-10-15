@@ -1,0 +1,125 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+____ test_formal_capture_barrier_detail_review_durable_delivery_and_restart ____
+
+confirmed = (<backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x114c99070>, {'geographic_plan': {'...:d871f76cf63942e28dad0a3a4f5fa80d'}, ...}, 'auto_analyze': True, 'collect_comments': True, 'collect_media': True, ...})
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-9fk7lam0/pytest/test_formal_capture_barrier_de0')
+
+    def test_formal_capture_barrier_detail_review_durable_delivery_and_restart(confirmed, tmp_path):
+>       runner, events, model = runtime(confirmed, tmp_path)
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_geographic_runtime_pipeline.py:66: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+confirmed = (<backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x114c99070>, {'geographic_plan': {'...:d871f76cf63942e28dad0a3a4f5fa80d'}, ...}, 'auto_analyze': True, 'collect_comments': True, 'collect_media': True, ...})
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-9fk7lam0/pytest/test_formal_capture_barrier_de0')
+events = None, crawler = None, fence = <function <lambda> at 0x1134b8d60>
+stop = <function <lambda> at 0x1134f0ea0>
+
+    def runtime(confirmed, tmp_path, *, events=None, crawler=None, fence=lambda db: True, stop=lambda:False):
+>       from backend.audit_agent.geographic_pipeline import GeographicPipeline
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_pipeline'
+
+tests/test_geographic_runtime_pipeline.py:53: ModuleNotFoundError
+_________ test_runtime_uses_frozen_parameters_and_rejects_stale_fence __________
+
+confirmed = (<backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x114ffd7c0>, {'geographic_plan': {'...:2417dbab5110429da513c4176eeb5bdd'}, ...}, 'auto_analyze': True, 'collect_comments': True, 'collect_media': True, ...})
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-9fk7lam0/pytest/test_runtime_uses_frozen_param0')
+
+    def test_runtime_uses_frozen_parameters_and_rejects_stale_fence(confirmed, tmp_path):
+        active = [True]
+>       runner, events, _ = runtime(confirmed, tmp_path, fence=lambda db:active[0])
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_geographic_runtime_pipeline.py:89: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+confirmed = (<backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x114ffd7c0>, {'geographic_plan': {'...:2417dbab5110429da513c4176eeb5bdd'}, ...}, 'auto_analyze': True, 'collect_comments': True, 'collect_media': True, ...})
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-9fk7lam0/pytest/test_runtime_uses_frozen_param0')
+events = None, crawler = None
+fence = <function test_runtime_uses_frozen_parameters_and_rejects_stale_fence.<locals>.<lambda> at 0x11372fb00>
+stop = <function <lambda> at 0x1134f0ea0>
+
+    def runtime(confirmed, tmp_path, *, events=None, crawler=None, fence=lambda db: True, stop=lambda:False):
+>       from backend.audit_agent.geographic_pipeline import GeographicPipeline
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_pipeline'
+
+tests/test_geographic_runtime_pipeline.py:53: ModuleNotFoundError
+______________ test_partial_stopped_capture_never_reaches_detail _______________
+
+confirmed = (<backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x1150dc9b0>, {'geographic_plan': {'...:7802d47cc3094862bc9ecb662151e349'}, ...}, 'auto_analyze': True, 'collect_comments': True, 'collect_media': True, ...})
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-9fk7lam0/pytest/test_partial_stopped_capture_n0')
+
+    def test_partial_stopped_capture_never_reaches_detail(confirmed, tmp_path):
+        stopped = [False]
+        events = []
+        class Partial(Crawler):
+            def run_search(self, **kw):
+                result = super().run_search(**kw)
+                stopped[0] = True
+                return result
+>       runner, _, _ = runtime(confirmed, tmp_path, events=events, crawler=Partial(events), stop=lambda:stopped[0])
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_geographic_runtime_pipeline.py:104: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+confirmed = (<backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x1150dc9b0>, {'geographic_plan': {'...:7802d47cc3094862bc9ecb662151e349'}, ...}, 'auto_analyze': True, 'collect_comments': True, 'collect_media': True, ...})
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-9fk7lam0/pytest/test_partial_stopped_capture_n0')
+events = []
+crawler = <test_geographic_runtime_pipeline.test_partial_stopped_capture_never_reaches_detail.<locals>.Partial object at 0x114eaa570>
+fence = <function <lambda> at 0x1134b8d60>
+stop = <function test_partial_stopped_capture_never_reaches_detail.<locals>.<lambda> at 0x114fb5c60>
+
+    def runtime(confirmed, tmp_path, *, events=None, crawler=None, fence=lambda db: True, stop=lambda:False):
+>       from backend.audit_agent.geographic_pipeline import GeographicPipeline
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_pipeline'
+
+tests/test_geographic_runtime_pipeline.py:53: ModuleNotFoundError
+_________ test_detail_changed_outside_region_never_creates_membership __________
+
+confirmed = (<backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x115774b30>, {'geographic_plan': {'...:9795adcfcabc47dca478defe86313110'}, ...}, 'auto_analyze': True, 'collect_comments': True, 'collect_media': True, ...})
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-9fk7lam0/pytest/test_detail_changed_outside_re0')
+
+    def test_detail_changed_outside_region_never_creates_membership(confirmed, tmp_path):
+        events=[]
+        class Outside(Crawler):
+            def run_detail(self, **kw):
+                result = super().run_detail(**kw)
+                result.contents[0]['title'] = '北京市欠薪'
+                return result
+>       runner, _, _ = runtime(confirmed, tmp_path, events=events, crawler=Outside(events))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_geographic_runtime_pipeline.py:118: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+confirmed = (<backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x115774b30>, {'geographic_plan': {'...:9795adcfcabc47dca478defe86313110'}, ...}, 'auto_analyze': True, 'collect_comments': True, 'collect_media': True, ...})
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-9fk7lam0/pytest/test_detail_changed_outside_re0')
+events = []
+crawler = <test_geographic_runtime_pipeline.test_detail_changed_outside_region_never_creates_membership.<locals>.Outside object at 0x11556f8c0>
+fence = <function <lambda> at 0x1134b8d60>
+stop = <function <lambda> at 0x1134f0ea0>
+
+    def runtime(confirmed, tmp_path, *, events=None, crawler=None, fence=lambda db: True, stop=lambda:False):
+>       from backend.audit_agent.geographic_pipeline import GeographicPipeline
+E       ModuleNotFoundError: No module named 'backend.audit_agent.geographic_pipeline'
+
+tests/test_geographic_runtime_pipeline.py:53: ModuleNotFoundError
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_runtime_pipeline.py::test_formal_capture_barrier_detail_review_durable_delivery_and_restart
+FAILED tests/test_geographic_runtime_pipeline.py::test_runtime_uses_frozen_parameters_and_rejects_stale_fence
+FAILED tests/test_geographic_runtime_pipeline.py::test_partial_stopped_capture_never_reaches_detail
+FAILED tests/test_geographic_runtime_pipeline.py::test_detail_changed_outside_region_never_creates_membership
+4 failed, 2 warnings in 11.70s

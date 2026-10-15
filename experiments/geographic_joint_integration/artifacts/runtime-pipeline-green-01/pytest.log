@@ -1,0 +1,57 @@
+...F                                                                     [100%]
+=================================== FAILURES ===================================
+_________ test_detail_changed_outside_region_never_creates_membership __________
+
+confirmed = (<backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x123a508f0>, {'geographic_plan': {'...:57843276ffea4492bba13ad5247465ca'}, ...}, 'auto_analyze': True, 'collect_comments': True, 'collect_media': True, ...})
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-dowk1neu/pytest/test_detail_changed_outside_re0')
+
+    def test_detail_changed_outside_region_never_creates_membership(confirmed, tmp_path):
+        events=[]
+        class Outside(Crawler):
+            def run_detail(self, **kw):
+                result = super().run_detail(**kw)
+                result.contents[0]['title'] = '北京市欠薪'
+                return result
+        runner, _, _ = runtime(confirmed, tmp_path, events=events, crawler=Outside(events))
+>       report, output = runner.run()
+                         ^^^^^^^^^^^^
+
+tests/test_geographic_runtime_pipeline.py:119: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/audit_agent/geographic_pipeline.py:164: in run
+    report = self.execution.run()
+             ^^^^^^^^^^^^^^^^^^^^
+backend/audit_agent/scoped_execution.py:249: in run
+    self._pending_receipts()
+backend/audit_agent/scoped_execution.py:181: in _pending_receipts
+    self._finish_collection(attempt)
+backend/audit_agent/scoped_execution.py:147: in _finish_collection
+    tier = eligible_tier(self.plan, updated, risk_candidate=occurrence['candidate'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/audit_agent/scoped_selection.py:237: in eligible_tier
+    _validate_occurrence(plan, query, occurrence, risk_candidate=risk_candidate)
+backend/audit_agent/scoped_selection.py:198: in _validate_occurrence
+    _require(result.get('schema_version') == 'post-only-simple-names-v2' and
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+condition = False, reason = 'geo_evaluation_failed'
+
+    def _require(condition, reason):
+        if not condition:
+>           raise ValueError(reason)
+E           ValueError: geo_evaluation_failed
+
+backend/audit_agent/scoped_selection.py:25: ValueError
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_runtime_pipeline.py::test_detail_changed_outside_region_never_creates_membership
+1 failed, 3 passed, 2 warnings in 32.05s

@@ -1,0 +1,17 @@
+{
+  "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+  "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo",
+  "pytest_argv": [
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-0chd3ivw/pytest",
+    "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/runtime-auth-red-02/junit.xml",
+    "tests/test_geographic_runtime_pipeline.py::test_detail_auth_failure_cannot_restart_outer_account_sweep"
+  ],
+  "guard_installed_before_collection": true,
+  "allowed_database_roots": [
+    "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-0chd3ivw",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/runtime-auth-red-02"
+  ]
+}
