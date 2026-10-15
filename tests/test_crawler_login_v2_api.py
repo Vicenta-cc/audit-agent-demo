@@ -387,3 +387,91 @@ def test_start_api_invalid_json_option_types_return_400(api, monkeypatch, body):
     )
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "INVALID_LOGIN_OPTIONS"
+
+
+def test_manual_claim_and_transport_secrets_never_enter_rest_or_ws(api):
+    import json
+    client,m,s,_,_,_,_=api
+    claim='manual-claim-canary-private'
+    password='proxy-password-canary-private'
+    m.operations.mark_stage(s['operation_id'],'checking',result_json=json.dumps({'status':'success','operation_id':s['operation_id'],
+        'recovery_claim':claim,'password':password,'account':{'id':s['account_id'],'status':'active','recovery_claim':claim,
+        'manual_recovery_claim':claim,'auth_state_ciphertext':password,'transport_ciphertext':password}}))
+    response=client.get(f"/api/crawler-accounts/{s['account_id']}/login-operations/{s['operation_id']}")
+    assert response.status_code==200
+    assert claim not in response.text and password not in response.text
+    m.sessions[s['id']].manual_recovery_claim=claim
+    path=f"/api/crawler-account-login-sessions/{s['id']}"
+    ticket=client.post(path+'/ws-tickets').json()['ticket']
+    with client.websocket_connect(path+'/stream',headers={'Origin':'https://app.test'}) as ws:
+        ws.send_json({'type':'auth','protocol_version':2,'ticket':ticket})
+        snapshot=json.dumps(ws.receive_json())
+        assert claim not in snapshot and password not in snapshot
+
+
+def test_explicit_new_browser_claim_rotates_token_and_cookie_without_respawning(api):
+    client,m,s,auth,p,_,allowed=api
+    live=m.sessions[s['id']]
+    process,deadline,operation=live.process,live.deadline,live.operation_id
+    old_ticket=client.post(f"/api/crawler-account-login-sessions/{s['id']}/ws-tickets").json()['ticket']
+    _,new_cookie,new_csrf=auth.login('owner','long password 123456')
+    client.cookies.set('session',new_cookie)
+    client.headers.update({'X-CSRF-Token':new_csrf,'X-Login-Token':'y'*32})
+    path=f"/api/crawler-accounts/{s['account_id']}/login-session-claims"
+    assert client.post(path,json={},headers={'X-CSRF-Token':''}).status_code==403
+    claimed=client.post(path,json={'expected_operation_id':operation})
+    assert claimed.status_code==200,claimed.text
+    assert claimed.json()['item']['id']==s['id']
+    assert claimed.headers['cache-control']=='private, no-store'
+    assert live.process is process and process.poll() is None and live.deadline==deadline and live.operation_id==operation
+    assert client.post(path,json={}).json()==claimed.json()
+    assert client.post(f"/api/crawler-account-login-sessions/{s['id']}/ws-tickets",headers={'X-Login-Token':'x'*32}).status_code==403
+    assert client.post(path,json={},headers={'X-Login-Token':'x'*32}).status_code==403
+    ticket=client.post(f"/api/crawler-account-login-sessions/{s['id']}/ws-tickets")
+    assert ticket.status_code==200 and ticket.json()['ticket']!=old_ticket
+    with client.websocket_connect(f"/api/crawler-account-login-sessions/{s['id']}/stream",headers={'Origin':'https://app.test'}) as ws:
+        ws.send_json({'type':'auth','protocol_version':2,'ticket':ticket.json()['ticket']})
+        snap=ws.receive_json()['item']
+        assert snap['controller_state']=='attached'
+        action=dict(type='action',command_id='new-browser-command',operation_id=operation,
+            controller_epoch=snap['controller_epoch'],sequence=1,expected_state_revision=snap['state_revision'],
+            action='request_sms',payload={'phone':'13800000000'})
+        response=client.post(f"/api/crawler-account-login-sessions/{s['id']}/actions",json=action)
+        assert response.status_code==202,response.text
+        wait_until(lambda:m.operations.get_command(operation,'new-browser-command')['execution_status']=='executed')
+
+
+def test_claim_other_user_including_admin_cannot_take_over_even_with_manage_acl(api):
+    client,m,s,auth,p,_,_=api
+    other=auth.create_user(username='admin-claim',password='long password 123456',role='admin')
+    _,token,csrf=auth.login('admin-claim','long password 123456')
+    app=FastAPI()
+    app.add_middleware(ApplicationAuthMiddleware,store=auth,cookie_name='session')
+    app.include_router(create_login_v2_router(m,principal_provider=RequestPrincipalProvider(),auth_store=auth,
+        require_account=lambda *args,**kwargs: True,auth_required=lambda:True,cookie_name='session',
+        allowed_origins=lambda:['https://app.test']))
+    with TestClient(app) as admin:
+        admin.cookies.set('session',token)
+        response=admin.post(f"/api/crawler-accounts/{s['account_id']}/login-session-claims",json={},
+            headers={'X-CSRF-Token':csrf,'X-Login-Token':'z'*32})
+    assert response.status_code==403
+    assert response.json()['detail']['code']=='SESSION_OWNER_MISMATCH'
+    assert m.sessions[s['id']].user_id==p.id
+
+
+@pytest.mark.parametrize('body',[[],{'unexpected':True},{'expected_operation_id':''},{'expected_operation_id':123}])
+def test_claim_rejects_invalid_body_without_changing_current_owner(api,body):
+    client,m,s,*_=api
+    before=m.sessions[s['id']].owner_hash
+    response=client.post(f"/api/crawler-accounts/{s['account_id']}/login-session-claims",json=body)
+    assert response.status_code==400
+    assert m.sessions[s['id']].owner_hash==before
+
+
+def test_claim_absent_active_session_reports_specific_not_found(api):
+    client,m,s,*_=api
+    m.cancel(s['id'],user_id=m.sessions[s['id']].user_id,
+        app_session_id=m.sessions[s['id']].app_session_id,owner_token='x'*32)
+    response=client.post(f"/api/crawler-accounts/{s['account_id']}/login-session-claims",json={})
+    assert response.status_code==404
+    assert response.json()['detail']['code']=='ACTIVE_LOGIN_NOT_FOUND'

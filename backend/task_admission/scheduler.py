@@ -42,11 +42,25 @@ def select_account(worker, row):
         waiting(worker.store.admission, row, "", "")
         yield True
         return
+    from backend.audit_agent.config import settings
     platform = config.get("platform", "xhs")
     preferred = config.get("crawler_account_id") or ""
+    from .store import AdmissionError
+    from backend.audit_agent.account_rotation import AccountRotationManager
+    all_permitted=set()
+    for candidate in account_store.list(platform=platform):
+        try:
+            with worker.store.admission.connect() as db:
+                worker.store.admission.validate_user(db,row['owner_id'],candidate['id'])
+            all_permitted.add(candidate['id'])
+        except AdmissionError:
+            continue
+    manager=AccountRotationManager(account_store)
+    manager.refresh_authorized(platform,row['owner_id'],all_permitted)
+    manager.recover_authorized(platform,row['owner_id'],all_permitted)
+    manager.prepare_exhausted_pool(platform,row['owner_id'],all_permitted)
     accounts = account_store.available_accounts(platform)
     permitted_accounts = []
-    from .store import AdmissionError
 
     for account in accounts:
         try:
@@ -60,6 +74,7 @@ def select_account(worker, row):
     permitted_accounts.sort(
         key=lambda item: (
             item[0] != "public",
+            *(account_store.fair_key(item[1]) if platform=='dy' and settings.crawler_safety_enabled else ()),
             item[1]["id"] != preferred,
         )
     )
@@ -73,6 +88,20 @@ def select_account(worker, row):
                 a["id"] for a in account_store.available_accounts(platform)
             }:
                 continue
+            from backend.audit_agent.crawler_route import (
+                resolve_account_route, authorize_route_owner, CollectionRouteError,
+            )
+            try:
+                from backend.audit_agent.config import settings
+                requires_route = settings.crawler_proxy_enabled or account.get("proxy_required") or account.get("proxy_id")
+                if platform == "dy" and requires_route:
+                    snapshot = resolve_account_route(account["id"], account_store=account_store)
+                    if snapshot:
+                        authorize_route_owner(account["id"], None if snapshot.route_mode in {"direct_degraded", "legacy_direct"} else snapshot.proxy_id, row["owner_id"], account_store=account_store)
+            except CollectionRouteError as exc:
+                waiting(worker.store.admission, row, exc.code, account["id"])
+                continue
+            account_store.record_fair_selection(account['id'], [item['id'] for _,item in permitted_accounts])
             waiting(worker.store.admission, row, "", account["id"])
             with assigned_account(account["id"]):
                 yield True
@@ -90,7 +119,16 @@ def select_account(worker, row):
 def dispatch(worker):
     from .legacy import dispatch_one
     from .recovery import reconcile, reconcile_one
+    from backend.audit_agent.config import settings
 
+    trial_id = str(getattr(settings, "crawler_proxy_trial_id", "") or "").strip()
+    allowed = getattr(settings, "crawler_proxy_trial_job_ids", ())
+    if isinstance(allowed, str):
+        allowed = [value.strip() for value in allowed.split(",") if value.strip()]
+    trial_jobs = frozenset(allowed)
+    if trial_id and not trial_jobs:
+        # An isolated trial starts idle; only a manifest-listed task may run.
+        return None
     admission = worker.store.admission
     reconcile(worker)
     with admission.connect() as db:
@@ -101,6 +139,8 @@ def dispatch(worker):
             )
         ]
     for candidate in rows:
+        if trial_id and candidate["task_id"] not in trial_jobs and candidate.get("job_id") not in trial_jobs:
+            continue
         task_id = candidate["task_id"]
         result = None
         executed = False

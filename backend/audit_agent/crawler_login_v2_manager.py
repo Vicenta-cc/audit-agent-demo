@@ -15,6 +15,7 @@ import selectors
 import signal
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -60,6 +61,8 @@ ERROR_MESSAGES = {
     "ACCOUNT_DISABLED": "账号已停用，请先启用账号。",
     "SESSION_OWNER_MISMATCH": "该登录窗口属于另一应用或浏览器会话，请重新打开。",
     "OWNER_TOKEN_REQUIRED": "登录窗口信息已失效，请重新打开。",
+    "ACTIVE_LOGIN_NOT_FOUND": "当前没有进行中的登录，请重新开始登录。",
+    "SESSION_CLAIM_LIMIT": "本次登录窗口切换次数过多，请等待当前登录结束。",
     "SESSION_NOT_FOUND": "登录窗口已失效，请检查登录记录或重新打开。",
     "SESSION_ENDED": "本次登录已结束，请查看结果或重新登录。",
     "SESSION_REPLACED": "应用登录状态已变化，请重新登录应用。",
@@ -120,8 +123,27 @@ ERROR_MESSAGES = {
     "RECOVERY_REQUIRES_V2": "当前登录方式不支持恢复，请启用新版登录。",
     "PROTOCOL_NOT_AVAILABLE": "当前服务未启用此登录方式，请使用可用方式。",
     "PROFILE_MIGRATION_REQUIRED": "旧登录信息需要迁移，请明确选择重新扫码后再继续。",
+    "INVALID_MIGRATION_ID": "迁移记录标识无效，请重新选择迁移记录。",
+    "MIGRATION_REQUIRES_DY_V2": "账号迁移需要使用抖音新版登录。",
+    "BROWSER_PROFILE_MIGRATION_REQUIRED": "账号浏览器资料尚未迁移，请先完成迁移。",
+    "MIGRATION_BLOCKED": "账号迁移尚未完成，暂不能开始本次登录。",
+    "MIGRATION_NOT_FOUND": "未找到对应迁移记录，请重新检查。",
+    "CRAWLER_BROWSER_MAINTENANCE": "账号浏览器正在维护，请稍后重试。",
     "CURRENT_PHASE_UNKNOWN": "暂未识别当前登录步骤，请打开验证面板人工处理。",
 }
+
+
+ERROR_MESSAGES.update({
+    "PROXY_BUSY": "代理正在使用，请稍后重试。",
+    "SUPPLEMENT_DEFERRED": "代理资源暂不可用。",
+    "PROXY_REVISION_MISMATCH": "账号代理配置已变化，请重新开始登录。",
+    "PROXY_EXIT_CHANGED": "代理出口已变化，登录已停止。",
+    "PROXY_UNAVAILABLE": "代理不可用，登录已停止。",
+    "PROXY_AUTH_FAILED": "代理鉴权失败，登录已停止。",
+    "PROXY_CONFIG_INVALID": "代理配置无效，登录已停止。",
+    "PROBE_BUDGET_EXHAUSTED": "出口检测额度已耗尽，登录已停止。",
+    "SCHEDULER_POLICY_CONFLICT": "请求保护配置冲突，登录已停止。",
+})
 
 
 def safe_error_code(value, fallback="LOGIN_FAILED"):
@@ -178,6 +200,7 @@ class V2Session:
     controller: object = None
     frame: bytes = b""
     frame_revision: int = 0
+    retired_owner_hashes: set = field(default_factory=set)
     results: list = field(default_factory=list)
     result_base: int = 0
     candidate: dict | None = None
@@ -314,6 +337,7 @@ class CrawlerLoginV2Manager:
         source_operation_id=None,
         browser_mode="default",
         authorize=None,
+        migration_id=None,
     ):
         if not 32 <= len(owner_token) <= 128:
             raise LoginV2Error("OWNER_TOKEN_REQUIRED", status=403)
@@ -368,7 +392,12 @@ class CrawlerLoginV2Manager:
                 request_fingerprint=fingerprint,
                 intent=intent,
                 source_operation_id=source_operation_id,
+                migration_id=migration_id,
             )
+            migration_id = op.get("migration_id") or migration_id
+            from .crawler_child_runtime import require_browser_available
+            require_browser_available(account["id"], store=self.store, owner_id=user_id,
+                                      migration_id=migration_id, operation_id=op["id"])
             if op["stage"] == "committed":
                 return self._committed_snapshot(op), False
             for s in self.sessions.values():
@@ -411,94 +440,131 @@ class CrawlerLoginV2Manager:
                     op["id"], "failed", error_code="ACCOUNT_BUSY"
                 )
                 raise
-            parent, child = socket.socketpair()
-            s = V2Session(
-                uuid4().hex,
-                op["id"],
-                account["id"],
-                user_id,
-                app_session_id,
-                digest(owner_token),
-                {},
-                media=parent,
-                handles=handles,
-                deadline=time.monotonic() + self.timeout,
-                authorize=authorize,
-            )
-            s.snapshot = {
-                "protocol_version": 2,
-                "engine": "v2",
-                "id": s.id,
-                "operation_id": s.operation_id,
-                "source_operation_id": source_operation_id,
-                "account_id": s.account_id,
-                "platform": "dy",
-                "phase": "checking",
-                "status": "starting",
-                "state_revision": 1,
-                "controller_epoch": 0,
-                "controller_state": "detached",
-                "cleanup_state": "active",
-                "available_actions": ["cancel"],
-                "qr": None,
-                "sms": None,
-                "challenge": None,
-                "identity": {"status": "pending", "platform_account_id": ""},
-                "result": None,
-                "error": None,
-                "created_at": utc(),
-                "updated_at": utc(),
-                "expires_at": (
-                    datetime.now(timezone.utc) + timedelta(seconds=self.timeout)
-                ).isoformat(),
-                "interactive": False,
-                "qr_image_data_url": "",
-            }
-            diagnostic = tempfile.TemporaryFile(mode="w+b")
-            env = os.environ.copy()
-            env.update(account_browser_env(account["id"]))
-            env.update(scheduler_env())
-            env.update(
-                PYTHONUNBUFFERED="1",
-                MEDIACRAWLER_DIR=str(settings.media_crawler_dir.expanduser().resolve()),
-                CRAWLER_BROWSER_PROFILE_ROOT=env["MEDIACRAWLER_CLOAK_PROFILE_ROOT"],
-            )
-            env["PYTHONPATH"] = os.pathsep.join(
-                filter(None, [str(settings.root_dir), env.get("PYTHONPATH", "")])
-            )
-            args = [
-                str(self.python_path),
-                str(self.helper_path),
-                "--platform",
-                "dy",
-                "--account-id",
-                account["id"],
-                "--protocol-v2",
-                "--media-fd",
-                str(child.fileno()),
-                "--operation-id",
-                op["id"],
-                "--intent",
-                intent,
-                "--entry",
-                settings.crawler_login_v2_entry,
-                "--timeout",
-                str(self.timeout),
-            ]
-            if (
-                browser_mode == "compatibility"
-                or settings.crawler_login_v2_browser_mode == "compatibility"
-            ):
-                args.append("--headed")
-            if settings.crawler_login_v2_resource_policy == "precise":
-                args.append("--block-media")
-            if self.store.get_auth_state_ciphertext(account["id"]):
-                args.append("--has-auth-backup")
-            if account.get("platform_account_id"):
-                args.extend(
-                    ["--expected-platform-account-id", account["platform_account_id"]]
-                )
+            manual_claim = None
+            from .crawler_route import acquire_route_execution, RouteConfigPipe
             try:
+                if not migration_id and settings.crawler_safety_enabled and account.get('route_state') in {'manual_required','challenge_paused','recovery_check'}:
+                    if not self.lease_factory:
+                        from .crawler_route import reconcile_stopped_route_admissions
+                        reconcile_stopped_route_admissions(self.store,account['id'],handles[-1])
+                    manual_claim = self.store.begin_manual_recovery(account['id'],op['id'],owner_id=user_id)
+                    if not manual_claim:
+                        raise LoginV2Error('ACCOUNT_BUSY')
+                from .crawler_route import resolve_account_route
+                snapshot = resolve_account_route(account["id"], account_store=self.store, expected_binding_revision=op.get("expected_binding_revision"), expected_config_revision=op.get("expected_config_revision"), allow_probe=True)
+                if (snapshot.proxy_id if snapshot and snapshot.route_mode not in {'direct_degraded', 'legacy_direct'} else account.get('proxy_id') if snapshot else None) != op.get("proxy_id"):
+                    from .crawler_route import CollectionRouteError
+                    raise CollectionRouteError("PROXY_REVISION_MISMATCH")
+                route_bundle = acquire_route_execution(account["id"], op["id"], user_id, account_handle=handles[-1], account_store=self.store, snapshot=snapshot, allow_probe=True, recovery_claim=manual_claim,human_login_operation_id=None if migration_id else op["id"], migration_id=migration_id)
+            except Exception as exc:
+                if manual_claim:
+                    self.store.finish_manual_recovery(account['id'],op['id'],manual_claim,'uncertain',owner_id=user_id)
+                for handle in handles:
+                    handle.close()
+                self.operations.mark_stage(op["id"], "failed", error_code=safe_error_code(exc))
+                raise
+            parent = child = diagnostic = s = None
+            try:
+                parent, child = socket.socketpair()
+                s = V2Session(
+                    uuid4().hex,
+                    op["id"],
+                    account["id"],
+                    user_id,
+                    app_session_id,
+                    digest(owner_token),
+                    {},
+                    media=parent,
+                    handles=handles,
+                    deadline=time.monotonic() + self.timeout,
+                    authorize=authorize,
+                )
+                s.manual_recovery_claim = getattr(route_bundle,"manual_recovery_claim",None) or manual_claim
+                s.manual_finished = False
+                s.route_bundle = route_bundle
+                s.route_pipe = RouteConfigPipe(route_bundle.snapshot)
+                s.snapshot = {
+                    "protocol_version": 2,
+                    "engine": "v2",
+                    "id": s.id,
+                    "operation_id": s.operation_id,
+                    "source_operation_id": source_operation_id,
+                    "account_id": s.account_id,
+                    "platform": "dy",
+                    "phase": "checking",
+                    "status": "starting",
+                    "state_revision": 1,
+                    "controller_epoch": 0,
+                    "controller_state": "detached",
+                    "cleanup_state": "active",
+                    "available_actions": ["cancel"],
+                    "qr": None,
+                    "sms": None,
+                    "challenge": None,
+                    "identity": {"status": "pending", "platform_account_id": ""},
+                    "result": None,
+                    "error": None,
+                    "created_at": utc(),
+                    "updated_at": utc(),
+                    "expires_at": (
+                        datetime.now(timezone.utc) + timedelta(seconds=self.timeout)
+                    ).isoformat(),
+                    "interactive": False,
+                    "qr_image_data_url": "",
+                }
+                diagnostic = tempfile.TemporaryFile(mode="w+b")
+                from .crawler_child_runtime import child_environment, child_process_options, authority_for
+                env = child_environment()
+                for name in ("MEDIACRAWLER_PROXY_CONFIG_FD", "MEDIACRAWLER_PROXY_RECEIPT_FD", "MEDIACRAWLER_ROUTE_ACK_FD", "MEDIACRAWLER_MANAGED_ROUTE", "MEDIACRAWLER_PROXY_REQUIRED", "MEDIACRAWLER_PROXY_PROBE_BUDGET_ID"):
+                    env.pop(name, None)
+                env.update(account_browser_env(account["id"]))
+                env.update(scheduler_env())
+                env.update(s.route_pipe.env)
+                from .crawler_route import RouteReceiptPipe
+                s.route_receipt_pipe = RouteReceiptPipe(s.route_bundle) if s.route_bundle and s.route_bundle.snapshot else None
+                if s.route_receipt_pipe:
+                    env.update(s.route_receipt_pipe.env)
+                from .crawler_route import probe_env
+                env.update(probe_env(route_bundle))
+                env.update(
+                    PYTHONUNBUFFERED="1",
+                    MEDIACRAWLER_DIR=str(settings.media_crawler_dir.expanduser().resolve()),
+                    CRAWLER_BROWSER_PROFILE_ROOT=str(settings.crawler_browser_profile_root),
+                )
+                env["PYTHONPATH"] = os.pathsep.join(
+                    filter(None, [str(settings.root_dir), env.get("PYTHONPATH", "")])
+                )
+                args = [
+                    str(self.python_path),
+                    str(self.helper_path),
+                    "--platform",
+                    "dy",
+                    "--account-id",
+                    account["id"],
+                    "--protocol-v2",
+                    "--media-fd",
+                    str(child.fileno()),
+                    "--operation-id",
+                    op["id"],
+                    "--intent",
+                    intent,
+                    "--entry",
+                    settings.crawler_login_v2_entry,
+                    "--timeout",
+                    str(self.timeout),
+                ]
+                if sys.platform == "linux":
+                    args.append("--headed")
+                if settings.crawler_login_v2_resource_policy == "precise":
+                    args.append("--block-media")
+                if self.store.get_auth_state_ciphertext(account["id"]):
+                    args.append("--has-auth-backup")
+                if account.get("platform_account_id"):
+                    args.extend(
+                        ["--expected-platform-account-id", account["platform_account_id"]]
+                    )
+                s.request_authority = authority_for(route_bundle, login_bootstrap=True)
+                env.update(s.request_authority.env)
                 s.process = self.process_factory(
                     args,
                     stdin=subprocess.PIPE,
@@ -506,24 +572,52 @@ class CrawlerLoginV2Manager:
                     stderr=diagnostic,
                     cwd=str(settings.root_dir),
                     env=env,
-                    pass_fds=tuple(h.fileno() for h in handles) + (child.fileno(),),
+                    pass_fds=tuple(set((*tuple(h.fileno() for h in handles), child.fileno(), *route_bundle.pass_fds, *s.route_pipe.pass_fds, *(s.route_receipt_pipe.pass_fds if s.route_receipt_pipe else ()), *s.request_authority.pass_fds))),
                     start_new_session=True,
                     bufsize=0,
+                    **child_process_options(),
                 )
+                s.request_authority.bind_child(s.process.pid)
+                s.route_pipe.start(s.process)
+                if s.route_receipt_pipe:
+                    s.route_receipt_pipe.start(s.process)
                 s.diagnostic = diagnostic
                 self.sessions[s.id] = s
                 self.operations.mark_stage(op["id"], "checking")
-            except Exception:
-                parent.close()
-                diagnostic.close()
-                for h in handles:
-                    h.close()
-                self.operations.mark_stage(
-                    op["id"], "failed", error_code="BROWSER_START_FAILED"
-                )
+            except Exception as exc:
+                code = safe_error_code(exc, 'BROWSER_START_FAILED')
+                self.operations.mark_stage(op['id'],'failed',error_code=code)
+                if s is not None:
+                    s.snapshot.update(phase='failed',status='failed',error={'code':code,'message':error_message(code)})
+                    s.stopped.set()
+                if s is not None and s.process is not None:
+                    from .crawler_route import _stop_probe_process_group
+                    _stop_probe_process_group(s.process)
+                    for stream in (s.process.stdin,s.process.stdout):
+                        if stream is not None:
+                            stream.close()
+                # No child exists, or its process group is proven stopped. All
+                # preparation resources belong to this same failure boundary.
+                for resource in (
+                    getattr(s,'request_authority',None),
+                    getattr(s,'route_receipt_pipe',None),
+                    getattr(s,'route_pipe',None),
+                    route_bundle,parent,diagnostic,*handles,
+                ):
+                    if resource is not None:
+                        resource.close()
+                claim = getattr(s,'manual_recovery_claim',None) or manual_claim
+                if claim and not getattr(s,'manual_finished',False):
+                    self.store.finish_manual_recovery(account['id'],op['id'],claim,'uncertain',owner_id=user_id)
+                    if s is not None:
+                        s.manual_finished=True
+                if s is not None:
+                    self.sessions.pop(s.id,None)
+                    s.cleanup_done.set()
                 raise
             finally:
-                child.close()
+                if child is not None:
+                    child.close()
             for target in (
                 self._writer,
                 self._reader,
@@ -567,7 +661,7 @@ class CrawlerLoginV2Manager:
             "account_eligibility": "disabled"
             if account.get("status") == "disabled"
             else "cooling_down"
-            if account_is_cooling_down(account)
+            if account_is_cooling_down(account) or account.get("route_state","active") != "active"
             else "ready",
             "cooldown_until": account.get("cooldown_until"),
         }
@@ -611,6 +705,53 @@ class CrawlerLoginV2Manager:
             s = self.sessions.get(session_id)
             if s and sub in s.subscribers:
                 s.subscribers.remove(sub)
+
+    def claim_active(self, account_id, *, user_id, app_session_id, owner_token,
+                     authorize, expected_operation_id=None):
+        if not isinstance(owner_token,str) or not 32 <= len(owner_token) <= 128:
+            raise LoginV2Error('OWNER_TOKEN_REQUIRED',status=403)
+        with self._start_lock, self._lock:
+            matches=[s for s in self.sessions.values()
+                     if s.account_id==account_id and s.snapshot['phase'] not in TERMINAL]
+            if not matches:
+                raise LoginV2Error('ACTIVE_LOGIN_NOT_FOUND',status=404)
+            if len(matches)!=1:
+                raise LoginV2Error('ACCOUNT_BUSY')
+            s=matches[0]
+            if s.user_id!=user_id:
+                raise LoginV2Error('SESSION_OWNER_MISMATCH',status=403)
+            if expected_operation_id is not None and expected_operation_id!=s.operation_id:
+                raise LoginV2Error('OPERATION_MISMATCH')
+            if authorize is None:
+                raise LoginV2Error('APPLICATION_AUTH_REVOKED',status=403)
+            authorize()
+            new_hash=digest(owner_token)
+            if s.app_session_id==app_session_id and secrets.compare_digest(s.owner_hash,new_hash):
+                s.authorize=authorize
+                return copy.deepcopy(s.snapshot),None
+            if new_hash in s.retired_owner_hashes or new_hash==s.owner_hash:
+                raise LoginV2Error('SESSION_OWNER_MISMATCH',status=403)
+            if len(s.retired_owner_hashes)>=128:
+                raise LoginV2Error('SESSION_CLAIM_LIMIT')
+            self.operations.rebind_active_owner(s.operation_id,owner_user_id=user_id,
+                previous_session_id=s.app_session_id,previous_owner_hash=s.owner_hash,
+                application_session_id=app_session_id,owner_token_hash=new_hash)
+            previous_controller=s.controller
+            s.retired_owner_hashes.add(s.owner_hash)
+            s.app_session_id=app_session_id
+            s.owner_hash=new_hash
+            s.authorize=authorize
+            self.tickets={key:value for key,value in self.tickets.items() if value[0]!=s.id}
+            s.epoch+=1
+            s.sequence=0
+            s.controller=None
+            s.controller_ready.clear()
+            s.frame=b''
+            s.snapshot.update(controller_epoch=s.epoch,controller_state='detached')
+            s.snapshot['state_revision']+=1
+            self._enqueue(s,dict(type='controller_authorized',controller_epoch=s.epoch,attached=False),priority=True)
+            self._notify(s)
+            return copy.deepcopy(s.snapshot),previous_controller
 
     def ticket(self, session_id, *, user_id, app_session_id, owner_token):
         with self._lock:
@@ -842,13 +983,14 @@ class CrawlerLoginV2Manager:
             if session and session.epoch == epoch:
                 self._finish(session, "cancelled")
 
-    def revoke_application(self, session_id, user_id, app_session_id):
+    def revoke_application(self, session_id, user_id, app_session_id, *, expected_epoch=None):
         with self._lock:
             session = self.sessions.get(session_id)
             if (
                 session
                 and session.user_id == user_id
                 and session.app_session_id == app_session_id
+                and (expected_epoch is None or session.epoch == expected_epoch)
             ):
                 self._finish(session, "cancelled", "APPLICATION_AUTH_REVOKED")
 
@@ -915,6 +1057,7 @@ class CrawlerLoginV2Manager:
         )
 
     def _writer(self, s):
+        from .crawler_route import CollectionRouteError
         deferred = None
         readiness = selectors.DefaultSelector()
         try:
@@ -950,12 +1093,6 @@ class CrawlerLoginV2Manager:
                             ):
                                 raise CommandRejected("GESTURE_EXPIRED")
                             self._validate_runtime(s, c, dispatch=True)
-                            if self.operations.get_command(
-                                s.operation_id, c["command_id"]
-                            ):
-                                self.operations.dispatch_command(
-                                    s.operation_id, c["command_id"]
-                                )
                         except Exception as exc:
                             code = safe_error_code(exc, "INVALID_COMMAND")
                             self._abort_current_stale_graphic(s, c, code)
@@ -968,18 +1105,52 @@ class CrawlerLoginV2Manager:
                         if key not in {"queued_mono", "graph_generation"}
                     }
                     data = (json.dumps(wire, separators=(",", ":")) + "\n").encode()
+                    frame_epoch = s.epoch
+                started = False
+                dispatch_recorded = False
                 deadline = time.monotonic() + 2
                 while data and not s.stopped.is_set():
                     if time.monotonic() > deadline:
                         raise TimeoutError("control writer timed out")
                     if readiness.select(timeout=0.1):
-                        try:
-                            count = os.write(fd, data)
-                        except BlockingIOError:
-                            continue
+                        if not started:
+                            # Claim/attach and the first nonblocking write share
+                            # this exact fence. A lock-free recheck would leave
+                            # the same ownership race before os.write.
+                            with self._lock:
+                                try:
+                                    if c:
+                                        self._validate_runtime(s, c, dispatch=True)
+                                        if not dispatch_recorded and self.operations.get_command(s.operation_id,c['command_id']):
+                                            self.operations.dispatch_command(s.operation_id,c['command_id'])
+                                            dispatch_recorded = True
+                                    elif message.get('type') in {'controller_authorized','abort_gesture'} and (
+                                        frame_epoch != s.epoch or message.get('type') == 'controller_authorized'
+                                        and message.get('controller_epoch') != s.epoch):
+                                        break
+                                except Exception as exc:
+                                    code = safe_error_code(exc,'INVALID_COMMAND')
+                                    self._abort_current_stale_graphic(s,c,code)
+                                    self._command_rejected(s,c,code)
+                                    break
+                                try:
+                                    count = os.write(fd, data)
+                                except BlockingIOError:
+                                    continue
+                                started = count > 0
+                        else:
+                            # A partial frame has crossed the fence already.
+                            # Finish it on this sole writer, within the original
+                            # deadline, before a new controller frame is sent.
+                            try:
+                                count = os.write(fd, data)
+                            except BlockingIOError:
+                                continue
                         if count <= 0:
                             raise BrokenPipeError()
                         data = data[count:]
+        except CollectionRouteError as exc:
+            self._finish(s, "failed", exc.code)
         except Exception:
             self._finish(s, "failed", "CONTROL_CHANNEL_FAILED")
         finally:
@@ -1015,6 +1186,7 @@ class CrawlerLoginV2Manager:
         )
 
     def _reader(self, s):
+        from .crawler_route import CollectionRouteError, consume_route_event
         try:
             while True:
                 raw = s.process.stdout.readline(65537)
@@ -1022,11 +1194,15 @@ class CrawlerLoginV2Manager:
                     break
                 if len(raw) > 65536:
                     raise ValueError("oversized control event")
+                if consume_route_event(raw, getattr(s, "route_bundle", None)):
+                    continue
                 self.handle_event(s.id, json.loads(raw))
             s.process.wait(timeout=3)
             with self._lock:
                 if s.snapshot["phase"] not in TERMINAL:
                     self._finish(s, "failed", "BROWSER_DISCONNECTED")
+        except CollectionRouteError as exc:
+            self._finish(s, "failed", exc.code)
         except Exception:
             self._finish(s, "failed", "CONTROL_CHANNEL_FAILED")
         finally:
@@ -1140,6 +1316,7 @@ class CrawlerLoginV2Manager:
                         "ValueError",
                         "RuntimeError",
                         "ConnectionError",
+                        "CollectionRouteError",
                         "OSError",
                         "Exception",
                     }
@@ -1190,8 +1367,30 @@ class CrawlerLoginV2Manager:
                         safe_frame = (
                             f"{frame['file']}:{frame['function']}:{frame['line']}"
                         )
+                    login_entry = event.get("login_entry")
+                    safe_entry = None
+                    if isinstance(login_entry, dict):
+                        counts = {
+                            key: login_entry.get(key)
+                            for key in (
+                                "candidate_count",
+                                "click_attempts",
+                                "click_successes",
+                                "click_timeouts",
+                            )
+                        }
+                        if all(
+                            type(value) is int and 0 <= value <= 10000
+                            for value in counts.values()
+                        ) and login_entry.get("ready_state") in {
+                            "loading",
+                            "interactive",
+                            "complete",
+                            "unknown",
+                        }:
+                            safe_entry = {**counts, "ready_state": login_entry["ready_state"]}
                     logger.warning(
-                        "Douyin login failure operation=%s stage=%s exception_class=%s pattern=%s method=%s timeout_ms=%s source=%s",
+                        "Douyin login failure operation=%s stage=%s exception_class=%s pattern=%s method=%s timeout_ms=%s source=%s login_entry=%s",
                         s.operation_id,
                         stage,
                         exception_class,
@@ -1199,6 +1398,7 @@ class CrawlerLoginV2Manager:
                         method,
                         timeout_ms,
                         safe_frame,
+                        safe_entry,
                     )
             elif kind == "diagnostic":
                 phase = event.get("phase")
@@ -1260,6 +1460,9 @@ class CrawlerLoginV2Manager:
                 phase = event.get("phase", s.snapshot["phase"])
                 if phase in TERMINAL:
                     raise ValueError("child cannot commit terminal state")
+                if phase=="challenge_required":
+                    from .crawler_route import record_login_challenge
+                    record_login_challenge(getattr(s,"route_bundle",None))
                 s.snapshot.update(
                     phase=phase,
                     status=phase_to_status(phase),
@@ -1385,7 +1588,10 @@ class CrawlerLoginV2Manager:
                     ciphertext,
                     candidate["platform_account_id"],
                     credentials_changed=candidate.get("credentials_changed", True),
+                    **({"manual_recovery_claim":s.manual_recovery_claim,"owner_id":s.user_id} if getattr(s,"manual_recovery_claim",None) else {}),
+                    **({"route_snapshot":s.route_bundle.snapshot} if getattr(s,"route_bundle",None) and s.route_bundle.snapshot and s.route_bundle.snapshot.route_mode=="direct_degraded" else {}),
                 )
+                s.manual_finished = bool(getattr(s,"manual_recovery_claim",None))
                 s.snapshot["result"] = self._result(op["result"]["account"])
                 self._enqueue(
                     s, {"type": "save_committed", "operation_id": s.operation_id}
@@ -1503,12 +1709,21 @@ class CrawlerLoginV2Manager:
                     s.process.wait(timeout=2)
         finally:
             s.stopped.set()
+            if getattr(s,'manual_recovery_claim',None) and not getattr(s,'manual_finished',False):
+                self.store.finish_manual_recovery(s.account_id,s.operation_id,s.manual_recovery_claim,'cancelled' if s.snapshot['phase']=='cancelled' else 'uncertain',owner_id=s.user_id)
+                s.manual_finished=True
             for stream in (s.media, s.process.stdin, s.process.stdout, s.diagnostic):
                 if stream:
                     try:
                         stream.close()
                     except OSError:
                         pass
+            if getattr(s, "route_pipe", None):
+                s.route_pipe.close()
+            if getattr(s, "request_authority", None):
+                s.request_authority.close()
+            if getattr(s, "route_bundle", None):
+                s.route_bundle.close()
             for h in s.handles:
                 h.close()
             with self._lock:

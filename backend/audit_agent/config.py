@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -7,8 +8,17 @@ from .limits import MAX_SUPPORTED_INVESTIGATION_POSTS
 from .triage import OFFICIAL_VERIFY_PATTERNS
 
 
+def trial_job_ids(value: str) -> tuple[str, ...]:
+    ids = tuple(dict.fromkeys(part.strip() for part in value.split(',') if part.strip()))
+    if any(not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', item) for item in ids):
+        # A malformed manifest never expands authorization or runs a partial list.
+        return ()
+    return ids
+
+
 ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env")
+if os.getenv("CRAWLER_RESTRICTED_CHILD") != "1":
+    load_dotenv(ROOT / ".env")
 
 
 def environment_flag(name: str, *, default: bool = False) -> bool:
@@ -47,6 +57,20 @@ def parse_login_v2_origins(value: str, *, auth_mode: str, enabled: bool) -> list
 
 class Settings:
     investigation_multi_round_enabled = environment_flag("INVESTIGATION_MULTI_ROUND_ENABLED")
+    crawler_safety_enabled = environment_flag("CRAWLER_SAFETY_ENABLED")
+    crawler_direct_degrade_enabled = environment_flag("CRAWLER_DIRECT_DEGRADE_ENABLED")
+    crawler_exit_observation_ttl = max(1, int(os.getenv("CRAWLER_EXIT_OBSERVATION_TTL", "300")))
+    crawler_shared_exit_active_limit = max(1, int(os.getenv("CRAWLER_SHARED_EXIT_ACTIVE_LIMIT", "1")))
+    crawler_fair_skip_limit = max(1, int(os.getenv("CRAWLER_FAIR_SKIP_LIMIT", "3")))
+    crawler_proxy_enabled = environment_flag("CRAWLER_PROXY_ENABLED")
+    crawler_proxy_pool_ids = trial_job_ids(os.getenv("CRAWLER_PROXY_POOL_IDS", ""))
+    crawler_proxy_default_id = os.getenv("CRAWLER_PROXY_DEFAULT_ID", "").strip()
+    crawler_proxy_echo_url = os.getenv("CRAWLER_PROXY_ECHO_URL", "https://api.ip.sb/ip").strip()
+    crawler_proxy_probe_interval = 300
+    crawler_proxy_probe_budget = 96
+    crawler_proxy_probe_ttl = 300
+    crawler_proxy_trial_id = os.getenv("CRAWLER_PROXY_TRIAL_ID", "").strip()
+    crawler_proxy_trial_job_ids = trial_job_ids(os.getenv("CRAWLER_PROXY_TRIAL_JOB_IDS", ""))
     continuous_resource_session_enabled = environment_flag("CONTINUOUS_RESOURCE_SESSION_ENABLED")
     root_dir = ROOT
     data_dir = Path(os.getenv("XHS_AUDIT_DATA_DIR", str(ROOT / "data"))).expanduser()
@@ -301,6 +325,7 @@ class Settings:
         raise ValueError("Invalid CRAWLER_LOGIN_V2_BROWSER_MODE")
     if crawler_login_v2_resource_policy not in {"conservative", "precise"}:
         raise ValueError("Invalid CRAWLER_LOGIN_V2_RESOURCE_POLICY")
+    crawler_login_v2_preparation_timeout_seconds = max(15, min(180, int(os.getenv("CRAWLER_LOGIN_V2_PREPARATION_TIMEOUT_SECONDS", "120"))))
     crawler_login_v2_timeout_seconds = max(180, min(1800, int(os.getenv("CRAWLER_LOGIN_V2_TIMEOUT_SECONDS", "600"))))
     crawler_login_v2_active_fps = max(5, min(20, int(os.getenv("CRAWLER_LOGIN_V2_ACTIVE_FPS", "15"))))
     crawler_login_v2_idle_fps = max(1, min(5, int(os.getenv("CRAWLER_LOGIN_V2_IDLE_FPS", "2"))))
@@ -344,6 +369,20 @@ class Settings:
     crawler_browser_profile_root = Path(os.getenv(
         "CRAWLER_BROWSER_PROFILE_ROOT", str(data_dir / "crawler_browser_profiles")
     )).expanduser().resolve()
+    crawler_camoufox_state_root = Path(os.getenv(
+        "CRAWLER_CAMOUFOX_STATE_ROOT", str(data_dir / "camoufox_state")
+    )).expanduser().resolve()
+    crawler_camoufox_browser_version = os.getenv("CRAWLER_CAMOUFOX_BROWSER_VERSION", "156.0.1-beta.39")
+    crawler_camoufox_executable = os.getenv("CRAWLER_CAMOUFOX_EXECUTABLE", "").strip()
+    crawler_camoufox_executable_sha256 = os.getenv("CRAWLER_CAMOUFOX_EXECUTABLE_SHA256", "").strip()
+    crawler_camoufox_archive_root = Path(os.getenv(
+        "CRAWLER_CAMOUFOX_ARCHIVE_ROOT", str(data_dir / "browser_profile_archives")
+    )).expanduser().resolve()
+    crawler_browser_maintenance = environment_flag("CRAWLER_BROWSER_MAINTENANCE")
+    crawler_child_uid = os.getenv("CRAWLER_CHILD_UID", "").strip()
+    crawler_child_gid = os.getenv("CRAWLER_CHILD_GID", "").strip()
+    crawler_child_output_max_bytes = max(1, int(os.getenv("CRAWLER_CHILD_OUTPUT_MAX_BYTES", "2147483648")))
+    crawler_child_output_max_files = max(1, int(os.getenv("CRAWLER_CHILD_OUTPUT_MAX_FILES", "20000")))
     _media_crawler_python_default = (
         media_crawler_dir / ".venv" / "Scripts" / "python.exe"
         if os.name == "nt"
@@ -453,5 +492,6 @@ class Settings:
 
 
 settings = Settings()
-settings.data_dir.mkdir(parents=True, exist_ok=True)
-settings.outputs_dir.mkdir(parents=True, exist_ok=True)
+if os.getenv("CRAWLER_RESTRICTED_CHILD") != "1":
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    settings.outputs_dir.mkdir(parents=True, exist_ok=True)

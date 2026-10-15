@@ -629,6 +629,7 @@ def test_candidate_rows_never_reach_the_returned_output(tmp_path: Path, monkeypa
 
 def _drive_crawl_dispatch(tmp_path: Path, monkeypatch, mode: str) -> list[str]:
     """跑真正的 run()，在采集调用处用哨兵异常停下来，只看它走了哪个分支。"""
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
     from backend.audit_agent.ingestion import AuditResultStore, IngestionStore
     from backend.audit_agent.job_store import JobStore
     from backend.audit_agent.requests import CrawlRequest
@@ -639,7 +640,7 @@ def _drive_crawl_dispatch(tmp_path: Path, monkeypatch, mode: str) -> list[str]:
     store.create(job_id=job_id, platform="dy", start_page=0, max_notes=1)
     monkeypatch.setattr(pipeline_module, "job_store", store)
     monkeypatch.setattr(pipeline_module, "crawler_account_store",
-                        SimpleNamespace(available_accounts=lambda platform: []))
+                        CrawlerAccountStore(tmp_path / f"accounts-{mode}.sqlite3"))
     monkeypatch.setattr(pipeline_module.settings, "app_auth_mode", "off")
     monkeypatch.setattr(pipeline_module.settings, "outputs_dir", tmp_path / "outputs")
     monkeypatch.setattr(pipeline_module.settings, "triage_mode", mode)

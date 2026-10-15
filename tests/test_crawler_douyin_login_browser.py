@@ -1,4 +1,4 @@
-"""Real pinned CloakBrowser fixture; opt in with RUN_CLOAK_LOGIN_TESTS=1."""
+"""Real pinned Camoufox fixture; opt in with RUN_CAMOUFOX_LOGIN_TESTS=1."""
 
 import asyncio
 import base64
@@ -11,17 +11,75 @@ from types import SimpleNamespace
 import pytest
 
 pytestmark = pytest.mark.skipif(
-    os.getenv("RUN_CLOAK_LOGIN_TESTS") != "1",
-    reason="requires installed pinned CloakBrowser",
+    os.getenv("RUN_CAMOUFOX_LOGIN_TESTS") != "1",
+    reason="requires installed pinned Camoufox",
 )
 
 
-def test_real_capture_preserves_native_text_caret(tmp_path):
+@pytest.fixture(autouse=True)
+def camoufox_generation(monkeypatch):
+    monkeypatch.setenv("MEDIACRAWLER_CAMOUFOX_PROFILE_GENERATION", "fixture-generation")
+
+
+@pytest.mark.parametrize("role", [True, False])
+def test_real_semantic_login_entry_waits_for_hydration_and_opens_qr(tmp_path, role):
+    import cv2
+    from backend.audit_agent.crawler_browser import load_account_browser
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    qr = cv2.QRCodeEncoder_create().encode("https://fixture.invalid/login-entry")
+    qr = cv2.copyMakeBorder(qr, 4, 4, 4, 4, cv2.BORDER_CONSTANT, value=255)
+    qr = cv2.resize(qr, (180, 180), interpolation=cv2.INTER_NEAREST)
+    _, png = cv2.imencode(".png", qr)
+    data = base64.b64encode(png).decode()
+    attribute = 'role="button"' if role else ""
+    html = f"""<div style="display:none">登录</div>
+    <div role="button" style="width:60px;height:30px" onclick="window.decoyClicked=true">登录</div>
+    <div id="header" {attribute} style="display:none" onclick="panel.style.display='block';document.body.dataset.clicks=String(Number(document.body.dataset.clicks||0)+1)"><span>登录</span></div>
+    <div id="panel" class="douyin_login_new_class" style="display:none;width:400px;height:300px">
+    <div id="animate_qrcode_container"><img src="data:image/png;base64,{data}"></div></div>
+    <script>setTimeout(()=>header.style.display='block',250)</script>"""
+
+    async def run():
+        browser = load_account_browser()
+        context, _ = await browser.launch_account_context(
+            "login-entry-fixture",
+            tmp_path,
+            headless=(__import__("sys").platform == "darwin"),
+        )
+        try:
+            page = await context.new_page()
+
+            async def fixture(route):
+                if route.request.url == "https://www.douyin.com/login-entry-fixture":
+                    await route.fulfill(
+                        body=html, content_type="text/html; charset=utf-8"
+                    )
+                else:
+                    await route.abort()
+
+            await context.route("**/*", fixture)
+            await page.goto("https://www.douyin.com/login-entry-fixture")
+            adapter = DouyinLoginAdapter(context, page)
+            await adapter.open_login()
+            assert await page.evaluate("document.body.dataset.clicks") == "1"
+            assert (await adapter.observe())["phase"] == "qr_ready"
+            await adapter.open_login()
+            assert await page.evaluate("document.body.dataset.clicks") == "1"
+        finally:
+            await context.close()
+
+    asyncio.run(run())
+
+
+def test_firefox_capture_reports_caret_limit_and_preserves_focus_input_selection(
+    tmp_path,
+):
     import cv2
     import numpy as np
     from backend.audit_agent.crawler_browser import load_account_browser
     from scripts.crawler_douyin_login_adapter import Region
-    from scripts.crawler_douyin_login_v2 import DouyinLoginV2
+    from scripts.crawler_douyin_login_v2 import DouyinLoginV2, CAPTURE_CAPABILITIES
 
     def caret_pixels(jpeg):
         pixels = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
@@ -33,7 +91,7 @@ def test_real_capture_preserves_native_text_caret(tmp_path):
     async def run():
         browser = load_account_browser()
         context, _ = await browser.launch_account_context(
-            "caret-fixture", tmp_path, headless=True
+            "caret-fixture", tmp_path, headless=(__import__("sys").platform == "darwin")
         )
         left, right = socket.socketpair()
         helper = DouyinLoginV2(
@@ -41,14 +99,15 @@ def test_real_capture_preserves_native_text_caret(tmp_path):
         )
         original_media = helper.media
         frames = []
+        metadata_frames = []
         try:
             page = await context.new_page()
             await page.bring_to_front()
             await page.set_viewport_size({"width": 500, "height": 200})
             html = (
-                '<style>body{margin:0;background:white}input{position:absolute;'
-                'left:30px;top:30px;width:230px;height:50px;font-size:24px;'
-                'color:black;background:white;caret-color:#e00066}</style>'
+                "<style>body{margin:0;background:white}input{position:absolute;"
+                "left:30px;top:30px;width:230px;height:50px;font-size:24px;"
+                "color:black;background:white;caret-color:#e00066}</style>"
                 '<input aria-label="fixture input" value="abcd">'
             )
             await page.route(
@@ -71,11 +130,8 @@ def test_real_capture_preserves_native_text_caret(tmp_path):
             class Media:
                 async def send(self, jpeg, metadata, **kwargs):
                     frames.append(jpeg)
-                    if caret_pixels(jpeg) or len(frames) >= 4:
-                        helper.stopped.set()
-                    else:
-                        await field.press("ArrowLeft")
-                        await field.press("ArrowRight")
+                    metadata_frames.append(metadata)
+                    helper.stopped.set()
 
             helper.adapter = SimpleNamespace(page=page)
             helper.region = Region(20, 20, 280, 80)
@@ -85,11 +141,19 @@ def test_real_capture_preserves_native_text_caret(tmp_path):
             helper.phase = "manual_required"
             helper.media = Media()
             await asyncio.wait_for(helper.capture_frames(), timeout=5)
-            assert any(caret_pixels(frame) > 0 for frame in frames), {
-                "frame_count": len(frames),
-                "document_focused": await page.evaluate("document.hasFocus()"),
-                "caret_color": await field.evaluate("e=>getComputedStyle(e).caretColor"),
+            assert CAPTURE_CAPABILITIES == {
+                "native_caret": False,
+                "editable_focus_and_selection": True,
             }
+            assert len(frames) == 1 and caret_pixels(frames[0]) == 0
+            fields = metadata_frames[0]["editable_targets"]
+            assert len(fields) == 1 and fields[0]["focused"]
+            assert fields[0]["selection_start"] == fields[0]["selection_end"] == 4
+            await field.press("ArrowLeft")
+            await field.press("X")
+            assert await field.input_value() == "abcXd"
+            await field.press("Backspace")
+            assert await field.input_value() == "abcd"
             assert await field.evaluate("e=>document.activeElement===e")
             assert await field.input_value() == "abcd"
         finally:
@@ -116,9 +180,9 @@ def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path, monkeypatch):
     html = f"""<style>.douyin_login_new_class {{position:absolute;left:100px;top:100px;width:500px;height:400px;background:white}} #captcha_container {{position:absolute;left:150px;top:180px;width:300px;height:180px;display:none;background:#ddd}}</style>
     <div class="douyin_login_new_class"><div id="animate_qrcode_container"><img src="data:image/png;base64,{data}"></div>
     <span>验证码登录</span><input placeholder="请输入手机号" type="tel"><input placeholder="验证码" maxlength="6">
-    <button onclick="window.smsSent=true">获取验证码</button><button onclick="localStorage.setItem('fixtureLogin','saved');window.codeSubmitted=true">登录</button></div>
+    <button onclick="document.body.dataset.smsSent='true'">获取验证码</button><button onclick="localStorage.setItem('fixtureLogin','saved');document.body.dataset.codeSubmitted='true'">登录</button></div>
     <div id="captcha_container"><p>请人工画图或拖动滑块</p><input type="range" id="slider" style="width:260px"><canvas id="drawing" width="280" height="80"></canvas></div>
-    <script>window.points=[];drawing.onpointerdown=e=>{{drawing.setPointerCapture(e.pointerId);window.drawingActive=true}};drawing.onpointermove=e=>{{if(window.drawingActive)points.push([e.offsetX,e.offsetY])}};drawing.onpointerup=e=>window.drawingActive=false;</script>"""
+    <script>window.points=[];drawing.onpointerdown=e=>{{drawing.setPointerCapture(e.pointerId);window.drawingActive=true}};drawing.onpointermove=e=>{{if(window.drawingActive){{points.push([e.offsetX,e.offsetY]);document.body.dataset.pointCount=String(points.length)}}}};drawing.onpointerup=e=>window.drawingActive=false;</script>"""
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -133,18 +197,24 @@ def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path, monkeypatch):
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    origin = f"http://127.0.0.1:{server.server_port}"
+    origin = "https://www.douyin.com"
 
     async def run():
         browser = load_account_browser()
         c, profile = await browser.launch_account_context(
-            "fixture", tmp_path, headless=True
+            "fixture", tmp_path, headless=(__import__("sys").platform == "darwin")
         )
         left, right = socket.socketpair()
         helper = DouyinLoginV2(
             SimpleNamespace(operation_id="op", media_fd=left.detach())
         )
         try:
+            await c.route(
+                "https://www.douyin.com/**",
+                lambda route: route.fulfill(
+                    content_type="text/html; charset=utf-8", body=html
+                ),
+            )
             page = await c.new_page()
             await page.set_viewport_size({"width": 1000, "height": 760})
             await page.goto(origin)
@@ -209,7 +279,7 @@ def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path, monkeypatch):
                     "payload": {"phone": "13800000000"},
                 }
             )
-            assert await page.evaluate("window.smsSent")
+            assert await page.evaluate("document.body.dataset.smsSent === 'true'")
             await helper.apply_command(
                 {
                     "command_id": "submit",
@@ -218,7 +288,7 @@ def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path, monkeypatch):
                     "payload": {"code": "123456"},
                 }
             )
-            assert await page.evaluate("window.codeSubmitted")
+            assert await page.evaluate("document.body.dataset.codeSubmitted === 'true'")
             await page.locator("#captcha_container").evaluate(
                 "e=>e.style.display='block'"
             )
@@ -254,12 +324,16 @@ def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path, monkeypatch):
                     ],
                 }
             )
-            assert await page.evaluate("points.length") >= 2
+            assert (
+                await page.evaluate("Number(document.body.dataset.pointCount || 0)")
+                >= 2
+            )
             jpeg = await page.screenshot(type="jpeg", clip=helper.region.clip())
+            receive = asyncio.create_task(asyncio.to_thread(read_packet, right))
             await helper.media.send(
                 jpeg, {"codec": "jpeg", "operation_id": "op"}, area_version=2
             )
-            packet = await asyncio.to_thread(read_packet, right)
+            packet = await receive
             assert packet["payload"] == jpeg and packet["area_version"] == 2
             await helper.media.auth(
                 {"auth_state": {"cookies": []}, "identity_verified": True}, "op"
@@ -271,18 +345,24 @@ def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path, monkeypatch):
             await adapter.close()
             await c.close()
             c, reopened = await browser.launch_account_context(
-                "fixture", tmp_path, headless=True
+                "fixture", tmp_path, headless=(__import__("sys").platform == "darwin")
             )
             assert (
-                profile["seed"] == reopened["seed"]
+                profile["identity_hash"] == reopened["identity_hash"]
                 and profile["version"] == reopened["version"]
+            )
+            await c.route(
+                "https://www.douyin.com/**",
+                lambda route: route.fulfill(
+                    content_type="text/html; charset=utf-8", body=html
+                ),
             )
             page = await c.new_page()
             await page.goto(origin)
             assert (
                 await page.evaluate("localStorage.getItem('fixtureLogin')") == "saved"
             )
-            # Credential reset affects first-party only, retains unrelated local fixture storage.
+            # Credential reset clears this first-party fixture, including persistent login state.
             await c.add_cookies(
                 [
                     {
@@ -300,9 +380,7 @@ def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path, monkeypatch):
             )
             page = await c.new_page()
             await page.goto(origin)
-            assert (
-                await page.evaluate("localStorage.getItem('fixtureLogin')") == "saved"
-            )
+            assert await page.evaluate("localStorage.getItem('fixtureLogin')") is None
         finally:
             helper.media.close()
             right.close()
@@ -315,7 +393,9 @@ def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path, monkeypatch):
         server.server_close()
 
 
-def test_cdp_document_guard_keeps_warmed_static_cache(tmp_path, monkeypatch):
+def test_firefox_resource_guard_preserves_required_static_scripts(
+    tmp_path, monkeypatch
+):
     from backend.audit_agent.crawler_browser import load_account_browser
     from scripts import crawler_douyin_login_adapter as module
 
@@ -328,7 +408,7 @@ def test_cdp_document_guard_keeps_warmed_static_cache(tmp_path, monkeypatch):
                 hits["script"] += 1
                 self.send_header("Cache-Control", "max-age=3600")
                 self.send_header("Content-Type", "application/javascript")
-                body = b"window.fixtureAsset=true"
+                body = b"document.documentElement.dataset.fixtureAsset='true'"
             else:
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 body = b'<script src="/asset.js"></script><p>cache fixture</p>'
@@ -340,7 +420,7 @@ def test_cdp_document_guard_keeps_warmed_static_cache(tmp_path, monkeypatch):
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    origin = f"http://127.0.0.1:{server.server_port}"
+    origin = "https://www.douyin.com"
     original = module.document_allowed
     monkeypatch.setattr(
         module,
@@ -351,16 +431,35 @@ def test_cdp_document_guard_keeps_warmed_static_cache(tmp_path, monkeypatch):
 
     async def run():
         context, _ = await load_account_browser().launch_account_context(
-            "cachefixture", tmp_path, headless=True
+            "cachefixture", tmp_path, headless=(__import__("sys").platform == "darwin")
         )
         try:
             page = await context.new_page()
+
+            async def static_fixture(route):
+                if route.request.url.endswith("/asset.js"):
+                    hits["script"] += 1
+                    await route.fulfill(
+                        content_type="application/javascript",
+                        body="document.documentElement.dataset.fixtureAsset='true'",
+                    )
+                else:
+                    await route.fulfill(
+                        content_type="text/html",
+                        body='<script src="/asset.js"></script>',
+                    )
+
+            await context.route("https://www.douyin.com/**", static_fixture)
             adapter = await module.DouyinLoginAdapter(context, page).install()
             await page.goto(origin + "/first", wait_until="load")
-            assert await page.evaluate("window.fixtureAsset")
+            assert await page.evaluate(
+                "document.documentElement.dataset.fixtureAsset === 'true'"
+            )
             await page.goto(origin + "/second", wait_until="load")
-            assert await page.evaluate("window.fixtureAsset")
-            assert hits["script"] == 1
+            assert await page.evaluate(
+                "document.documentElement.dataset.fixtureAsset === 'true'"
+            )
+            assert 1 <= hits["script"] <= 2
             await adapter.close()
         finally:
             await context.close()
@@ -381,7 +480,9 @@ def test_real_nested_iframe_edit_target_focus_unicode_clear_and_detachment(
 
     async def run():
         context, _ = await load_account_browser().launch_account_context(
-            "editablefixture", tmp_path, headless=True
+            "editablefixture",
+            tmp_path,
+            headless=(__import__("sys").platform == "darwin"),
         )
         targets = module.EditableTargets()
         monkeypatch.setattr(module, "document_allowed", lambda *args, **kwargs: True)
@@ -486,7 +587,7 @@ def test_real_shadow_edit_inventory_excludes_sensitive_disabled_and_outside(
 
     async def run():
         context, _ = await load_account_browser().launch_account_context(
-            "shadowfixture", tmp_path, headless=True
+            "shadowfixture", tmp_path, headless=(__import__("sys").platform == "darwin")
         )
         targets = EditableTargets()
         try:
@@ -495,7 +596,7 @@ def test_real_shadow_edit_inventory_excludes_sensitive_disabled_and_outside(
                 "data:text/html,<div id='host'></div><input id='out' style='position:absolute;left:800px'>"
             )
             await page.evaluate(
-                """()=>{host.attachShadow({mode:'open'}).innerHTML='<textarea id="valid" style="width:220px;height:90px"></textarea><input readonly value="readonly"><input disabled><input type="password" value="secret"><input type="file">'}"""
+                """()=>{document.getElementById('host').attachShadow({mode:'open'}).innerHTML='<textarea id="valid" style="width:220px;height:90px"></textarea><input readonly value="readonly"><input disabled><input type="password" value="secret"><input type="file">'}"""
             )
             area = Region(0, 0, 700, 500)
             fields = await targets.inventory(page, area)
@@ -545,7 +646,7 @@ def test_real_edit_inventory_multiple_frames_have_independent_node_ids(
 
     async def run():
         context, _ = await load_account_browser().launch_account_context(
-            "framesfixture", tmp_path, headless=True
+            "framesfixture", tmp_path, headless=(__import__("sys").platform == "darwin")
         )
         targets = module.EditableTargets()
         monkeypatch.setattr(module, "document_allowed", lambda *a, **kw: True)
@@ -592,7 +693,9 @@ def test_real_covered_background_fields_are_not_exposed_editables(
 
     async def run():
         context, _ = await load_account_browser().launch_account_context(
-            "coveredfixture", tmp_path, headless=True
+            "coveredfixture",
+            tmp_path,
+            headless=(__import__("sys").platform == "darwin"),
         )
         targets = module.EditableTargets()
         monkeypatch.setattr(module, "document_allowed", lambda *a, **kw: True)
@@ -618,6 +721,115 @@ def test_real_covered_background_fields_are_not_exposed_editables(
             assert await targets.inventory(page, area) == []
         finally:
             await targets.clear()
+            await context.close()
+
+    asyncio.run(run())
+
+
+def test_real_firefox_reset_removes_all_first_party_credential_stores(tmp_path):
+    from backend.audit_agent.crawler_browser import load_account_browser
+    from scripts.crawler_login_pages import reset_douyin_credentials_v2
+
+    async def run():
+        context, profile = await load_account_browser().launch_account_context(
+            "credential-reset-fixture", tmp_path
+        )
+        try:
+            await context.route(
+                "https://www.douyin.com/**",
+                lambda route: route.fulfill(
+                    content_type="text/html",
+                    body="<!doctype html><html><body>fixture</body></html>",
+                ),
+            )
+            page = await context.new_page()
+            await page.goto("https://www.douyin.com/")
+            await page.evaluate("""async () => {
+                localStorage.setItem('fixture-auth', 'old');
+                sessionStorage.setItem('fixture-auth', 'old');
+                await caches.open('fixture-auth-cache');
+                await new Promise((resolve, reject) => {
+                    const request = indexedDB.open('fixture-auth-db', 1);
+                    request.onupgradeneeded = () => request.result.createObjectStore('auth');
+                    request.onsuccess = () => {request.result.close(); resolve();};
+                    request.onerror = reject;
+                });
+            }""")
+            await context.add_cookies(
+                [
+                    {
+                        "name": "sessionid",
+                        "value": "fixture-only",
+                        "domain": ".douyin.com",
+                        "path": "/",
+                        "secure": True,
+                    }
+                ]
+            )
+            await reset_douyin_credentials_v2(context, profile)
+            page = context.pages[0]
+            await page.goto("https://www.douyin.com/")
+            observed = await page.evaluate("""async () => ({
+                local:localStorage.length, session:sessionStorage.length,
+                indexedDB:(await indexedDB.databases()).length,
+                cache:(await caches.keys()).length,
+                serviceWorkers:(await navigator.serviceWorker.getRegistrations()).length
+            })""")
+            assert observed == {
+                "local": 0,
+                "session": 0,
+                "indexedDB": 0,
+                "cache": 0,
+                "serviceWorkers": 0,
+            }
+            assert not any(
+                cookie["name"] == "sessionid" for cookie in await context.cookies()
+            )
+            assert (profile["directory"] / "auth-imported").is_file()
+        finally:
+            await context.close()
+
+    asyncio.run(run())
+
+
+def test_firefox_reset_deletes_aborted_indexeddb_without_serializing_it(tmp_path):
+    from backend.audit_agent.crawler_browser import load_account_browser
+    from scripts.crawler_login_pages import reset_douyin_credentials_v2
+
+    async def run():
+        context, profile = await load_account_browser().launch_account_context(
+            "aborted-idb-reset-fixture", tmp_path
+        )
+        try:
+            await context.route(
+                "https://www.douyin.com/**",
+                lambda route: route.fulfill(
+                    content_type="text/html",
+                    body="<!doctype html><html><body></body></html>",
+                ),
+            )
+            page = await context.new_page()
+            await page.goto("https://www.douyin.com/")
+            await page.evaluate("""async () => {
+                await new Promise((resolve, reject) => {
+                    const request = indexedDB.open('aborted-fixture-db', 1);
+                    request.onupgradeneeded = () => request.transaction.abort();
+                    request.onerror = event => {event.preventDefault(); resolve();};
+                    request.onsuccess = () => {request.result.close(); reject(new Error('EXPECTED_UPGRADE_ABORT'));};
+                });
+                localStorage.setItem('fixture-auth','old');
+            }""")
+            # This creates a real aborted Firefox IDB upgrade. Whether the
+            # engine retains version-zero metadata varies; reset must not export it.
+            await reset_douyin_credentials_v2(context, profile)
+            page = context.pages[0]
+            await page.goto("https://www.douyin.com/")
+            assert await page.evaluate("localStorage.length") == 0
+            assert (
+                await page.evaluate("async () => (await indexedDB.databases()).length")
+                == 0
+            )
+        finally:
             await context.close()
 
     asyncio.run(run())

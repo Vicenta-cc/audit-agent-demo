@@ -12,6 +12,8 @@ def test_rotation_cools_current_and_returns_decrypted_next_account(tmp_path):
     second = store.create(platform="dy", display_name="b")
     store.save_auth_state(first["id"], cipher.encrypt({"cookies": [], "origins": []}))
     store.save_auth_state(second["id"], cipher.encrypt({"cookies": [], "origins": []}))
+    with store._connect() as db:
+        db.execute("UPDATE crawler_accounts SET auth_source_generation=profile_generation")
     rotated = AccountRotationManager(store, cipher).rotate("dy", first["id"], reason="verify", cooldown_seconds=60)
     assert rotated[0]["id"] == second["id"]
     assert rotated[1]["cookies"] == []

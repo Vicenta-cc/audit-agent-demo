@@ -23,6 +23,7 @@ export interface LoginSnapshot {
   controller_epoch: number;
   controller_state: string;
   available_actions: string[];
+  cleanup_state?: string;
   expires_at: string;
   qr: null | {
     revision: number | string;
@@ -58,6 +59,7 @@ export interface LoginEditableTarget {
   max_length: number;
   value: string;
   focused: boolean;
+  caret?: { rect: { x: number; y: number; width: number; height: number }; color: string } | null;
   applied_edit_revision: number;
   selection_start?: number | null;
   selection_end?: number | null;
@@ -121,10 +123,11 @@ export function decodeLoginFrame(buffer: ArrayBuffer): LoginFrame {
 }
 export async function createLoginSocket(
   id: string,
+  accountId?: string,
 ): Promise<{ socket: WebSocket; ticket: string }> {
   const { ticket } = await apiRequest<{ ticket: string }>(
     `/api/crawler-account-login-sessions/${encodeURIComponent(id)}/ws-tickets`,
-    { method: "POST", headers: loginControlHeaders() },
+    { method: "POST", headers: loginControlHeaders(accountId) },
   );
   const url = new URL(
     `${API_BASE()}/api/crawler-account-login-sessions/${encodeURIComponent(id)}/stream`,

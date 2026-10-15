@@ -12,6 +12,8 @@ from backend.audit_agent.crawler_adapter import (
 from backend.audit_agent.job_state import failure_metadata, available_job_actions
 from backend.investigation_creation.contracts import RunStatus
 from test_keyword_media_failure import run, crawler
+from test_crawler_adapter_output_handoff import handoff
+from test_crawler_collection_failures import write_handoff_failure
 from test_task_admission import stack, make_run, worker_for
 from test_investigation_creation_m3 import FakeExecutionAdapter, FakeReportAdapter
 
@@ -19,22 +21,15 @@ from test_investigation_creation_m3 import FakeExecutionAdapter, FakeReportAdapt
 @pytest.mark.parametrize('exit_code', [0, 1])
 @pytest.mark.parametrize('marker,expected', [
     ('BROWSER_INITIALIZATION_FAILED: local_storage_unavailable', CrawlerBrowserInitializationError),
+    ('BROWSER_INITIALIZATION_FAILED: x\nCOLLECTION_INCOMPLETE', CrawlerBrowserInitializationError),
     ('BROWSER_INITIALIZATION_FAILED: x\nACCOUNT_VERIFY', CrawlerVerificationError),
     ('BROWSER_INITIALIZATION_FAILED: x\nPLATFORM_RATE_LIMITED', CrawlerRateLimitError),
 ])
-def test_subprocess_marker_and_platform_signal_priority(tmp_path, monkeypatch, exit_code, marker, expected):
-    class Process:
-        returncode = exit_code
-        def __init__(self, *args, stderr, **kw):
-            stderr.write(marker)
-            stderr.flush()
-        def poll(self):
-            return self.returncode
-    monkeypatch.setattr('backend.audit_agent.crawler_adapter.subprocess.Popen', Process)
-    monkeypatch.setattr(MediaCrawlerAdapter, '_subprocess_env', lambda *a, **k: {})
+def test_subprocess_marker_and_platform_signal_priority(handoff, exit_code, marker, expected):
+    write_handoff_failure(handoff, marker, exit_code)
     with pytest.raises(expected):
-        MediaCrawlerAdapter(tmp_path)._run_command(command=['python', 'main.py'], save_root=tmp_path/'output',
-            platform='dy', account_id='', max_notes=1, progress_callback=None, content_callback=None)
+        handoff.run()
+    assert handoff.events.index('final') < handoff.events.index('cleanup')
 
 
 @pytest.mark.parametrize('stage', ['candidate', 'detail'])

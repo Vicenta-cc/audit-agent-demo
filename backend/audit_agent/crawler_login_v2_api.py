@@ -99,7 +99,22 @@ def create_login_v2_router(
             "updated_at",
             "completed_at",
         )
-        return {k: op.get(k) for k in fields}
+        item={k: op.get(k) for k in fields}
+        result=item.get('result')
+        if isinstance(result,dict):
+            safe={key:result[key] for key in ('status','operation_id') if key in result}
+            account=result.get('account')
+            if isinstance(account,dict):
+                public_account_fields=('id','platform','display_name','platform_account_id','status','access_scope',
+                    'has_auth_state','auth_state_revision','auth_state_updated_at','last_validated_at','last_used_at',
+                    'last_error','cooldown_until','failure_kind','risk_count','last_risk_at','created_at','updated_at',
+                    'proxy_id','proxy_required','binding_revision','route_mode','route_state','pause_reason','paused_until',
+                    'shared_exit_generation','recovery_state')
+                safe['account']={key:account[key] for key in public_account_fields if key in account}
+            item['result']=safe
+        else:
+            item['result']=None
+        return item
 
     def public_command(command):
         result = {
@@ -121,6 +136,36 @@ def create_login_v2_router(
             result["error_code"] = safe_error_code(command["error_code"])
             result["error_message"] = error_message(result["error_code"])
         return result
+
+    @router.post('/api/crawler-accounts/{account_id}/login-session-claims',dependencies=[Depends(no_store)])
+    async def claim(account_id: str, request: Request, principal=Depends(principal_provider)):
+        require_account(account_id,principal,permission='manage')
+        try:
+            try:
+                body=await request.json()
+            except (ValueError,UnicodeError):
+                raise LoginV2Error('INVALID_LOGIN_OPTIONS',status=400) from None
+            if (not isinstance(body,dict) or set(body)-{'expected_operation_id'}
+                    or 'expected_operation_id' in body and (not isinstance(body['expected_operation_id'],str)
+                        or not 1<=len(body['expected_operation_id'])<=128)):
+                raise LoginV2Error('INVALID_LOGIN_OPTIONS',status=400)
+            cookie=request.cookies.get(cookie_name,'')
+            def authorize():
+                current=auth_store.authenticate_session(cookie) if auth_required() else principal_provider()
+                if current.id!=principal.id or session_key(current)!=session_key(principal):
+                    raise LoginV2Error('SESSION_REPLACED',status=401)
+                return require_account(account_id,current,permission='manage')
+            snapshot,old=await asyncio.to_thread(manager.claim_active,account_id,user_id=principal.id,
+                app_session_id=session_key(principal),owner_token=request.headers.get('x-login-token',''),
+                authorize=authorize,expected_operation_id=body.get('expected_operation_id'))
+            if old is not None:
+                try:
+                    await old.close(code=4409)
+                except RuntimeError:
+                    pass
+            return {'item':snapshot}
+        except ValueError as exc:
+            raise fail(exc) from exc
 
     @router.post("/api/crawler-account-login-sessions/{session_id}/ws-tickets")
     def ticket(
@@ -410,7 +455,7 @@ def create_login_v2_router(
                     or getattr(exc, "status", None) == 401
                 ):
                     manager.revoke_application(
-                        session_id, principal.id, session_key(principal)
+                        session_id, principal.id, session_key(principal), expected_epoch=epoch
                     )
                 else:
                     manager.cancel_if_controller(session_id, epoch)

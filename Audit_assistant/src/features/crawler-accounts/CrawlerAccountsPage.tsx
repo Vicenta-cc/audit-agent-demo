@@ -180,9 +180,9 @@ export function CrawlerAccountsPage() {
   const stats = useMemo(
     () => ({
       total: scopedAccounts.length,
-      active: scopedAccounts.filter((account) => account.status === "active" && !isCooling(account, clock)).length,
+      active: scopedAccounts.filter((account) => isAccountReady(account, clock)).length,
       attention: scopedAccounts.filter(
-        (account) => isCooling(account, clock) || ["login_required", "expired"].includes(account.status)
+        (account) => account.status !== "disabled" && (account.collectionReady === false || account.needsProxyLoginValidation || (account.proxyRequired && !account.proxyId) || isCooling(account, clock) || ["login_required", "expired"].includes(account.status) || !account.hasAuthState)
       ).length,
       disabled: scopedAccounts.filter((account) => account.status === "disabled").length
     }),
@@ -397,7 +397,7 @@ export function CrawlerAccountsPage() {
               if (groupAccounts.length === 0) return null;
               const meta = platformMeta[platformKey];
               const activeCount = groupAccounts.filter(
-                (account) => account.status === "active" && !isCooling(account, clock)
+                (account) => isAccountReady(account, clock)
               ).length;
               const exceptionCount = groupAccounts.length - activeCount;
 
@@ -447,7 +447,9 @@ export function CrawlerAccountsPage() {
                               {account.platformAccountId || "待登录后识别"}
                             </span>
                             <span className="crawler-account-cell" data-label="登录状态">
-                              <span className={`crawler-account-status ${status.className}`}>{status.label}</span>
+                              <span className={`crawler-account-status ${status.className}`} title={account.routeMode
+                                ? `${account.routeMode === "direct_degraded" ? "受控直连" : account.routeMode === "proxy_preferred" ? "优先代理" : account.routeMode === "proxy_required" ? "严格代理" : "默认路由"} · 出口版本 ${account.sharedExitGeneration ?? 0}`
+                                : undefined}>{status.label}</span>
                             </span>
                             <span className="crawler-account-cell" data-label="最近校验">
                               {formatDateTime(account.lastValidatedAt)}
@@ -459,8 +461,8 @@ export function CrawlerAccountsPage() {
                               {account.canManage ? <>
                               <IconButton
                                 type="button"
-                                aria-label={`${account.status === "active" ? "重新登录" : "扫码登录"}${account.displayName}`}
-                                title={account.status === "active" ? "重新登录" : "扫码登录"}
+                                aria-label={`${account.needsProxyLoginValidation ? "校验登录" : account.status === "active" ? "重新登录" : "扫码登录"}${account.displayName}`}
+                                title={account.needsProxyLoginValidation ? "校验登录" : account.status === "active" ? "重新登录" : "扫码登录"}
                                 disabled={account.status === "disabled" || isActing}
                                 onClick={() => openLogin(account)}
                               >
@@ -580,12 +582,51 @@ function isCooling(account: CrawlerAccount, now: number): boolean {
   return Number.isFinite(until) && until > now;
 }
 
+function isAccountReady(account: CrawlerAccount, now: number): boolean {
+  return account.collectionReady !== false && account.status === "active" && account.hasAuthState && !isCooling(account, now) && !account.needsProxyLoginValidation
+    && !(account.routeMode !== "direct_degraded" && account.proxyRequired && !account.proxyId);
+}
+
 function accountStatus(account: CrawlerAccount, now: number): { label: string; className: string } {
+  if (account.status === "disabled") return statusMeta.disabled;
   if (isCooling(account, now)) {
     return {
       label: `冷却中 · 至 ${formatDateTime(account.cooldownUntil)}`,
       className: "is-cooling"
     };
+  }
+  if (account.status === "expired") return statusMeta.expired;
+  if (account.routeState === "manual_required" || account.collectionBlockReason === "ACCOUNT_MANUAL_REQUIRED") {
+    return { label: "需人工处理", className: "is-login-required" };
+  }
+  if (account.routeState === "recovery_check" || account.collectionBlockReason === "ACCOUNT_RECOVERY_CHECK") {
+    return { label: "恢复校验中", className: "is-login-required" };
+  }
+  if (account.routeState === "challenge_paused" || account.collectionBlockReason === "ACCOUNT_CHALLENGE_PAUSED") {
+    return { label: "安全验证暂停", className: "is-cooling" };
+  }
+  if (account.collectionBlockReason === "ACCOUNT_PAUSED") {
+    return { label: `已暂停 · 至 ${formatDateTime(account.pausedUntil || "")}`, className: "is-cooling" };
+  }
+  if (account.collectionBlockReason === "SHARED_EXIT_UNAVAILABLE") {
+    return { label: "共享出口保护中或待校验", className: "is-login-required" };
+  }
+  if (account.collectionBlockReason === "ACCOUNT_ROUTE_BLOCKED") {
+    return { label: "采集路由暂停", className: "is-login-required" };
+  }
+  if (account.collectionBlockReason === "PROXY_CONFIGURATION_REQUIRED" || (account.proxyRequired && !account.proxyId)) {
+    return { label: "待配置采集网络", className: "is-login-required" };
+  }
+  if (account.collectionBlockReason?.startsWith("PROXY_") && account.collectionBlockReason !== "PROXY_LOGIN_VALIDATION_REQUIRED") {
+    return { label: "采集网络暂不可用", className: "is-login-required" };
+  }
+  if (account.collectionBlockReason === "PROXY_LOGIN_VALIDATION_REQUIRED" || account.needsProxyLoginValidation) {
+    return { label: "采集网络已变更，需校验登录", className: "is-login-required" };
+  }
+  if (account.status === "active" && !account.hasAuthState) return statusMeta.login_required;
+  if (account.collectionReady === false) return { label: "采集暂不可用", className: "is-login-required" };
+  if (account.routeMode === "direct_degraded" && account.collectionReady) {
+    return { label: "受控直连 · 低频采集", className: "is-active" };
   }
   return statusMeta[account.status];
 }

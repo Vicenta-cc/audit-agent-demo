@@ -57,6 +57,10 @@ class LoginSession:
     frame_sequence: int = 0
     resource_handle: object | None = field(default=None, repr=False)
     global_handle: object | None = field(default=None, repr=False)
+    route_bundle: object | None = field(default=None, repr=False)
+    route_pipe: object | None = field(default=None, repr=False)
+    manual_recovery_claim: str = field(default="",repr=False)
+    manual_finished: bool = field(default=False,repr=False)
     input_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def public(self) -> dict:
@@ -126,6 +130,8 @@ class CrawlerAccountLoginManager:
         owner_user_id: str,
         owner_is_admin: bool,
     ) -> dict:
+        if account["platform"] == "dy":
+            raise ValueError("抖音账号请使用 Login V2 登录入口")
         interactive = account["platform"] == "dy" and settings.crawler_login_interactive
         if interactive and not (32 <= len(owner_token) <= 128):
             raise PermissionError("请刷新页面后重新打开登录窗口")
@@ -175,6 +181,8 @@ class CrawlerAccountLoginManager:
             str(timeout),
         ]
         env = os.environ.copy()
+        for name in ("MEDIACRAWLER_PROXY_CONFIG_FD", "MEDIACRAWLER_PROXY_RECEIPT_FD", "MEDIACRAWLER_PROXY_REQUIRED", "MEDIACRAWLER_PROXY_PROBE_BUDGET_ID"):
+            env.pop(name, None)
         if session.platform == "dy":
             browser_env = account_browser_env(session.account_id)
             env.update(browser_env)
@@ -188,7 +196,7 @@ class CrawlerAccountLoginManager:
                 command.extend(["--expected-platform-account-id", account["platform_account_id"]])
             # The helper and crawler load the same adapter implementation.
             env["MEDIACRAWLER_DIR"] = str(settings.media_crawler_dir.expanduser().resolve())
-            env["CRAWLER_BROWSER_PROFILE_ROOT"] = browser_env["MEDIACRAWLER_CLOAK_PROFILE_ROOT"]
+            env["CRAWLER_BROWSER_PROFILE_ROOT"] = str(settings.crawler_browser_profile_root)
         env["PYTHONUNBUFFERED"] = "1"
         root_path = str(settings.root_dir)
         current_python_path = env.get("PYTHONPATH", "")
@@ -213,11 +221,38 @@ class CrawlerAccountLoginManager:
             session.global_handle.close()
             session.resource_handle.close()
             raise ValueError("已有账号正在登录，请等待结束。")
+        from .crawler_route import acquire_route_execution, RouteConfigPipe
+        try:
+            if session.platform == "dy":
+                if settings.crawler_safety_enabled and account.get("route_state") in {"manual_required","challenge_paused","recovery_check"}:
+                    from .crawler_route import reconcile_stopped_route_admissions
+                    reconcile_stopped_route_admissions(self.store,session.account_id,session.resource_handle)
+                    session.manual_recovery_claim = self.store.begin_manual_recovery(session.account_id,session.id,owner_id=session.owner_user_id) or ""
+                    if not session.manual_recovery_claim:
+                        raise ValueError('ACCOUNT_BUSY')
+                session.route_bundle = acquire_route_execution(session.account_id, session.id, session.owner_user_id, account_handle=session.resource_handle, account_store=self.store, allow_probe=True, recovery_claim=session.manual_recovery_claim or None,human_login_operation_id=session.id)
+                session.manual_recovery_claim=getattr(session.route_bundle,"manual_recovery_claim",None) or session.manual_recovery_claim
+            session.route_pipe = RouteConfigPipe(session.route_bundle.snapshot if session.route_bundle else None)
+            env.update(session.route_pipe.env)
+            from .crawler_route import RouteReceiptPipe
+            session.route_receipt_pipe = RouteReceiptPipe(session.route_bundle) if session.route_bundle and session.route_bundle.snapshot else None
+            if session.route_receipt_pipe:
+                env.update(session.route_receipt_pipe.env)
+            if session.route_bundle:
+                from .crawler_route import probe_env
+                env.update(probe_env(session.route_bundle))
+        except Exception:
+            if session.manual_recovery_claim and not session.manual_finished:
+                self.store.finish_manual_recovery(session.account_id,session.id,session.manual_recovery_claim,"uncertain",owner_id=session.owner_user_id)
+                session.manual_finished=True
+            session.resource_handle.close()
+            session.global_handle.close()
+            raise
         diagnostic_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
         try:
             process = subprocess.Popen(
                 command,
-                pass_fds=(session.resource_handle.fileno(), session.global_handle.fileno()),
+                pass_fds=tuple(set((session.resource_handle.fileno(), session.global_handle.fileno(), *(session.route_bundle.pass_fds if session.route_bundle else ()), *session.route_pipe.pass_fds, *(session.route_receipt_pipe.pass_fds if session.route_receipt_pipe else ())))),
                 cwd=str(settings.root_dir),
                 env=env,
                 stdout=subprocess.PIPE,
@@ -232,11 +267,20 @@ class CrawlerAccountLoginManager:
                 start_new_session=os.name != "nt",
             )
         except OSError as exc:
+            if session.manual_recovery_claim and not session.manual_finished:
+                self.store.finish_manual_recovery(session.account_id,session.id,session.manual_recovery_claim,"uncertain",owner_id=session.owner_user_id)
+                session.manual_finished=True
+            session.route_pipe.close()
+            if session.route_bundle:
+                session.route_bundle.close()
             diagnostic_file.close()
             session.resource_handle.close()
             session.global_handle.close()
             raise RuntimeError(f"无法启动登录浏览器：{exc}") from exc
 
+        session.route_pipe.start(process)
+        if session.route_receipt_pipe:
+            session.route_receipt_pipe.start(process)
         session.process = process
         session.diagnostic_file = diagnostic_file
         with self._lock:
@@ -431,7 +475,15 @@ class CrawlerAccountLoginManager:
             return
 
         try:
+            from .crawler_route import CollectionRouteError, consume_route_event
             for raw_line in process.stdout:
+                try:
+                    if consume_route_event(raw_line, session.route_bundle):
+                        continue
+                except CollectionRouteError as exc:
+                    self._fail(session_id, exc.code)
+                    self._stop_process(process)
+                    break
                 try:
                     event = json.loads(raw_line)
                 except json.JSONDecodeError:
@@ -458,6 +510,13 @@ class CrawlerAccountLoginManager:
                     self._unexpected_exit_message(return_code, diagnostic),
                 )
         finally:
+            if session.manual_recovery_claim and not session.manual_finished:
+                self.store.finish_manual_recovery(session.account_id,session.id,session.manual_recovery_claim,"cancelled" if session.status=="cancelled" else "uncertain",owner_id=session.owner_user_id)
+                session.manual_finished=True
+            if session.route_pipe is not None:
+                session.route_pipe.close()
+            if session.route_bundle is not None:
+                session.route_bundle.close()
             if session.resource_handle is not None:
                 session.resource_handle.close()
             if session.global_handle is not None:
@@ -492,6 +551,13 @@ class CrawlerAccountLoginManager:
 
     def _handle_event(self, session_id: str, event: dict) -> None:
         event_type = str(event.get("type") or "")
+        if event_type=="security_challenge":
+            with self._lock:
+                session=self._sessions.get(session_id)
+                if session and session.platform=="dy" and session.status in ACTIVE_LOGIN_STATUSES:
+                    from .crawler_route import record_login_challenge
+                    record_login_challenge(session.route_bundle)
+            return
         if event_type in {"interactive", "frame"}:
             with self._lock:
                 session = self._sessions.get(session_id)
@@ -601,9 +667,23 @@ class CrawlerAccountLoginManager:
                         if expected and expected.get("platform_account_id") and expected["platform_account_id"] != platform_account_id:
                             self.store.mark_douyin_auth_invalid(session.account_id, status="login_required")
                             raise ValueError("IDENTITY_MISMATCH")
-                        account = self.store.save_douyin_auth_state(
-                            session.account_id, ciphertext, platform_account_id or ""
-                        )
+                        with self.store._connect() as conn:
+                            conn.execute('BEGIN IMMEDIATE')
+                            account = self.store.save_douyin_auth_state(session.account_id,ciphertext,platform_account_id or '',connection=conn)
+                            if session.route_bundle and session.route_bundle.snapshot:
+                                route = session.route_bundle.snapshot
+                                if route.route_mode == 'direct_degraded':
+                                    self.store.mark_direct_validated(session.account_id,route.exit_generation,connection=conn)
+                                else:
+                                    session.route_bundle.proxy_store.mark_route_login_validated(session.account_id,
+                                        expected_binding_revision=route.binding_revision,expected_config_revision=route.config_revision,connection=conn)
+                            if session.manual_recovery_claim:
+                                if not self.store.finish_manual_recovery(session.account_id,session.id,session.manual_recovery_claim,'success',
+                                    owner_id=session.owner_user_id,verified_identity=platform_account_id,connection=conn):
+                                    raise ValueError('MANUAL_RECOVERY_REJECTED')
+                            account=self.store.get(session.account_id,connection=conn)
+                        if session.manual_recovery_claim:
+                            session.manual_finished=True
                     else:
                         account = self.store.save_auth_state(
                             session.account_id, ciphertext, platform_account_id=platform_account_id or None

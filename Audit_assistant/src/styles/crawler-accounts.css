@@ -1228,3 +1228,9 @@
 .crawler-login-native-sync { position: absolute; left: 8px; bottom: 8px; z-index: 2; padding: 5px 8px; border-radius: 4px; background: rgba(255,255,255,.95); color: #475569; font-size: 12px; line-height: 1.5; pointer-events: none; }
 
 .crawler-login-keyboard-relay { position: fixed !important; left: -10000px !important; top: 0 !important; width: 1px !important; height: 1px !important; min-width: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; opacity: 0; resize: none; pointer-events: none; }
+
+/* Actual Firefox editor caret geometry projected over the existing image. */
+.crawler-login-caret-layer { position: absolute; inset: 1px; overflow: hidden; pointer-events: none; }
+.crawler-login-projected-caret { position: absolute; pointer-events: none; z-index: 1; animation: crawler-login-caret-blink 1s step-end infinite; }
+@keyframes crawler-login-caret-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .crawler-login-projected-caret { animation: none; } }

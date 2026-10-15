@@ -120,6 +120,9 @@ class QwenClient:
         image_quality: int | None = None,
         enable_thinking: bool | None = None,
     ) -> dict:
+        if str(image_path).startswith(("http://", "https://")) and getattr(settings, "crawler_proxy_enabled", False):
+            from .crawler_route import CollectionRouteError
+            raise CollectionRouteError("SUPPLEMENT_DEFERRED")
         if not hasattr(self, "_response_capture"):
             self._response_capture = threading.local()
         self._response_capture.value = None

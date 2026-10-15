@@ -9,6 +9,97 @@ from scripts.crawler_douyin_login_adapter import document_allowed
 
 INPUT_TYPES = {"text", "tel", "email", "url", "search", "number"}
 
+# Firefox exposes its actual native editor caret through hit testing, including
+# input/textarea anonymous editor content retargeted to the original element.
+# No copied text layout, focus/selection mutation, or text payload is involved.
+NATIVE_CARET = r"""e => {
+  const start = e.selectionStart, end = e.selectionEnd;
+  if (start === null || start !== end || !document.caretPositionFromPoint) return null;
+  const cleanTransform = node => {
+    for (let n = node; n; n = n.parentElement || n.getRootNode().host) {
+      const s = getComputedStyle(n);
+      if (s.perspective !== 'none') return false;
+      if (s.transform !== 'none') {
+        const m = new DOMMatrixReadOnly(s.transform);
+        if (!m.is2D || m.a <= 0 || m.d <= 0 || Math.abs(m.b) > 1e-8 || Math.abs(m.c) > 1e-8) return false;
+      }
+    }
+    return true;
+  };
+  if (!cleanTransform(e)) return null;
+  const r = e.getBoundingClientRect(), style = getComputedStyle(e);
+  if (style.writingMode !== 'horizontal-tb') return null;
+  const color = style.caretColor === 'auto' ? style.color : style.caretColor;
+  if (!color || color === 'transparent' || /rgba\([^)]*,\s*0\s*\)/.test(color)) return null;
+  const scrollLeft = e.scrollLeft, scrollTop = e.scrollTop;
+  const sx = r.width / e.offsetWidth, sy = r.height / e.offsetHeight;
+  const contentLeft = r.left + e.clientLeft * sx;
+  const contentTop = r.top + e.clientTop * sy;
+  const left = Math.max(0, contentLeft), top = Math.max(0, contentTop);
+  const right = Math.min(innerWidth, contentLeft + e.clientWidth * sx);
+  const bottom = Math.min(innerHeight, contentTop + e.clientHeight * sy);
+  if (right <= left || bottom <= top) return null;
+  const ys = [(top + bottom) / 2];
+  const stepY = Math.max(2, parseFloat(style.fontSize) / 2);
+  for (let y = top + .5; y < bottom; y += stepY) ys.push(y);
+  let attempts = 0;
+  const probe = (x, y) => {
+    if (++attempts > 4096) return null;
+    const p = document.caretPositionFromPoint(x, y);
+    if (!p || p.offsetNode !== e || p.offset !== start || typeof p.getClientRect !== 'function') return null;
+    const c = p.getClientRect();
+    if (!c || ![c.x,c.y,c.width,c.height].every(Number.isFinite) || c.height < 0 || c.width < 0 || c.x < left || c.x > right) return null;
+    let caretTop = c.y, caretHeight = c.height;
+    if (caretHeight === 0 && e.tagName === 'INPUT' && e.value.length === 0) {
+      // Gecko returns the real baseline for an empty single-line editor.
+      // Use this browser's font bounds, never the input box centre/font size.
+      const ctx = document.createElement('canvas').getContext('2d');
+      if (!ctx || !style.font) return null;
+      ctx.font = style.font;
+      const metrics = ctx.measureText('M');
+      const a = metrics.fontBoundingBoxAscent, d = metrics.fontBoundingBoxDescent;
+      if (![a,d].every(Number.isFinite) || a < 0 || d < 0 || a+d <= 0) return null;
+      caretTop = c.y - a * sy;
+      caretHeight = (a+d) * sy;
+    }
+    if (caretHeight <= 0) return null;
+    const y1 = Math.max(caretTop, top), y2 = Math.min(caretTop+caretHeight, bottom);
+    if (y2 <= y1 || e.selectionStart !== start || e.selectionEnd !== end || e.scrollLeft !== scrollLeft || e.scrollTop !== scrollTop) return null;
+    return {x:(c.x-r.x)/r.width, y:(y1-r.y)/r.height, width:c.width/r.width, height:(y2-y1)/r.height, color};
+  };
+  for (const y of ys) {
+    // Native offset binary search is fast for ordinary LTR/RTL single lines.
+    for (const direction of [1,-1]) {
+      let lo = left + .25, hi = right - .25;
+      for (let i=0;i<12 && hi>=lo;i++) {
+        const x=(lo+hi)/2, result=probe(x,y);
+        if(result)return result;
+        const p=document.caretPositionFromPoint(x,y);
+        if(!p || p.offsetNode!==e)break;
+        if((p.offset<start)===(direction===1))lo=x+.1;else hi=x-.1;
+      }
+    }
+    // Bidi/wrapped text is not monotonic: accept only an exact native hit.
+    for(let x=left+.25;x<right && attempts<4096;x+=1) {
+      const result=probe(x,y);if(result)return result;
+    }
+    if(attempts>=4096)break;
+  }
+  return null;
+}"""
+
+AXIS_ALIGNED_FRAME = r"""e => {
+  for(let n=e;n;n=n.parentElement || n.getRootNode().host) {
+    const s=getComputedStyle(n);
+    if(s.perspective!=='none')return false;
+    if(s.transform!=='none') {
+      const m=new DOMMatrixReadOnly(s.transform);
+      if(!m.is2D || m.a<=0 || m.d<=0 || Math.abs(m.b)>1e-8 || Math.abs(m.c)>1e-8)return false;
+    }
+  }
+  return true;
+}"""
+
 
 class EditNotExecuted(ValueError):
     pass
@@ -88,6 +179,11 @@ class EditableTargets:
                             await handle.dispose()
                         seen.add(field_id)
                         maximum = state["maxLength"]
+                        caret = None
+                        if state["focused"]:
+                            caret = await self.caret(
+                                self.nodes[field_id], frame, box, region
+                            )
                         found.append(
                             {
                                 "field_id": field_id,
@@ -107,6 +203,7 @@ class EditableTargets:
                                 "selection_end": state["selectionEnd"],
                                 "selection_direction": state["selectionDirection"],
                                 "focused": state["focused"],
+                                "caret": caret,
                                 "applied_edit_revision": self.revisions.get(
                                     field_id, 0
                                 ),
@@ -139,6 +236,34 @@ class EditableTargets:
                 self.revisions.pop(field_id, None)
                 self.frames.pop(field_id, None)
         return found
+
+    async def caret(self, handle, frame, box, region):
+        child = frame
+        while child.parent_frame is not None:
+            element = await child.frame_element()
+            try:
+                if not await element.evaluate(AXIS_ALIGNED_FRAME):
+                    return None
+            finally:
+                await element.dispose()
+            child = child.parent_frame
+        geometry = await handle.evaluate(NATIVE_CARET)
+        if geometry is None:
+            return None
+        rect = {
+            "x": (box["x"] + geometry["x"] * box["width"] - region.x) / region.width,
+            "y": (box["y"] + geometry["y"] * box["height"] - region.y) / region.height,
+            "width": geometry["width"] * box["width"] / region.width,
+            "height": geometry["height"] * box["height"] / region.height,
+        }
+        if (
+            rect["x"] < 0
+            or rect["y"] < 0
+            or rect["x"] + rect["width"] > 1
+            or rect["y"] + rect["height"] > 1
+        ):
+            return None
+        return {"rect": rect, "color": geometry["color"]}
 
     @staticmethod
     def inside(box, region):

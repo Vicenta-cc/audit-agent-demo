@@ -30,6 +30,10 @@ interface Editing {
   composing: boolean;
   focus: LoginCommandReceipt & { acknowledged: boolean; proven?: boolean };
   intents: InputIntent[];
+  frameSequence: number;
+  controllerEpoch: number;
+  areaVersion: number;
+  challengeId: string;
   edit?: LoginCommandReceipt & { revision: number; acknowledged: boolean };
 }
 export const CrawlerLoginKeyboardBridge = forwardRef<
@@ -54,10 +58,17 @@ export const CrawlerLoginKeyboardBridge = forwardRef<
   const compositionText = useRef("");
   const [networkToken, setNetworkToken] = useState("");
   const [slow, setSlow] = useState(false);
+  const pageActive = useRef(document.hasFocus());
+  const [projectedCaret, setProjectedCaret] = useState<{
+    frame: LoginFrame;
+    rect: LoginEditableTarget["rect"];
+    color: string;
+  } | null>(null);
   const current = useRef({ area, frame, enabled, send, onError, onPending });
   current.current = { area, frame, enabled, send, onError, onPending };
   const clear = (message?: string) => {
     editing.current = null;
+    setProjectedCaret(null);
     if (relay.current) {
       relay.current.value = "";
       relay.current.blur();
@@ -89,6 +100,34 @@ export const CrawlerLoginKeyboardBridge = forwardRef<
           state.revision > state.confirmed),
       ),
     );
+    const picture = current.current.frame;
+    const rect = target?.caret?.rect;
+    const confirmed = Boolean(
+      current.current.enabled &&
+      picture && state && target && rect &&
+      pageActive.current &&
+      document.visibilityState === "visible" &&
+      document.activeElement === relay.current &&
+      state.focus.proven && state.focus.acknowledged && target.focused &&
+      !focusWaiting && !state.edit && !state.composing &&
+      state.revision <= state.confirmed &&
+      target.applied_edit_revision >= state.confirmed &&
+      target.value === state.value &&
+      Number.isInteger(target.selection_start) &&
+      target.selection_start === target.selection_end &&
+      typeof target.caret?.color === "string" &&
+      CSS.supports("color", target.caret.color) &&
+      picture.sequence >= state.frameSequence &&
+      picture.metadata.controller_epoch === state.controllerEpoch &&
+      picture.area_version === state.areaVersion &&
+      current.current.area.area_version === state.areaVersion &&
+      current.current.area.challenge_id === state.challengeId &&
+      picture.metadata.challenge_id === state.challengeId &&
+      Object.values(rect).every(Number.isFinite) &&
+      rect.x >= 0 && rect.y >= 0 && rect.width >= 0 && rect.height > 0 &&
+      rect.x + rect.width <= 1 && rect.y + rect.height <= 1
+    );
+    setProjectedCaret(confirmed ? { frame: picture!, rect: rect!, color: target!.caret!.color } : null);
     setNetworkToken(
       state?.edit?.command_id ||
         (focusWaiting ? state?.focus.command_id || "" : ""),
@@ -241,7 +280,12 @@ export const CrawlerLoginKeyboardBridge = forwardRef<
         ],
       });
       if (!receipt) return false;
+      setProjectedCaret(null);
       editing.current = {
+        frameSequence: current.current.frame.sequence,
+        controllerEpoch: current.current.frame.metadata.controller_epoch,
+        areaVersion: current.current.area.area_version,
+        challengeId: current.current.area.challenge_id,
         fieldId: target.field_id,
         value: target.value,
         revision: target.applied_edit_revision,
@@ -268,6 +312,15 @@ export const CrawlerLoginKeyboardBridge = forwardRef<
       return;
     }
     const state = editing.current;
+    if (state && frame && (
+      frame.metadata.controller_epoch !== state.controllerEpoch ||
+      frame.area_version !== state.areaVersion ||
+      area.challenge_id !== state.challengeId ||
+      area.area_version !== state.areaVersion
+    )) {
+      clear();
+      return;
+    }
     if (state && !field()) {
       clear("输入框已变化，请点击当前页面的输入框重新输入");
       return;
@@ -320,7 +373,7 @@ export const CrawlerLoginKeyboardBridge = forwardRef<
       state.confirmed = state.revision;
       if (relay.current) relay.current.value = target.value;
     }
-  }, [frame, enabled]);
+  }, [frame, enabled, area.challenge_id, area.area_version]);
   useEffect(() => {
     const state = editing.current;
     if (!state || !result) return;
@@ -406,6 +459,27 @@ export const CrawlerLoginKeyboardBridge = forwardRef<
     element.addEventListener("beforeinput", beforeInput);
     return () => element.removeEventListener("beforeinput", beforeInput);
   }, []);
+  useEffect(() => {
+    const hideFocus = () => {
+      pageActive.current = false;
+      setProjectedCaret(null);
+    };
+    const restoreFocus = () => {
+      pageActive.current = document.hasFocus();
+    };
+    const visibilityChanged = () => {
+      pageActive.current = document.visibilityState === "visible" && document.hasFocus();
+      setProjectedCaret(null);
+    };
+    window.addEventListener("blur", hideFocus);
+    window.addEventListener("focus", restoreFocus);
+    document.addEventListener("visibilitychange", visibilityChanged);
+    return () => {
+      window.removeEventListener("blur", hideFocus);
+      window.removeEventListener("focus", restoreFocus);
+      document.removeEventListener("visibilitychange", visibilityChanged);
+    };
+  }, []);
   useEffect(
     () => () => {
       editing.current = null;
@@ -435,6 +509,7 @@ export const CrawlerLoginKeyboardBridge = forwardRef<
         autoComplete="off"
         spellCheck={false}
         onChange={update}
+        onBlur={() => setProjectedCaret(null)}
         onSelect={() => {
           const state = editing.current;
           const element = relay.current;
@@ -500,6 +575,20 @@ export const CrawlerLoginKeyboardBridge = forwardRef<
           }
         }}
       />
+      {enabled && projectedCaret?.frame === frame ? (
+          <span className="crawler-login-caret-layer" aria-hidden="true">
+            <span
+              className="crawler-login-projected-caret"
+              style={{
+                left: `${projectedCaret.rect.x * 100}%`,
+                top: `${projectedCaret.rect.y * 100}%`,
+                width: `max(1px, ${projectedCaret.rect.width * 100}%)`,
+                backgroundColor: projectedCaret.color,
+                height: `${projectedCaret.rect.height * 100}%`,
+              }}
+            />
+          </span>
+      ) : null}
       {slow ? (
         <span className="crawler-login-native-sync" role="status">
           正在同步输入，请稍候…

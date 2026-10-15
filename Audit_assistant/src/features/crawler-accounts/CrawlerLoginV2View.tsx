@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Loader2, Smartphone, AlertCircle } from "lucide-react";
 import { Button } from "../../components/common/Button";
-import { apiRequest } from "../../services/apiClient";
+import { ApiError, apiRequest } from "../../services/apiClient";
 import { loginControlHeaders } from "../../services/crawlerAccounts";
 import {
   createLoginSocket,
@@ -48,11 +48,16 @@ function commandHasDefinitiveOutcome(result: CommandOutcome): boolean {
 export function CrawlerLoginV2View({
   initial,
   onSnapshot,
+  onOwnershipLost,
 }: {
   initial: LoginSnapshot;
   onSnapshot: (snapshot: LoginSnapshot) => void;
+  onOwnershipLost?: () => void;
 }) {
   const [snapshot, setSnapshot] = useState(initial);
+  const ownershipLost = useRef(false);
+  const lostCallback = useRef(onOwnershipLost);
+  lostCallback.current = onOwnershipLost;
   const [now, setNow] = useState(Date.now());
   const phaseStarted = useRef(Date.now());
   useEffect(() => {
@@ -88,6 +93,8 @@ export function CrawlerLoginV2View({
     let needsResultQuery = Boolean(pendingRef.current);
     let timer = 0;
     const clear = () => {
+      ownershipLost.current = true;
+      lostCallback.current?.();
       disposed = true;
       document.removeEventListener("visibilitychange", visibility);
       window.clearTimeout(timer);
@@ -105,9 +112,23 @@ export function CrawlerLoginV2View({
       setConnection("登录身份已变化，请重新打开");
       setError("应用登录已结束，请重新登录后打开此窗口");
     };
+    const relinquish = (message = "已在另一页面继续，请在当前操作的页面完成登录") => {
+      if (ownershipLost.current || disposed) return;
+      ownershipLost.current = true;
+      window.clearTimeout(timer);
+      setFrame(null);
+      setPhone("");
+      setCode("");
+      setGestureReset(value => value + 1);
+      setConnection(message);
+      setError(message);
+      lostCallback.current?.();
+    };
     const connect = async () => {
       if (
         disposed ||
+        ownershipLost.current ||
+        !initial.id ||
         document.hidden ||
         ["success", "failed", "expired", "cancelled"].includes(
           current.current.status,
@@ -115,8 +136,8 @@ export function CrawlerLoginV2View({
       )
         return;
       try {
-        const created = await createLoginSocket(initial.id);
-        if (disposed || document.hidden) {
+        const created = await createLoginSocket(initial.id, initial.account_id);
+        if (disposed || ownershipLost.current || document.hidden) {
           created.socket.close();
           return;
         }
@@ -130,7 +151,7 @@ export function CrawlerLoginV2View({
             }),
           );
         created.socket.onmessage = (event) => {
-          if (disposed) return;
+          if (disposed || ownershipLost.current) return;
           if (event.data instanceof ArrayBuffer) {
             try {
               const next = decodeLoginFrame(event.data);
@@ -177,10 +198,10 @@ export function CrawlerLoginV2View({
               const queriedCommandId = pendingRef.current;
               void apiRequest<{ item: CommandOutcome }>(
                 `/api/crawler-accounts/${next.account_id}/login-operations/${next.operation_id}/commands/${pendingRef.current}`,
-                { headers: loginControlHeaders() },
+                { headers: loginControlHeaders(initial.account_id) },
               )
                 .then((result) => {
-                  if (pendingRef.current !== queriedCommandId) return;
+                  if (disposed || ownershipLost.current || pendingRef.current !== queriedCommandId) return;
                   needsResultQuery = false;
                   if (result.item.platform_status === "confirmed") {
                     setPending("");
@@ -230,6 +251,10 @@ export function CrawlerLoginV2View({
               }
             }
           } else if (message.type === "error") {
+            if (["SESSION_OWNER_MISMATCH", "CONTROLLER_REPLACED"].includes(message.code || message.error?.code)) {
+              relinquish();
+              return;
+            }
             if (message.command_id) setCommandResult(message);
             setError(
               message.message ||
@@ -260,7 +285,9 @@ export function CrawlerLoginV2View({
         created.socket.onclose = (event) => {
           setFrame(null);
           needsResultQuery = Boolean(pendingRef.current);
-          if (disposed) return;
+          if (disposed || ownershipLost.current) return;
+          if (event.code === 4409) { relinquish(); return; }
+          if ([4401, 4403].includes(event.code)) { relinquish("登录权限已失效，请重新打开"); return; }
           setConnection("连接已断开");
           if ([4401, 4403, 4409, 4410, 1000].includes(event.code)) {
             setError(
@@ -277,9 +304,13 @@ export function CrawlerLoginV2View({
             Math.min(5000, 500 * 2 ** retry++) + Math.random() * 200,
           );
         };
-        created.socket.onerror = () => setConnection("正在恢复连接");
+        created.socket.onerror = () => { if (!disposed && !ownershipLost.current) setConnection("正在恢复连接"); };
       } catch (failure) {
         if (!disposed) {
+          if (failure instanceof ApiError && [401, 403].includes(failure.status)) {
+            relinquish(failure.code === "SESSION_OWNER_MISMATCH" ? undefined : "登录权限已失效，请重新打开");
+            return;
+          }
           setError(failure instanceof Error ? failure.message : "连接失败");
           timer = window.setTimeout(
             connect,
@@ -295,6 +326,7 @@ export function CrawlerLoginV2View({
         setFrame(null);
       } else if (
         !disposed &&
+        !ownershipLost.current &&
         (!socket.current || socket.current.readyState === WebSocket.CLOSED)
       )
         void connect();
@@ -319,7 +351,7 @@ export function CrawlerLoginV2View({
       snapshot.status,
     );
   const send = (input: Record<string, unknown>): LoginCommandReceipt | null => {
-    if (!enabled || socket.current?.readyState !== WebSocket.OPEN) return null;
+    if (ownershipLost.current || !enabled || socket.current?.readyState !== WebSocket.OPEN) return null;
     if (socket.current.bufferedAmount > 64 * 1024) {
       setError("连接发送积压，本次操作已停止，恢复连接后请重新操作");
       socket.current.close(1011, "input congestion");

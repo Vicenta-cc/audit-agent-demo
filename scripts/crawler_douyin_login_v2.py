@@ -6,17 +6,22 @@ import asyncio
 from contextlib import ExitStack, suppress
 import hashlib
 import json
+import math
 import re
 import traceback
 import sys
 import time
 import uuid
+import os
 
 from backend.audit_agent.crawler_login_protocol import validate_command
 from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
 from scripts.crawler_login_media import LoginMediaWriter
 from scripts.crawler_login_editables import EditableTargets, EditNotExecuted
-from scripts.crawler_login_pages import reset_douyin_credentials_v2
+from scripts.crawler_login_pages import (
+    reset_douyin_credentials_v2,
+    export_douyin_auth_state,
+)
 
 MANUAL_ACTIONS = [
     "pointer_batch",
@@ -26,6 +31,13 @@ MANUAL_ACTIONS = [
     "scroll",
     "abort_gesture",
 ]
+# Firefox's compositor snapshots omit the native insertion caret. Editable
+# inventory still conveys focus and selection; do not promise a pixel caret.
+ACTION_EXECUTION_TIMEOUT = 8
+ACTION_ADMISSION_TIMEOUT = 30
+
+CAPTURE_CAPABILITIES = {"native_caret": False, "editable_focus_and_selection": True}
+
 AUTHENTICATION_PHASES = {
     "qr_ready",
     "qr_expired",
@@ -85,7 +97,7 @@ class DouyinLoginV2:
         self.tasks = []
         self.capture_enabled = True
         self.committed = False
-        self.headed_mode = args.headed if hasattr(args, "headed") else False
+        self.headed_mode = sys.platform != "darwin"
         self.display = ExitStack()
         self.display_fallback_used = False
         self.progress_observed = False
@@ -311,10 +323,10 @@ class DouyinLoginV2:
                             self.check_command(command, executing=True)
                         except ValueError as exc:
                             raise ActionNotExecuted(str(exc)) from None
-                        details = await asyncio.wait_for(self.apply_command(command), 8)
+                        details = await self.apply_command(command)
                         self.applied_sequence = command["sequence"]
                 else:
-                    details = await asyncio.wait_for(self.apply_command(command), 8)
+                    details = await self.apply_command(command)
                 self.applied_sequence = command["sequence"]
                 self.last_activity = time.monotonic()
                 self.result(
@@ -343,6 +355,35 @@ class DouyinLoginV2:
                 self.pending_trajectories.pop(command["command_id"], None)
 
     async def apply_command(self, command):
+        session = getattr(self, "bound_proxy_session", None)
+        if session:
+            await asyncio.wait_for(session.ensure_business(), ACTION_ADMISSION_TIMEOUT)
+        paced = command.get("type") == "action" and command.get("action") in {
+            "request_sms",
+            "submit_sms",
+            "refresh_qr",
+            "switch_to_sms",
+        }
+        if paced and session:
+            # Account pacing is admission time, separate from browser execution.
+            # Slow-mode accounts can legitimately wait longer than one click.
+            async with session.slot(
+                "login_action",
+                timeout=ACTION_EXECUTION_TIMEOUT,
+                max_wait=ACTION_ADMISSION_TIMEOUT,
+            ):
+                try:
+                    self.check_command(command, executing=True)
+                except ValueError as exc:
+                    raise ActionNotExecuted(str(exc)) from None
+                return await asyncio.wait_for(
+                    self._apply_command(command), ACTION_EXECUTION_TIMEOUT
+                )
+        return await asyncio.wait_for(
+            self._apply_command(command), ACTION_EXECUTION_TIMEOUT
+        )
+
+    async def _apply_command(self, command):
         self.progress_observed = True
         page = self.adapter.page
         kind = command["type"]
@@ -663,24 +704,48 @@ class DouyinLoginV2:
         self.failure_stage = "browser_start"
         from scripts.crawler_account_login import load_account_browser, settings
 
+        from backend.audit_agent.crawler_route import child_route_snapshot
+
+        self.route_snapshot = child_route_snapshot(self.args.account_id)
         browser = load_account_browser()
-        if settings.crawler_login_browser_version:
-            browser.profile_for(
-                self.args.account_id,
-                settings.crawler_browser_profile_root,
-                settings.crawler_login_browser_version,
+        from backend.audit_agent.crawler_route import make_bound_proxy_session
+
+        bound_session = getattr(self, "bound_proxy_session", None)
+        if bound_session is not None:
+            if bound_session.snapshot != self.route_snapshot:
+                raise ValueError("PROXY_REVISION_MISMATCH")
+            # Flush/reuse verification retains the one operation authority FD.
+            # The engine must confirm physical context and driver teardown first.
+            await bound_session.reopen_after_context_closed()
+        elif self.route_snapshot:
+            bound_session = await asyncio.to_thread(
+                make_bound_proxy_session,
+                self.route_snapshot,
+                login_bootstrap=bool(settings.crawler_proxy_trial_id),
             )
         self.context, self.profile = await browser.launch_account_context(
             self.args.account_id,
-            settings.crawler_browser_profile_root,
+            settings.crawler_camoufox_state_root / "profiles",
             headless=not self.headed_mode,
+            **(
+                {
+                    "route_snapshot": self.route_snapshot,
+                    "bound_proxy_session": bound_session,
+                }
+                if self.route_snapshot
+                else {}
+            ),
         )
+        self.bound_proxy_session = self.profile.get("bound_proxy_session")
         self.failure_stage = "page_prepare"
         page = await self.context.new_page()
         await page.set_viewport_size({"width": 1000, "height": 760})
         page.set_default_timeout(2000)
         self.adapter = await DouyinLoginAdapter(
-            self.context, page, block_media=getattr(self.args, "block_media", False)
+            self.context,
+            page,
+            block_media=getattr(self.args, "block_media", False),
+            bound_proxy_session=self.bound_proxy_session,
         ).install()
 
     async def close_context(self):
@@ -693,33 +758,6 @@ class DouyinLoginV2:
         if self.context:
             context, self.context = self.context, None
             await asyncio.wait_for(context.close(), 15)
-
-    async def display_fallback(self):
-        if (
-            self.display_fallback_used
-            or self.headed_mode
-            or self.progress_observed
-            or self.pending_sms
-            or self.credentials_side_effect
-            or getattr(self.args, "intent", "check_or_login") == "recover"
-        ):
-            raise ValueError("LOGIN_PREPARATION_FAILED")
-        self.display_fallback_used = True
-        await self.close_context()
-        if sys.platform == "linux":
-            from scripts.crawler_interactive_login import virtual_display
-
-            try:
-                self.display.enter_context(virtual_display())
-            except RuntimeError:
-                raise ValueError("LOGIN_DISPLAY_UNAVAILABLE") from None
-        elif sys.platform != "darwin":
-            raise ValueError("LOGIN_DISPLAY_UNAVAILABLE")
-        self.headed_mode = True
-        await self.open_context()
-        await self.adapter.navigate(self.args.entry)
-        self.failure_stage = "login_entry_open"
-        await self.adapter.open_login()
 
     def diagnose_observation(self, observation, *, has_auth, elapsed):
         receipt = getattr(self.adapter, "latest_login_receipt", None)
@@ -814,6 +852,7 @@ class DouyinLoginV2:
             method=match.group(1) if match else None,
             timeout_ms=timeout_ms,
             source_frame=source_frame,
+            login_entry=getattr(self.adapter, "login_entry_diagnostic", None),
         )
 
     def authentication_pending(self, observation, auth_signal):
@@ -863,16 +902,7 @@ class DouyinLoginV2:
                 pending["unknown_reported"] = True
 
     async def flow(self):
-        try:
-            await self.open_context()
-        except Exception as exc:
-            # Profile locks, missing adapters and permissions are not rendering
-            # compatibility failures and must never trigger browser replacement.
-            from playwright.async_api import Error as BrowserError
-
-            if not isinstance(exc, BrowserError):
-                raise
-            await self.display_fallback()
+        await self.open_context()
         if self.args.intent == "reauth":
             await self.handshake("reset_requested", "reset_ready")
             await self.adapter.close()
@@ -882,7 +912,10 @@ class DouyinLoginV2:
             await page.set_viewport_size({"width": 1000, "height": 760})
             page.set_default_timeout(2000)
             self.adapter = await DouyinLoginAdapter(
-                self.context, page, block_media=getattr(self.args, "block_media", False)
+                self.context,
+                page,
+                block_media=getattr(self.args, "block_media", False),
+                bound_proxy_session=self.bound_proxy_session,
             ).install()
             self.credentials_changed = True
             self.emit("reset_done")
@@ -927,12 +960,16 @@ class DouyinLoginV2:
             self.failure_stage = "login_entry_open"
             await self.adapter.open_login()
         identity_probe = False
-        home_fallback = False
-        fallback_retired = initial_observation["phase"] in AUTHENTICATION_PHASES
         entry_started = time.monotonic()
         stable_identity = ""
         stable_since = 0.0
         identity_started = None
+        identity_timeout = float(
+            os.getenv("CRAWLER_LOGIN_V2_PREPARATION_TIMEOUT_SECONDS", "120")
+        )
+        if not math.isfinite(identity_timeout):
+            raise ValueError("LOGIN_PREPARATION_TIMEOUT_INVALID")
+        identity_timeout = min(180, max(15, identity_timeout))
         preparing_started = None
         while not self.stopped.is_set():
             self.failure_stage = "observation"
@@ -957,7 +994,6 @@ class DouyinLoginV2:
                 or getattr(self.adapter, "manual", False)
                 or getattr(self.adapter, "sms_selected", False)
             ):
-                fallback_retired = True
                 self.progress_observed = True
             authentication_pending = self.authentication_pending(
                 observation, auth_signal
@@ -976,21 +1012,6 @@ class DouyinLoginV2:
             ):
                 await self.abort_gesture()
             if (
-                observation["phase"] == "preparing"
-                and not home_fallback
-                and not fallback_retired
-                and not await self.adapter.has_auth()
-                and preparing_started is not None
-                and time.monotonic() - preparing_started > 8
-            ):
-                # Prefer the already rendered panel; an internal display retry
-                # replaces entry reloads and is allowed only before any progress.
-                home_fallback = True
-                await self.display_fallback()
-                entry_started = time.monotonic()
-                preparing_started = None
-                continue
-            if (
                 preparing_started is not None
                 and time.monotonic() - preparing_started > 12
             ):
@@ -1003,12 +1024,21 @@ class DouyinLoginV2:
                 self.failure_stage = "identity_check"
                 if identity_started is None:
                     identity_started = time.monotonic()
-                elif time.monotonic() - identity_started > 15:
-                    raise ValueError("IDENTITY_UNCONFIRMED")
+                # Read an already observed first-party identity before deciding
+                # that the bounded observation period expired.
                 identity = await self.adapter.trusted_identity()
                 if not identity and not identity_probe and auth_signal:
                     identity_probe = True
                     await self.adapter.navigate("self")
+                    # Navigation has its own finite timeout. Slow page loading
+                    # must not consume the entire identity observation budget.
+                    identity_started = time.monotonic()
+                    identity = await self.adapter.trusted_identity()
+                if (
+                    not identity
+                    and time.monotonic() - identity_started >= identity_timeout
+                ):
+                    raise ValueError("IDENTITY_UNCONFIRMED")
                 if identity and await self.adapter.has_auth():
                     if (
                         self.args.expected_platform_account_id
@@ -1043,10 +1073,10 @@ class DouyinLoginV2:
         self.publish({"phase": "reuse_check"})
         self.failure_stage = "reuse_check"
         await self.adapter.navigate("self")
-        deadline = time.monotonic() + 15
+        deadline = time.monotonic() + identity_timeout
         identity = ""
         reuse_stable_since = None
-        while time.monotonic() < deadline and not self.stopped.is_set():
+        while not self.stopped.is_set():
             if self.authentication_pending(
                 await self.adapter.observe(), await self.adapter.has_auth()
             ):
@@ -1063,7 +1093,9 @@ class DouyinLoginV2:
                     reuse_stable_since = None
             else:
                 identity, reuse_stable_since = "", None
-            await asyncio.sleep(0.4)
+            if time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(min(0.4, max(0, deadline - time.monotonic())))
         if (
             identity != stable_identity
             or not identity
@@ -1072,7 +1104,7 @@ class DouyinLoginV2:
         ):
             raise ValueError("REUSE_CHECK_FAILED")
         self.failure_stage = "export"
-        state = await asyncio.wait_for(self.context.storage_state(), 15)
+        state = await asyncio.wait_for(export_douyin_auth_state(self.context), 15)
         await self.close_context()
         self.emit("phase", phase="db_commit", available_actions=[])
         self.capture_enabled = False
@@ -1088,6 +1120,96 @@ class DouyinLoginV2:
         self.failure_stage = "save_wait"
         await self.handshake("save_ready", "save_committed")
         # Parent owns success and eligibility. Only commit acknowledgement permits exit.
+
+    async def capture_preparing_evidence(self, stage):
+        if stage not in {"preparing_fallback", "preparing_failed"}:
+            return
+        captured = getattr(self, "_preparing_captures", set())
+        if stage in captured:
+            return
+        captured.add(stage)
+        self._preparing_captures = captured
+        try:
+            async with asyncio.timeout(3):
+                from backend.audit_agent.config import settings
+
+                directory = settings.data_dir / "crawler-login-diagnostics"
+                directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+                directory.chmod(0o700)
+
+                def safe(value):
+                    return (
+                        re.sub(r"[^A-Za-z0-9_.-]", "_", str(value))[:128] or "unknown"
+                    )
+
+                stem = (
+                    safe(self.args.account_id)
+                    + "-"
+                    + safe(self.operation_id)
+                    + "-"
+                    + stage
+                )
+                image = directory / (stem + ".png")
+                metadata = directory / (stem + ".json")
+                page = self.adapter.page
+                values = await page.evaluate("""() => {
+                  const visible = e => {const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none'};
+                  const panels=[...document.querySelectorAll('.douyin_login_new_class')];
+                  const images=[...document.querySelectorAll('#animate_qrcode_container img')];
+                  const buttons=panels.flatMap(p=>[...p.querySelectorAll('button,[role=button]')]);
+                  const completed=new Set(performance.getEntriesByType('resource').filter(e=>e.initiatorType==='script').map(e=>e.name));
+                  const scripts=[...document.scripts].map(e=>e.src).filter(Boolean);
+                  const pending=new Map();
+                  for(const src of scripts){
+                    if(completed.has(src))continue;
+                    try{const host=new URL(src,location.href).hostname.toLowerCase();if(/^[a-z0-9.-]{1,253}$/.test(host))pending.set(host,(pending.get(host)||0)+1)}catch{}
+                  }
+                  return {ready:document.readyState==='complete',body_length:document.body?document.body.innerHTML.length:0,panel_count:panels.length,panel_visible:panels.filter(visible).length,image_count:images.length,image_visible:images.filter(visible).length,image_loaded:images.filter(e=>e.tagName==='IMG'&&e.complete&&e.naturalWidth>0).length,button_count:buttons.length,button_clickable:buttons.filter(e=>visible(e)&&!e.disabled).length,script_count:scripts.length,script_completed:scripts.filter(src=>completed.has(src)).length,pending_script_hosts:[...pending].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([host,count])=>({host,count}))};
+                }""")
+                values["network_failures"] = self.adapter.network_failure_summary()
+                fields = {
+                    "ready",
+                    "body_length",
+                    "panel_count",
+                    "panel_visible",
+                    "image_count",
+                    "image_visible",
+                    "image_loaded",
+                    "button_count",
+                    "button_clickable",
+                    "network_failures",
+                    "script_count",
+                    "script_completed",
+                    "pending_script_hosts",
+                }
+                if (
+                    not isinstance(values, dict)
+                    or set(values) != fields
+                    or type(values["ready"]) is not bool
+                    or not isinstance(values["network_failures"], list)
+                    or not isinstance(values["pending_script_hosts"], list)
+                    or any(
+                        type(values[k]) is not int or not 0 <= values[k] <= 100000000
+                        for k in fields
+                        - {"ready", "network_failures", "pending_script_hosts"}
+                    )
+                ):
+                    return
+                fd = os.open(metadata, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "w") as stream:
+                    stream.write(
+                        json.dumps({"stage": stage, **values}, allow_nan=False)
+                    )
+                fd = os.open(image, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                os.close(fd)
+                await page.screenshot(
+                    path=str(image),
+                    full_page=False,
+                    timeout=2000,
+                    animations="disabled",
+                )
+        except Exception:
+            pass  # Passive evidence must never replace the original login result.
 
     async def run(self):
         self.tasks = [
@@ -1115,8 +1237,12 @@ class DouyinLoginV2:
                     message="登录会话已超时，请重试",
                 )
         except Exception as exc:
+            if isinstance(exc, ValueError) and str(exc) == "LOGIN_PREPARATION_FAILED":
+                await self.capture_preparing_evidence("preparing_failed")
             self.diagnose_failure(exc)
-            code = str(exc) if isinstance(exc, ValueError) else "BROWSER_LOGIN_FAILED"
+            code = getattr(exc, "code", None) or (
+                str(exc) if isinstance(exc, ValueError) else "BROWSER_LOGIN_FAILED"
+            )
             self.emit(
                 "error", code=code, message="登录未完成，请重试或查看当前登录步骤"
             )
@@ -1132,7 +1258,7 @@ class DouyinLoginV2:
 
 
 async def run_login_v2(args):
-    if args.headed and sys.platform == "linux":
+    if sys.platform == "linux":
         from scripts.crawler_interactive_login import virtual_display
 
         with virtual_display():
