@@ -1,0 +1,18 @@
+
+> xhs-audit-agent-frontend-v2@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v6.4.3 building for production...
+transforming...
+✓ 2000 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                     0.44 kB │ gzip:   0.34 kB
+dist/assets/index-O2HDELHe.css    397.38 kB │ gzip:  65.02 kB
+dist/assets/index-BqD_O270.js   1,037.65 kB │ gzip: 306.67 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.32s

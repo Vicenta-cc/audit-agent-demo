@@ -48,6 +48,14 @@ def compilation_hash(compiled):
 
 def validate_execution_payload(execution):
     """Check duplicated frozen values and the existing compilation hash, offline."""
+    if execution.get("geographic_plan") is not None:
+        from .scope_search_plan import parse_confirmed_scope_search_plan
+        raw = execution["geographic_plan"]
+        plan = parse_confirmed_scope_search_plan(raw, expected_identity=raw.get("identity"),
+            expected_digest=raw.get("plan_digest"))
+        original = {k: v for k, v in execution.items() if k != "geographic_plan"}
+        if not same_payload(original, plan.inputs.resolution.execution.model_dump(mode="json")):
+            raise ValueError("geographic execution differs from frozen plan resolution")
     rules = execution["rule_snapshot"]
     prompts = execution["prompt_profile_snapshot"]
     revision = execution["audit_config_revision"]

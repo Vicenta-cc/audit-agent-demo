@@ -1,0 +1,88 @@
+{
+  "id": "investigation-draft:f0ce9dcc74664fdea2f5ad45c9aa58b4",
+  "current_revision": 1,
+  "title": "克拉玛依欠薪舆情调查",
+  "objective": "在抖音调查克拉玛依欠薪相关舆情",
+  "status": "DRAFT",
+  "configuration": {
+    "investigation": {
+      "mode": "search",
+      "recall_plan": {
+        "enabled_main_terms": [
+          "舆情事件"
+        ],
+        "expected_runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+        "lexicon_id": "custom_f43c26f2445a4a0e",
+        "strategy": "existing_lexicon"
+      }
+    },
+    "judgement": {
+      "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+      "expected_ruleset_version": 1,
+      "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+      "strategy": "existing_ruleset"
+    },
+    "platform": "dy",
+    "relevance_scope": {
+      "content_unit": "parent_post_event",
+      "province": {
+        "aliases": [
+          "新疆"
+        ],
+        "name": "新疆维吾尔自治区"
+      },
+      "schema_version": "geo-scope-v1",
+      "selection_policy": "local_first_with_supplement",
+      "target": {
+        "aliases": [
+          "克拉玛依"
+        ],
+        "name": "克拉玛依市"
+      },
+      "topic": null
+    },
+    "relevance_scope_state": {
+      "application_turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20",
+      "candidates": [
+        {
+          "kind": "地级市",
+          "level": "prefecture",
+          "name": "克拉玛依市",
+          "province_name": "新疆维吾尔自治区"
+        }
+      ],
+      "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+      "copied_from_draft_id": "",
+      "draft_id": "investigation-draft:f0ce9dcc74664fdea2f5ad45c9aa58b4",
+      "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+      "province": {
+        "aliases": [
+          "新疆"
+        ],
+        "name": "新疆维吾尔自治区"
+      },
+      "province_code": "650000",
+      "reason": "",
+      "selection_policy": "local_first_with_supplement",
+      "session_id": "investigation-session:df20bb8a6a7346a9b4429b5c32d28cfe",
+      "source_kind": "conversation",
+      "source_operation_id": "",
+      "source_quote": "在抖音调查克拉玛依的欠薪舆情",
+      "source_sequence": 1,
+      "source_turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20",
+      "source_user_message_id": "investigation-message:5952426ed12e4083908a78cd3bbe43fa",
+      "status": "resolved",
+      "target": {
+        "aliases": [
+          "克拉玛依"
+        ],
+        "name": "克拉玛依市"
+      },
+      "target_code": "650200",
+      "target_level": "prefecture",
+      "target_text": "克拉玛依",
+      "task_anchor_turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20"
+    },
+    "schema_version": "investigation-draft-config-v4"
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "schema_version": "p2-acceptance-risk-context-mismatch-v1",
+  "fixture_only": true,
+  "source_plan": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/example-fixture-plan.json",
+  "source_file_sha256": "f30c33b47de98c29f94a225d1502172ba7ef067fdb2b41c56ea5a0a68463c8cc",
+  "source_plan_digest": "e482b9e4b30b4bfa78cbcba18f4fd47a2a6a3dafb72119b3f76d6da75f2212a8",
+  "source_risk_digest": "5e51d1e9507d2e991c599346789d367787584c7805e5dc64760c77acb6393e62",
+  "source_identity": {
+    "draft_id": "investigation-draft:957862542c3f488594da50b2408af845",
+    "owner": "principal-a",
+    "revision": 3,
+    "session_id": "investigation-session:e4cded0808464c96a9083250d3f53f9d"
+  },
+  "input": {
+    "content_key": "dy:fixture",
+    "rank": 1,
+    "item": {
+      "title": "普通收费咨询",
+      "source_keyword": "维族文化"
+    },
+    "comments": [],
+    "category_ids": [],
+    "search_keyword": "维族文化"
+  },
+  "fixed_manual_response": {
+    "suspicion": "strong",
+    "risk_score": 85,
+    "reason": "fixed manual response",
+    "matched_terms": []
+  },
+  "original_runtime_rules_source": "resolution.execution.prompt_profile_snapshot (pipeline.py:2127-2128,2232-2233)",
+  "frozen_adapter_rules_source": "risk_inputs.rules (authority.py:187 and scope_search_plan.py:382)",
+  "original_runtime": {
+    "rules_keys": [
+      "audit_goal",
+      "category_id",
+      "comment_prompt_template",
+      "compiler_version",
+      "fixed_prompt_chars",
+      "frame_prompt",
+      "fusion_prompt_template",
+      "image_prompt",
+      "libraries",
+      "prompt_version",
+      "schema_version",
+      "stage_rule_ids",
+      "system_template_version"
+    ],
+    "rule_text": "审核目标：Assess recruitment advance fees and fabricated job offers from the supplied evidence.\n",
+    "rule_text_chars": 91,
+    "request_chars": 862,
+    "request_sha256": "328a93719bd155192e82caa7b30a14628ce8b1ea963d57d3dde98856976a3361",
+    "request_kwargs": {
+      "max_tokens": 800,
+      "model": "qwen3.6-flash",
+      "enable_thinking": false,
+      "request_timeout": 60
+    },
+    "score_output": {
+      "content_key": "dy:fixture",
+      "rank": 1,
+      "score": 200,
+      "band": "strong",
+      "reason": "fixed manual response，可疑分 85",
+      "hits": [],
+      "model": {
+        "suspicion": "strong",
+        "risk_score": 85,
+        "reason": "fixed manual response",
+        "matched_terms": [],
+        "locations": []
+      },
+      "engagement": 0,
+      "model_risk": 85
+    }
+  },
+  "frozen_adapter": {
+    "rules_keys": [
+      "decision_rules",
+      "general_exemptions",
+      "schema_version",
+      "scoring_rules",
+      "stage_routes",
+      "temporary_ruleset",
+      "thresholds"
+    ],
+    "rule_text": "",
+    "rule_text_chars": 0,
+    "request_chars": 771,
+    "request_sha256": "ead8c3ccaa0cb8d61369e952b53c016bdfb8b52330a844f8222eb4d005bddf73",
+    "request_kwargs": {
+      "max_tokens": 800,
+      "model": "qwen3.6-flash",
+      "enable_thinking": false,
+      "request_timeout": 60
+    },
+    "score_output": {
+      "content_key": "dy:fixture",
+      "rank": 1,
+      "score": 200,
+      "band": "strong",
+      "reason": "fixed manual response，可疑分 85",
+      "hits": [],
+      "model": {
+        "suspicion": "strong",
+        "risk_score": 85,
+        "reason": "fixed manual response",
+        "matched_terms": [],
+        "locations": []
+      },
+      "engagement": 0,
+      "model_risk": 85
+    }
+  },
+  "requests_equal": false,
+  "note": "Constant manual response can keep scores equal even when the original rule context has vanished; request equality is required.",
+  "search_cap_repro": [
+    {
+      "env_SEARCH_TERMS_MAX": 100,
+      "actual_p1_setting": 100,
+      "confirmed_query_count": 1,
+      "build_status": "accepted",
+      "query_count": 1
+    },
+    {
+      "env_SEARCH_TERMS_MAX": 101,
+      "actual_p1_setting": 101,
+      "confirmed_query_count": 1,
+      "build_status": "rejected",
+      "error": "1 validation error for PlanInputs\nsettings.limits.search_terms_max\n  Input should be less than or equal to 100 [type=less_than_equal, input_value=101, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/less_than_equal"
+    },
+    {
+      "env_SEARCH_TERMS_MAX": 200,
+      "actual_p1_setting": 200,
+      "confirmed_query_count": 1,
+      "build_status": "rejected",
+      "error": "1 validation error for PlanInputs\nsettings.limits.search_terms_max\n  Input should be less than or equal to 100 [type=less_than_equal, input_value=200, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/less_than_equal"
+    }
+  ],
+  "search_cap_source": "backend/audit_agent/config.py:251 permits 1..200; scope_search_plan.py:128 rejects above100",
+  "manual_client_calls": 2,
+  "real_model_calls": 0,
+  "sqlite_connections": 0,
+  "guard_attempts": [],
+  "business_source_changes": false,
+  "tests_changed": false
+}

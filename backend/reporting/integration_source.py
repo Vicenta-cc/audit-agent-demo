@@ -237,6 +237,32 @@ class CanonicalReportSource:
             raise ValueError("canonical audit rows contain duplicate content keys")
         return rows
 
+    def geographic_context(self, row) -> dict[str, Any] | None:
+        """Freeze the source Job's delivered selection, independently of risk totals."""
+        from backend.audit_agent.geographic_delivery import delivery_basis_from_connection
+        source_job_id = str(row["job_id"])
+        with self.connect() as connection:
+            job = connection.execute("SELECT control FROM jobs WHERE id=?", (source_job_id,)).fetchone()
+            control = json.loads(job["control"] or "{}") if job else {}
+            summary = control.get("geographic_selection")
+            if summary is None:
+                return None
+            if not isinstance(summary, dict):
+                raise ValueError("invalid geographic coverage")
+            bases = delivery_basis_from_connection(connection, source_job_id)
+        matches = [basis for basis in bases if basis.get("source_job_id") == source_job_id
+                   and basis.get("content_key") == str(row["content_key"])]
+        if len(matches) != 1:
+            raise ValueError("geographic report requires exactly one delivered selection basis")
+        basis = matches[0]
+        if basis.get("plan_digest") != summary.get("plan_digest"):
+            raise ValueError("geographic report plan binding mismatch")
+        public_keys = ("candidate_occurrences", "excluded_occurrences", "ineligible_occurrences",
+                       "geographic_pending_or_conflict", "reserved", "collected", "handed_off",
+                       "collected_not_delivered", "unfinished_queries", "reasons")
+        return {"coverage": {"source_job_id": source_job_id, **{key: summary.get(key) for key in public_keys}},
+                "selection_basis": basis}
+
     def coverage(self, task_id: str) -> dict[str, Any]:
         """Return public, sanitized coverage for completed and failed posts."""
         with self.connect() as connection:
@@ -385,6 +411,7 @@ def build_immutable_snapshot(
     counter_count = 0
     legacy_image_count = 0
     manual_matches = 0
+    geographic_coverage = {}
 
     for row in rows:
         result = _json(row["result_json"], {})
@@ -513,6 +540,18 @@ def build_immutable_snapshot(
             "raw_content_payload": result,
             "comments": comments,
         }
+        geographic_reader = getattr(source, "geographic_context", None)
+        geographic = geographic_reader(row) if callable(geographic_reader) else None
+        if geographic is not None:
+            basis = geographic["selection_basis"]
+            if (basis.get("source_job_id"), basis.get("content_key")) != (str(row["job_id"]), canonical_key):
+                raise ValueError("geographic selection source identity mismatch")
+            post_payload["selection_basis"] = basis
+            source_job_id = str(row["job_id"])
+            coverage_value = geographic["coverage"]
+            if source_job_id in geographic_coverage and geographic_coverage[source_job_id] != coverage_value:
+                raise ValueError("geographic coverage changed during report freeze")
+            geographic_coverage[source_job_id] = coverage_value
         if hasattr(source, "provenance_for_row"):
             post_payload["source_provenance"] = source.provenance_for_row(row)
         posts.append(
@@ -608,6 +647,8 @@ def build_immutable_snapshot(
         "risk_level": dict(sorted(risk_levels.items())),
         "manual_corrections": manual_matches,
     }
+    if geographic_coverage:
+        statistics["geographic_coverage"] = [geographic_coverage[key] for key in sorted(geographic_coverage)]
     coverage_source = getattr(source, "coverage", None)
     coverage = coverage_source(task_id) if callable(coverage_source) else coverage_source
     if isinstance(coverage, dict):
@@ -631,6 +672,8 @@ def build_immutable_snapshot(
     }
     if isinstance(coverage, dict):
         snapshot_body["source_configuration_hash"] = stable_hash(config)
+    if geographic_coverage:
+        snapshot_body["geographic_coverage_hash"] = stable_hash(statistics["geographic_coverage"])
     snapshot_hash = stable_hash(snapshot_body)
     return ImmutableReportSnapshot(
         snapshot_ref=f"snapshot-{snapshot_hash[:16]}",

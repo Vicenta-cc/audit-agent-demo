@@ -1,0 +1,53 @@
+{
+  "risk_binding": {
+    "ordinary_band": "weak",
+    "current_official_band": "discard",
+    "swapped_tier": "local",
+    "report": {
+      "execution_id": "execution-fixture",
+      "plan_digest": "c72ea1904ba64e227a10b6b85c9769db4595607ab4f44e0b18bdb67e15d1205b",
+      "validation_origin": "fixture",
+      "candidate_occurrences": 1,
+      "excluded_occurrences": 0,
+      "ineligible_occurrences": 0,
+      "geographic_pending_or_conflict": 0,
+      "reserved": 0,
+      "collected": 1,
+      "handed_off": 1,
+      "collected_not_delivered": 0,
+      "unfinished_queries": [],
+      "reasons": [
+        "task_success_limit"
+      ]
+    }
+  },
+  "rejected_delivery": {
+    "report": {
+      "execution_id": "execution-fixture",
+      "plan_digest": "c72ea1904ba64e227a10b6b85c9769db4595607ab4f44e0b18bdb67e15d1205b",
+      "validation_origin": "fixture",
+      "candidate_occurrences": 1,
+      "excluded_occurrences": 0,
+      "ineligible_occurrences": 0,
+      "geographic_pending_or_conflict": 0,
+      "reserved": 0,
+      "collected": 1,
+      "handed_off": 1,
+      "collected_not_delivered": 0,
+      "unfinished_queries": [],
+      "reasons": [
+        "task_success_limit"
+      ]
+    },
+    "saved_statuses": [
+      "rejected"
+    ]
+  },
+  "offline_guard": {
+    "network_attempts": 0,
+    "process_attempts": 0,
+    "real_model_attempts": 0,
+    "crawler_launch_attempts": 0,
+    "forbidden_database_attempts": 0
+  }
+}

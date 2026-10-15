@@ -1,3 +1,4 @@
+import { GeographicReportEvidence, GeographicPostBasis } from "./GeographicReportEvidence";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -1011,6 +1012,7 @@ function PostDetailDrawer({ reportVersionId, postRef, onClose }: { reportVersion
         <>
           <div className="r31-post-detail-head"><div><h3>{detail.title}</h3>{detail.author_display_name ? <span>作者：{detail.author_display_name}</span> : null}</div><RiskTag risk={detail.risk_level} /></div>
           <ReportPostSourceDetails detail={detail} reportVersionId={reportVersionId} />
+          <GeographicPostBasis basis={detail.selection_basis} />
           {detail.content_summary ? <section className="r31-drawer-section"><h3>内容摘要</h3><p>{detail.content_summary}</p></section> : null}
           <section className="r31-drawer-section"><h3>审核结论</h3><p>{decisionLabels[detail.decision] ? `${decisionLabels[detail.decision]} · ` : ""}{riskLabels[detail.risk_level] || "未分级"}</p><p>{detail.audit_summary || "原审核结果未提供文字说明。"}</p></section>
           {detail.direct_evidence.length ? <section className="r31-drawer-section"><h3>直接研判依据</h3><EvidenceList items={detail.direct_evidence} /></section> : null}
@@ -1135,6 +1137,8 @@ export function InvestigationReportPage() {
               {report.report_metadata.platform.status === "available" ? <div><dt>调查平台</dt><dd>{report.report_metadata.platform.label}</dd></div> : null}
             </dl>
           </header>
+
+          <GeographicReportEvidence coverage={report.statistics.geographic_coverage} basis={report.statistics.selection_basis} />
 
           {rootSections.map((section) => (
             <ReportSection

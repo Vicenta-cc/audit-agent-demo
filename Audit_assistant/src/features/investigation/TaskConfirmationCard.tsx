@@ -1,3 +1,4 @@
+import { RelevanceScopeEditor } from "./RelevanceScopeEditor";
 import { AlertTriangle, Edit3, ExternalLink, FileText, Play, ShieldCheck } from "lucide-react";
 import type { TaskDraft } from "../../types/investigation";
 import type { ConfirmationPreview } from "../../types/investigationCreation";
@@ -14,6 +15,8 @@ interface TaskConfirmationCardProps {
   preview?: ConfirmationPreview;
   onOpenKeywordEditor?: () => void;
   isConfirming?: boolean;
+  onSaveRelevanceScope?: (targetText: string, operationId: string, clarificationTargetText?: string) => Promise<void>;
+  relevanceScopeDisabled?: boolean;
   error?: string;
 }
 
@@ -24,6 +27,8 @@ export function TaskConfirmationCard({
   preview,
   onOpenKeywordEditor,
   isConfirming = false,
+  onSaveRelevanceScope,
+  relevanceScopeDisabled,
   error = ""
 }: TaskConfirmationCardProps) {
   const view = buildConfirmationCardView(draft, preview);
@@ -37,6 +42,8 @@ export function TaskConfirmationCard({
         </div>
         <span className="task-final-ready-state">等待确认</span>
       </div>
+
+      <RelevanceScopeEditor preview={preview} onSave={onSaveRelevanceScope} disabled={relevanceScopeDisabled} />
 
       <div className="task-final-fields">
         <div className="task-final-field">
@@ -93,6 +100,7 @@ export function TaskConfirmationCard({
           </>
         ) : null}
       </div>
+
 
       {preview?.effective_parameters ? <p aria-label="本次使用的统一设置">
         本次使用统一采集与分析设置：{preview.effective_parameters.max_items_per_minute} 条/分钟；

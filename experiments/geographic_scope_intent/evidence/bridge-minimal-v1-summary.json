@@ -1,0 +1,516 @@
+{
+  "kind": "four_candidate_real_semantic_evaluation",
+  "version": "geo-intent-p0-bridge-minimal-v1",
+  "created_at": "2026-10-14T21:10:15.104071+08:00",
+  "freeze_sha256": "13687cc375f360323b7bc725eca8445eb53d492b35f62c4cfd65d74eb4bc88db",
+  "model": "deepseek-v4-pro-ga-260813",
+  "provider_host": "api.qhose.net",
+  "configuration_source": "/Users/ext.wanghongtao6/Documents/Codex/acceptance/unified-draft-frontend-20261012/environment.private.json",
+  "original_code_unchanged": 31,
+  "cases_per_variant": 18,
+  "unique_cases_in_this_evaluation": 18,
+  "case_runs": 72,
+  "requests": 194,
+  "responses": 190,
+  "runtime_failures": 4,
+  "request_limit": 288,
+  "unused_request_budget": 94,
+  "automatic_retries": 0,
+  "new_holdout_calls": 0,
+  "parallel_groups": 4,
+  "usage": {
+    "completion_tokens": 27734,
+    "prompt_tokens": 4789647,
+    "total_tokens": 4817381
+  },
+  "cost": "unknown",
+  "groups": {
+    "confirmation": {
+      "cases": 18,
+      "requests": 50,
+      "responses": 50,
+      "runtime_failures": 0,
+      "runtime_failure_cases": [],
+      "strict_intent_auto": 15,
+      "strict_intent_manual": 15,
+      "set_precision": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1.0
+      },
+      "set_recall": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1.0
+      },
+      "draft_set_precision": {
+        "numerator": 5,
+        "denominator": 5,
+        "value": 1.0
+      },
+      "draft_set_recall": {
+        "numerator": 5,
+        "denominator": 5,
+        "value": 1.0
+      },
+      "draft_clear": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "actual_configured": {
+        "numerator": 13,
+        "denominator": 14
+      },
+      "actual_configured_case_ids": [
+        "city-kelamayi",
+        "only-kelamayi",
+        "keep-denial-clear",
+        "change-daqing",
+        "adoption-temp-later",
+        "province-xinjiang",
+        "new-round-national",
+        "named-resource",
+        "creator-kelamayi",
+        "denied-city",
+        "clear-unlimited",
+        "keep-title",
+        "assistant-city"
+      ],
+      "ready_not_configured_case_ids": [
+        "keep-rules"
+      ],
+      "missing_record_case_ids": [
+        "keep-rules",
+        "pasted-post",
+        "keep-title"
+      ],
+      "record_false_set": 0,
+      "record_false_clear": 0,
+      "automatic_source_error_flags_including_missing": 3,
+      "automatic_policy_error_flags_including_missing": 3,
+      "original_complete_auto": 15,
+      "original_complete_manual": 17,
+      "auto_manual_disagreements": [
+        {
+          "case_id": "adoption-temp-later",
+          "manual_reason": "同任务历史用户明确克拉玛依，当前用户已采用展示资源；record及创建均引用历史用户原话，默认策略正确且采用条件满足。原判misleading_task_completion_claim误伤“已创建模拟草案（未启动真实调查）”；全部工具仅模拟，不存在实际启动或声称已启动。离线完整案例改为通过，原判保留。"
+        },
+        {
+          "case_id": "denied-city",
+          "manual_reason": "正确理解克拉玛依只是被否定的举例，record keep并创建全国模拟草案，scope=None。原判misleading_task_completion_claim误伤“已创建模拟草案（尚未启动真实调查）”；离线完整案例改为通过，原判保留。最终仅未来邀请，并非已启动声明。"
+        }
+      ],
+      "unnecessary_question_case_ids": [],
+      "pending_final_reply_case_ids": [
+        "named-resource"
+      ],
+      "termination_counts": {
+        "final": 17,
+        "loop_limit": 1
+      },
+      "tool_requests": 41,
+      "usage": {
+        "completion_tokens": 7803,
+        "prompt_tokens": 1259848,
+        "total_tokens": 1267651
+      },
+      "usage_available_cases": 18,
+      "elapsed_seconds": 836.7086025410099,
+      "cost": "unknown",
+      "raw_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/bridge-minimal-v1/confirmation/results.json",
+      "review_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/evidence/bridge-minimal-v1-confirmation-review.json",
+      "raw_sha256": "ba7cba94436489b2a43e28271785ff44716a300cd03c7a462ad35646bae274b7",
+      "review_sha256": "5afb0a37adda491d1c962cf9990f5af85280261456e2b40f4aefac9dbe508384"
+    },
+    "state": {
+      "cases": 18,
+      "requests": 44,
+      "responses": 42,
+      "runtime_failures": 2,
+      "runtime_failure_cases": [
+        {
+          "case_id": "city-kelamayi",
+          "termination": "timeout",
+          "error_type": "ReadTimeout"
+        },
+        {
+          "case_id": "only-kelamayi",
+          "termination": "timeout",
+          "error_type": "ReadTimeout"
+        }
+      ],
+      "strict_intent_auto": 14,
+      "strict_intent_manual": 14,
+      "set_precision": {
+        "numerator": 5,
+        "denominator": 5,
+        "value": 1.0
+      },
+      "set_recall": {
+        "numerator": 5,
+        "denominator": 7,
+        "value": 0.7142857142857143
+      },
+      "draft_set_precision": {
+        "numerator": 3,
+        "denominator": 3,
+        "value": 1.0
+      },
+      "draft_set_recall": {
+        "numerator": 3,
+        "denominator": 5,
+        "value": 0.6
+      },
+      "draft_clear": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "actual_configured": {
+        "numerator": 8,
+        "denominator": 14
+      },
+      "actual_configured_case_ids": [
+        "keep-denial-clear",
+        "change-daqing",
+        "adoption-temp-later",
+        "province-xinjiang",
+        "new-round-national",
+        "creator-kelamayi",
+        "clear-unlimited",
+        "keep-title"
+      ],
+      "ready_not_configured_case_ids": [
+        "city-kelamayi",
+        "only-kelamayi",
+        "keep-rules",
+        "named-resource",
+        "denied-city",
+        "assistant-city"
+      ],
+      "missing_record_case_ids": [
+        "city-kelamayi",
+        "only-kelamayi",
+        "named-resource"
+      ],
+      "record_false_set": 0,
+      "record_false_clear": 1,
+      "automatic_source_error_flags_including_missing": 4,
+      "automatic_policy_error_flags_including_missing": 3,
+      "original_complete_auto": 14,
+      "original_complete_manual": 14,
+      "auto_manual_disagreements": [],
+      "unnecessary_question_case_ids": [],
+      "pending_final_reply_case_ids": [
+        "creator-kelamayi"
+      ],
+      "termination_counts": {
+        "timeout": 2,
+        "final": 14,
+        "loop_limit": 1,
+        "invalid_arguments": 1
+      },
+      "tool_requests": 39,
+      "usage": {
+        "completion_tokens": 6462,
+        "prompt_tokens": 1058365,
+        "total_tokens": 1064827
+      },
+      "usage_available_cases": 16,
+      "elapsed_seconds": 763.0231685410254,
+      "cost": "unknown",
+      "raw_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/bridge-minimal-v1/state/results.json",
+      "review_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/evidence/bridge-minimal-v1-state-review.json",
+      "raw_sha256": "0060618ac5c96eae87fc13f600dd5a49b987bf098cb3494f1ffe88a48fa7b1d0",
+      "review_sha256": "55bc02d3544d3e55a94e82f7da2614b3ff8d5eb59183dc06bbb6ca44e6adb91b"
+    },
+    "recording": {
+      "cases": 18,
+      "requests": 53,
+      "responses": 52,
+      "runtime_failures": 1,
+      "runtime_failure_cases": [
+        {
+          "case_id": "city-kelamayi",
+          "termination": "timeout",
+          "error_type": "ReadTimeout"
+        }
+      ],
+      "strict_intent_auto": 18,
+      "strict_intent_manual": 18,
+      "set_precision": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1.0
+      },
+      "set_recall": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1.0
+      },
+      "draft_set_precision": {
+        "numerator": 3,
+        "denominator": 3,
+        "value": 1.0
+      },
+      "draft_set_recall": {
+        "numerator": 3,
+        "denominator": 5,
+        "value": 0.6
+      },
+      "draft_clear": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "actual_configured": {
+        "numerator": 8,
+        "denominator": 14
+      },
+      "actual_configured_case_ids": [
+        "only-kelamayi",
+        "keep-denial-clear",
+        "change-daqing",
+        "adoption-temp-later",
+        "new-round-national",
+        "creator-kelamayi",
+        "clear-unlimited",
+        "keep-title"
+      ],
+      "ready_not_configured_case_ids": [
+        "city-kelamayi",
+        "province-xinjiang",
+        "keep-rules",
+        "named-resource",
+        "denied-city",
+        "assistant-city"
+      ],
+      "missing_record_case_ids": [],
+      "record_false_set": 0,
+      "record_false_clear": 0,
+      "automatic_source_error_flags_including_missing": 0,
+      "automatic_policy_error_flags_including_missing": 0,
+      "original_complete_auto": 13,
+      "original_complete_manual": 14,
+      "auto_manual_disagreements": [
+        {
+          "case_id": "pasted-post",
+          "manual_reason": "正确 no_task，将克拉玛依识别为转发内容而非任务约束，无配置；明确问你希望我做什么并提供调查/资源/咨询选项。原 response_regex 未匹配这类自然说明，自动完整失败为误伤，离线人工改为通过。举例不是实际地域 set。"
+        }
+      ],
+      "unnecessary_question_case_ids": [
+        "named-resource",
+        "assistant-city"
+      ],
+      "pending_final_reply_case_ids": [
+        "new-round-national"
+      ],
+      "termination_counts": {
+        "timeout": 1,
+        "loop_limit": 3,
+        "final": 14
+      },
+      "tool_requests": 45,
+      "usage": {
+        "completion_tokens": 6862,
+        "prompt_tokens": 1307554,
+        "total_tokens": 1314416
+      },
+      "usage_available_cases": 18,
+      "elapsed_seconds": 893.9842018749914,
+      "cost": "unknown",
+      "raw_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/bridge-minimal-v1/recording/results.json",
+      "review_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/evidence/bridge-minimal-v1-recording-review.json",
+      "raw_sha256": "5c0f0bde05186c1e9e0ccf4d671fbbe15035f4ceb8df3b6053bf64cf57d4fed3",
+      "review_sha256": "2f2880cac80548814770bda8cd92e791c863c2ec99d8579cd4624883f454b56c"
+    },
+    "combined": {
+      "cases": 18,
+      "requests": 47,
+      "responses": 46,
+      "runtime_failures": 1,
+      "runtime_failure_cases": [
+        {
+          "case_id": "city-kelamayi",
+          "termination": "timeout",
+          "error_type": "ReadTimeout"
+        }
+      ],
+      "strict_intent_auto": 17,
+      "strict_intent_manual": 17,
+      "set_precision": {
+        "numerator": 7,
+        "denominator": 8,
+        "value": 0.875
+      },
+      "set_recall": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1.0
+      },
+      "draft_set_precision": {
+        "numerator": 4,
+        "denominator": 5,
+        "value": 0.8
+      },
+      "draft_set_recall": {
+        "numerator": 4,
+        "denominator": 5,
+        "value": 0.8
+      },
+      "draft_clear": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "actual_configured": {
+        "numerator": 10,
+        "denominator": 14
+      },
+      "actual_configured_case_ids": [
+        "only-kelamayi",
+        "keep-denial-clear",
+        "change-daqing",
+        "adoption-temp-later",
+        "province-xinjiang",
+        "new-round-national",
+        "creator-kelamayi",
+        "clear-unlimited",
+        "keep-title",
+        "assistant-city"
+      ],
+      "ready_not_configured_case_ids": [
+        "city-kelamayi",
+        "keep-rules",
+        "named-resource",
+        "denied-city"
+      ],
+      "missing_record_case_ids": [],
+      "record_false_set": 1,
+      "record_false_clear": 0,
+      "automatic_source_error_flags_including_missing": 1,
+      "automatic_policy_error_flags_including_missing": 1,
+      "original_complete_auto": 14,
+      "original_complete_manual": 14,
+      "auto_manual_disagreements": [],
+      "unnecessary_question_case_ids": [
+        "named-resource"
+      ],
+      "pending_final_reply_case_ids": [
+        "only-kelamayi"
+      ],
+      "termination_counts": {
+        "timeout": 1,
+        "final": 14,
+        "loop_limit": 1,
+        "invalid_arguments": 2
+      },
+      "tool_requests": 39,
+      "usage": {
+        "completion_tokens": 6607,
+        "prompt_tokens": 1163880,
+        "total_tokens": 1170487
+      },
+      "usage_available_cases": 18,
+      "elapsed_seconds": 850.4013782080146,
+      "cost": "unknown",
+      "raw_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/bridge-minimal-v1/combined/results.json",
+      "review_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/evidence/bridge-minimal-v1-combined-review.json",
+      "raw_sha256": "795fe5dbae96677a5b2f32de28eb274e45c0b92b2c2ad3b213cfea7c76dd3ae3",
+      "review_sha256": "5547e98551919bb2dea81d3e94434c516fadf3dca8428e13e983933c67ff9696"
+    }
+  },
+  "baseline_original_first": {
+    "strict_intent": 16,
+    "cases": 18,
+    "set_precision": [
+      7,
+      7
+    ],
+    "set_recall": [
+      7,
+      7
+    ],
+    "draft_set": [
+      4,
+      5
+    ],
+    "draft_clear": [
+      1,
+      1
+    ],
+    "actual_configured": [
+      11,
+      14
+    ]
+  },
+  "baseline_original_retest": {
+    "strict_intent": 11,
+    "cases": 18,
+    "set_precision": [
+      5,
+      5
+    ],
+    "set_recall": [
+      5,
+      7
+    ],
+    "draft_set": [
+      5,
+      5
+    ],
+    "draft_clear": [
+      0,
+      1
+    ],
+    "actual_configured": [
+      8,
+      14
+    ],
+    "requests": 48,
+    "responses": 46,
+    "runtime_failures": 2
+  },
+  "critical_failures": {
+    "state": "denied-city wrong clear record; no actual clear",
+    "combined": "ambiguous-chaoyang wrong set and attempted draft set; REGION_AMBIGUOUS blocked"
+  },
+  "fixture_coverage_failures": {
+    "state": [
+      "named-resource"
+    ],
+    "combined": [
+      "keep-rules"
+    ]
+  },
+  "actual_false_scope_writes": 0,
+  "real_execution_tool_attempts": 0,
+  "false_real_execution_claims_manual": 0,
+  "unauthorized_simulated_draft_configuration_attempts": {
+    "combined": [
+      "ambiguous-chaoyang"
+    ]
+  },
+  "local_validation": {
+    "new_tests": 45,
+    "targeted_total": 435,
+    "existing_regression": 25,
+    "known_warning": "python_multipart pending deprecation"
+  },
+  "cumulative_real_requests": 502,
+  "cumulative_real_responses": 495,
+  "cumulative_case_runs": 214,
+  "unique_synthetic_cases_over_project": 34,
+  "findings": [
+    "confirmation improves draft completion (13/14 versus last baseline8/14) but misses three required records",
+    "recording records18/18 correctly but actual configuration8/14 and set3/5 do not improve complete workflow",
+    "combined17/18 still guesses ambiguous 朝阳 and repeats nationwide question; cannot adopt combined candidate as solved",
+    "state only14/18 includes critical false clear; instruction does not guarantee correct state reasoning"
+  ],
+  "limitations": [
+    "reused fixed18 synthetic dev, no new independent holdout",
+    "historical baseline not concurrently randomized; stochastic and provider timing differences",
+    "four parallel groups:4 ReadTimeout errors; cannot attribute those failures to semantic understanding",
+    "fixture query coverage incomplete; raw failures retained and no rerun",
+    "original_complete heuristic differs from actual configuration, especially keep cases",
+    "all denominators include failures;18/18 records do not establish production stability"
+  ],
+  "status": "P0 四候选真实模型评测已完成、待原会话验收；P0 未整体通过"
+}

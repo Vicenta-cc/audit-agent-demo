@@ -9,6 +9,7 @@ from backend.resource_management.generation import _validate_content, generation
 from backend.resource_management.generation_contracts import ResourceGenerationRequest
 from backend.resource_management.lexicon_authoring import GeneratedLexicon
 from backend.rulesets.contracts import RuleSetContent
+from backend.resource_management.ruleset_authoring import GeneratedRuleSet
 from test_resource_generation import REQUEST, authoring_lexicon, generator, lexicon
 from test_ruleset_proposal_presentation import content
 
@@ -129,7 +130,8 @@ def test_validation_reports_exact_stage_and_constraint(body, stage, constraint):
     details = caught.value.details
     assert details['validation_stage'] == stage
     assert details['validation_errors'][0]['constraint'] == constraint
-    assert not details['mutation_applied'] and not details['retryable']
+    assert not details['mutation_applied'] and details['retryable']
+    assert details['generation_stage'] == 'validation'
 
 
 @pytest.mark.parametrize('overrides,reason', [
@@ -154,7 +156,7 @@ def test_diagnostics_log_fields_not_raw_response_and_optional_private_sink(caplo
         gen.generate('lexicon', ResourceGenerationRequest(**REQUEST))
     details = caught.value.details
     assert details['http_status'] == 200 and details['finish_reason'] == 'stop'
-    assert details['authoring_version'] == '3'
+    assert details['authoring_version'] == '4'
     assert details['provider_request_id'] == 'provider-request'
     assert len(details['response_hash']) == 64 and details['diagnostic_id']
     assert marker not in json.dumps(details) and marker not in caplog.text
@@ -185,7 +187,35 @@ def test_malformed_json_retains_diagnostics_without_echoing_input():
     assert 'PRIVATE_INPUT' not in str(caught.value.details)
 
 
-def test_diagnostics_do_not_change_rule_output_contract(content):
+def test_legacy_generated_rules_preserve_semantics_with_backend_owned_identity(content):
     gen, _, _ = generator(content)
     result = gen.generate('ruleset', ResourceGenerationRequest(**REQUEST))
-    assert result == RuleSetContent.model_validate(content)
+    assert result == GeneratedRuleSet.from_content(RuleSetContent.model_validate(content)).to_content()
+
+
+@pytest.mark.parametrize('location', ['theme', 'variant', 'alternative', 'tag'])
+def test_global_duplicate_diagnostics_identify_both_paths_without_term_text(location):
+    body = authoring_lexicon(2)
+    word = body['themes'][0]['variants'][0]['term']
+    if location == 'theme':
+        body['themes'].append({'term': word, 'variants': [{'term': '另一个词'}]})
+        expected = ['themes', 1]
+    elif location == 'variant':
+        body['themes'][0]['variants'][1]['term'] = word
+        expected = ['themes', 0, 'variants', 1]
+    elif location == 'alternative':
+        body['themes'][0]['alternatives'] = [{'term': word}]
+        expected = ['themes', 0, 'alternatives', 0]
+    else:
+        body['tags'] = [{'term': word}]
+        expected = ['tags', 0]
+    before = json.dumps(body)
+    with pytest.raises(ResourceError) as caught:
+        parse(body)
+    details = caught.value.details
+    error = details['validation_errors'][0]
+    assert error['constraint'] == 'duplicate_term_platform_match_type'
+    assert error['path'] == expected
+    assert error['conflicts_with'] == ['themes', 0, 'variants', 0]
+    assert word not in json.dumps(details, ensure_ascii=False)
+    assert json.dumps(body) == before

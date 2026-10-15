@@ -1,0 +1,41 @@
+[
+  {
+    "code": "710000",
+    "name": "台湾省",
+    "level": "province",
+    "kind": "省",
+    "province_code": "710000",
+    "aliases": [
+      "台湾"
+    ],
+    "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+    "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm",
+    "evidence_note": "人工结构化转录：芜湖统计局2016-07-31代码表证明名称代码；中联办2014-01-04页面证明短名称。不是官方原始JSON；与交通部2024上传PDF交叉印证，发布日期不等于生效日期。"
+  },
+  {
+    "code": "810000",
+    "name": "香港特别行政区",
+    "level": "province",
+    "kind": "特别行政区",
+    "province_code": "810000",
+    "aliases": [
+      "香港"
+    ],
+    "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+    "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm",
+    "evidence_note": "人工结构化转录：芜湖统计局2016-07-31代码表证明名称代码；中联办2014-01-04页面证明短名称。不是官方原始JSON；与交通部2024上传PDF交叉印证，发布日期不等于生效日期。"
+  },
+  {
+    "code": "820000",
+    "name": "澳门特别行政区",
+    "level": "province",
+    "kind": "特别行政区",
+    "province_code": "820000",
+    "aliases": [
+      "澳门"
+    ],
+    "evidence_url": "https://tjj.wuhu.gov.cn/xwzx/ztzl/tjcd/tjbz/7765477.html",
+    "alias_evidence_url": "https://www.locpg.gov.cn/zggq/2014-01/04/c_125956269.htm",
+    "evidence_note": "人工结构化转录：芜湖统计局2016-07-31代码表证明名称代码；中联办2014-01-04页面证明短名称。不是官方原始JSON；与交通部2024上传PDF交叉印证，发布日期不等于生效日期。"
+  }
+]

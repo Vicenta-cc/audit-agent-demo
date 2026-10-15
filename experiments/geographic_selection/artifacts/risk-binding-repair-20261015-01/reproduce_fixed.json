@@ -1,0 +1,54 @@
+{
+  "command": [
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+    "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/reproduce_fixed.py"
+  ],
+  "cases": {
+    "post": {
+      "same_occurrence_id": true,
+      "old_band": "weak",
+      "current_band": "weak",
+      "selector_error": "risk_capture_evidence_mismatch",
+      "execution_error": "risk_capture_evidence_mismatch",
+      "query_status": "failed",
+      "persisted_evaluations": {},
+      "reserved": 0,
+      "collected": 0,
+      "handed_off": 0,
+      "detail_or_delivery_calls": []
+    },
+    "comments": {
+      "same_occurrence_id": true,
+      "old_band": "weak",
+      "current_band": "weak",
+      "selector_error": "risk_capture_evidence_mismatch",
+      "execution_error": "risk_capture_evidence_mismatch",
+      "query_status": "failed",
+      "persisted_evaluations": {},
+      "reserved": 0,
+      "collected": 0,
+      "handed_off": 0,
+      "detail_or_delivery_calls": []
+    },
+    "identity": {
+      "same_occurrence_id": true,
+      "old_band": "weak",
+      "current_band": "discard",
+      "selector_error": "risk_capture_evidence_mismatch",
+      "execution_error": "risk_capture_evidence_mismatch",
+      "query_status": "failed",
+      "persisted_evaluations": {},
+      "reserved": 0,
+      "collected": 0,
+      "handed_off": 0,
+      "detail_or_delivery_calls": []
+    }
+  },
+  "guard_metrics": {
+    "network_attempts": 0,
+    "process_attempts": 0,
+    "real_model_attempts": 0,
+    "crawler_launch_attempts": 0,
+    "forbidden_database_attempts": 0
+  }
+}

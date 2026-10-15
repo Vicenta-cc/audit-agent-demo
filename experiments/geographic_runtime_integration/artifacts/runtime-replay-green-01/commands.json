@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+    "-m",
+    "experiments.geographic_runtime_integration.run_offline",
+    "--worker",
+    "--output-dir",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_runtime_integration/artifacts/runtime-replay-green-01",
+    "tests/test_geographic_runtime_delivery.py::test_new_process_recovers_only_current_evidence"
+  ],
+  "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo",
+  "guard_installed_before_collection": true,
+  "allowed_database_roots": [
+    "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/geographic-runtime-n_5pvt_e",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_runtime_integration/artifacts/runtime-replay-green-01"
+  ],
+  "bootstrap": "from experiments.geographic_runtime_integration.run_offline import bootstrap\nbootstrap()\n"
+}

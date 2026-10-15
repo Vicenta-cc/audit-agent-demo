@@ -6,8 +6,10 @@ import type {
   InvestigationDraftSuggestion,
   PublicInvestigationDraft
 } from "../../types/investigationCreation";
+import { buildRelevanceScopeView } from "./confirmationView";
 import { InvestigationKeywordEditor } from "./InvestigationKeywordEditor";
 import { DraftResourceSave } from "./DraftResourceSave";
+import { GeographicSelectionPanel } from "./GeographicSelectionPanel";
 import { reportMetricTone, type ReportMetricTone } from "./reportMetricTone";
 
 const METRIC_TONE_COLORS: Record<ReportMetricTone, string> = {
@@ -29,6 +31,7 @@ export type DrawerType =
 
 interface InvestigationContextDrawerProps {
   isOpen: boolean;
+  geographicRunId?: string;
   type: DrawerType;
   onClose: () => void;
   draft?: TaskDraft;
@@ -67,6 +70,7 @@ export function buildDraftSuggestionPlanView(
 
 export function InvestigationContextDrawer({
   isOpen,
+  geographicRunId,
   type,
   onClose,
   draft,
@@ -83,6 +87,7 @@ export function InvestigationContextDrawer({
   onFollowUpUser
 }: InvestigationContextDrawerProps) {
   if (!isOpen || !type) return null;
+  const relevanceScope = buildRelevanceScopeView(confirmationPreview || creationDraft?.configuration);
   const draftSuggestionPlan = draftSuggestion
     ? buildDraftSuggestionPlanView(draftSuggestion)
     : null;
@@ -150,6 +155,16 @@ export function InvestigationContextDrawer({
                 <p style={{ fontSize: "12px", lineHeight: "1.7", color: "#64748b", marginTop: "6px" }}>{confirmationPreview.search_terms_notice}</p>
               ) : null}
             </div>
+
+            {relevanceScope ? <section aria-label="调查地域配置" style={{ fontSize: "13px", lineHeight: "1.75", color: "#334155" }}>
+              <div><strong>{relevanceScope.pending ? "最新地域要求（待澄清）" : "调查地域"}：</strong>{relevanceScope.target}</div>
+              {relevanceScope.policy ? <div>选择策略：{relevanceScope.policy}</div> : null}
+              {relevanceScope.reason ? <div>待澄清原因：{relevanceScope.reason}</div> : null}
+              {relevanceScope.candidates ? <div>候选地域：{relevanceScope.candidates}</div> : null}
+              <p>{relevanceScope.notice}</p>
+            </section> : null}
+
+            {relevanceScope && geographicRunId ? <GeographicSelectionPanel key={geographicRunId} runId={geographicRunId} /> : null}
 
             {draft.historyNotice ? <p style={{ fontSize: "12px", lineHeight: "1.7", color: "#64748b" }}>{draft.historyNotice}</p> : null}
             {draft.historicalConfiguration?.map((detail) => (

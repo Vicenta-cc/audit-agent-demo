@@ -1,0 +1,79 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_ test_configure_mixed_batch_is_atomically_rejected_without_draft_change[configure] _
+
+extra = 'configure'
+
+    @pytest.mark.parametrize('extra', ['configure', 'read', 'execution'])
+    def test_configure_mixed_batch_is_atomically_rejected_without_draft_change(extra):
+        c = case('keep-title')
+        first_write = tool('configure_investigation_draft', update(c, title='第一次改动'), 'first-write')
+        extra_call = {
+            'configure': tool('configure_investigation_draft', update(c, title='第二次改动'), 'second-write'),
+            'read': tool('query_investigation_options', {}, 'read-after-write'),
+            'execution': tool('confirm_and_queue_investigation', {}, 'start-after-write'),
+        }[extra]
+        trace = run_bridge_case(c, ScriptedProvider([
+            reply(tool('record_geographic_intent', {'action': 'keep'}, 'record')),
+            reply(first_write, extra_call),
+        ]))
+>       assert trace['termination'] == 'invalid_arguments'
+E       AssertionError: assert 'tool_error' == 'invalid_arguments'
+E         
+E         - invalid_arguments
+E         + tool_error
+
+tests/test_geographic_scope_bridge_handoff.py:344: AssertionError
+_ test_configure_mixed_batch_is_atomically_rejected_without_draft_change[read] _
+
+extra = 'read'
+
+    @pytest.mark.parametrize('extra', ['configure', 'read', 'execution'])
+    def test_configure_mixed_batch_is_atomically_rejected_without_draft_change(extra):
+        c = case('keep-title')
+        first_write = tool('configure_investigation_draft', update(c, title='第一次改动'), 'first-write')
+        extra_call = {
+            'configure': tool('configure_investigation_draft', update(c, title='第二次改动'), 'second-write'),
+            'read': tool('query_investigation_options', {}, 'read-after-write'),
+            'execution': tool('confirm_and_queue_investigation', {}, 'start-after-write'),
+        }[extra]
+        trace = run_bridge_case(c, ScriptedProvider([
+            reply(tool('record_geographic_intent', {'action': 'keep'}, 'record')),
+            reply(first_write, extra_call),
+        ]))
+>       assert trace['termination'] == 'invalid_arguments'
+E       AssertionError: assert 'draft_ready' == 'invalid_arguments'
+E         
+E         - invalid_arguments
+E         + draft_ready
+
+tests/test_geographic_scope_bridge_handoff.py:344: AssertionError
+_ test_configure_mixed_batch_is_atomically_rejected_without_draft_change[execution] _
+
+extra = 'execution'
+
+    @pytest.mark.parametrize('extra', ['configure', 'read', 'execution'])
+    def test_configure_mixed_batch_is_atomically_rejected_without_draft_change(extra):
+        c = case('keep-title')
+        first_write = tool('configure_investigation_draft', update(c, title='第一次改动'), 'first-write')
+        extra_call = {
+            'configure': tool('configure_investigation_draft', update(c, title='第二次改动'), 'second-write'),
+            'read': tool('query_investigation_options', {}, 'read-after-write'),
+            'execution': tool('confirm_and_queue_investigation', {}, 'start-after-write'),
+        }[extra]
+        trace = run_bridge_case(c, ScriptedProvider([
+            reply(tool('record_geographic_intent', {'action': 'keep'}, 'record')),
+            reply(first_write, extra_call),
+        ]))
+>       assert trace['termination'] == 'invalid_arguments'
+E       AssertionError: assert 'execution_blocked' == 'invalid_arguments'
+E         
+E         - invalid_arguments
+E         + execution_blocked
+
+tests/test_geographic_scope_bridge_handoff.py:344: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_geographic_scope_bridge_handoff.py::test_configure_mixed_batch_is_atomically_rejected_without_draft_change[configure]
+FAILED tests/test_geographic_scope_bridge_handoff.py::test_configure_mixed_batch_is_atomically_rejected_without_draft_change[read]
+FAILED tests/test_geographic_scope_bridge_handoff.py::test_configure_mixed_batch_is_atomically_rejected_without_draft_change[execution]
+3 failed, 41 deselected in 0.16s

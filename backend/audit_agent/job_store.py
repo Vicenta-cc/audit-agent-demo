@@ -4,6 +4,7 @@ import json
 import re
 import sqlite3
 import threading
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -42,6 +43,7 @@ JSON_FIELDS = {
     "lexicon_keywords",
     "rule_snapshot",
     "prompt_profile_snapshot",
+    "geographic_plan",
     "requested_config",
     "effective_config",
 }
@@ -50,6 +52,7 @@ JSON_OBJECT_FIELDS = {
     "control",
     "rule_snapshot",
     "prompt_profile_snapshot",
+    "geographic_plan",
     "requested_config",
     "effective_config",
 }
@@ -75,6 +78,7 @@ JOB_SUMMARY_COLUMNS = ", ".join((
     "rule_snapshot",
     "lexicon_keywords",
     "prompt_profile_snapshot",
+    "geographic_plan",
     "current_audit_config_revision_id",
     "creator_url",
     "creator_id",
@@ -112,11 +116,18 @@ class JobStore:
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30)
+        conn.execute("PRAGMA busy_timeout = 30000")
         conn.row_factory = sqlite3.Row
         return conn
 
     def _init_db(self) -> None:
+        # The API and the persistent worker share this file. WAL lets short
+        # worker commits finish while API status readers keep their snapshots.
+        with closing(self._connect()) as connection:
+            mode = str(connection.execute("PRAGMA journal_mode = WAL").fetchone()[0]).lower()
+            if mode != "wal":
+                raise RuntimeError("shared JobStore database requires WAL journal mode")
         with self._connect() as conn:
             conn.executescript(
                 """
@@ -277,6 +288,8 @@ class JobStore:
                 conn.execute("ALTER TABLE jobs ADD COLUMN crawl_status TEXT NOT NULL DEFAULT 'pending'")
             if "analysis_status" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN analysis_status TEXT NOT NULL DEFAULT 'pending'")
+            if "geographic_plan" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN geographic_plan TEXT")
             if "requested_config" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN requested_config TEXT NOT NULL DEFAULT '{}'")
             if "effective_config" not in columns:
@@ -415,7 +428,7 @@ class JobStore:
                     id, owner_user_id, status, crawl_status, analysis_status, platform, crawler_account_id, crawler_account_display_name,
                     display_name, crawl_mode, keyword, search_sort, keyword_source, lexicon_category,
                     library_ids, capabilities, scoring_template, rule_snapshot,
-                    lexicon_keywords, prompt_profile_snapshot, current_audit_config_revision_id,
+                    lexicon_keywords, prompt_profile_snapshot, geographic_plan, current_audit_config_revision_id,
                     creator_url, creator_id, start_page, crawl_checkpoint_page, crawl_checkpoint_keyword, max_notes,
                     max_total_notes, max_comments, max_concurrency, max_items_per_minute,
                     get_sub_comment, analyze_limit, auto_analyze, run_crawler,
@@ -423,7 +436,7 @@ class JobStore:
                     requested_config, effective_config, items, control,
                     error, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job["id"],
@@ -446,6 +459,7 @@ class JobStore:
                     json.dumps(job.get("rule_snapshot") or {}, ensure_ascii=False),
                     json.dumps(job.get("lexicon_keywords") or [], ensure_ascii=False),
                     json.dumps(job.get("prompt_profile_snapshot") or {}, ensure_ascii=False),
+                    json.dumps(job["geographic_plan"], ensure_ascii=False) if job.get("geographic_plan") is not None else None,
                     job.get("current_audit_config_revision_id"),
                     job.get("creator_url"),
                     job.get("creator_id"),
@@ -640,6 +654,7 @@ class JobStore:
             "rule_snapshot",
             "lexicon_keywords",
             "prompt_profile_snapshot",
+            "geographic_plan",
             "current_audit_config_revision_id",
             "creator_url",
             "creator_id",
@@ -1329,6 +1344,7 @@ class JobStore:
         job["rule_snapshot"] = self._loads_json(job.get("rule_snapshot"), {})
         job["lexicon_keywords"] = self._loads_json(job.get("lexicon_keywords"), [])
         job["prompt_profile_snapshot"] = self._loads_json(job.get("prompt_profile_snapshot"), {})
+        job["geographic_plan"] = self._loads_json(job.get("geographic_plan"), None)
         job["requested_config"] = self._loads_json(job.get("requested_config"), {})
         job["effective_config"] = self._loads_json(job.get("effective_config"), {})
         for key in ("collect_comments", "collect_media"):

@@ -1,0 +1,165 @@
+{
+  "session_id": "investigation-session:df20bb8a6a7346a9b4429b5c32d28cfe",
+  "continue_turn_id": "investigation-turn:709cd09af63c464da55aab2b4d1b6a39",
+  "model": "deepseek-v4-pro-ga-260813",
+  "test_proxy": "http://127.0.0.1:8996",
+  "test_proxy_node": "香港 01",
+  "tun_and_global_node_changed": false,
+  "checks": {
+    "same_draft": true,
+    "revision_ui_increment": true,
+    "revision_continue_unchanged": true,
+    "ui_target": true,
+    "final_target": true,
+    "all_non_geo_configuration_unchanged": true,
+    "all_19_resource_and_execution_tables_unchanged": true,
+    "only_continue_in_second_user_message": true,
+    "real_model_completed": true,
+    "model_final_mentions_new_region_and_revision": true
+  },
+  "resource_tables_changed": [],
+  "turns": [
+    {
+      "id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20",
+      "status": "completed",
+      "input_tokens": 9466,
+      "output_tokens": 1164,
+      "total_tokens": 83078,
+      "llm_call_count": 8,
+      "stop_reason": "text_response(finish_reason=stop)",
+      "error_code": ""
+    },
+    {
+      "id": "investigation-turn:709cd09af63c464da55aab2b4d1b6a39",
+      "status": "completed",
+      "input_tokens": 12497,
+      "output_tokens": 207,
+      "total_tokens": 31392,
+      "llm_call_count": 2,
+      "stop_reason": "text_response(finish_reason=stop)",
+      "error_code": ""
+    }
+  ],
+  "messages_and_tool_names": [
+    {
+      "role": "user",
+      "content": "在抖音调查克拉玛依的欠薪舆情。使用现有“独立测试通用舆情规则”和“独立测试通用舆情词库”，按原样使用，不修改、不重新生成规则和黑话库，不正式保存任何新资源。请生成调查草案，不启动采集；之后我说“继续”也只核对当前草案配置，告诉我当前调查地域，不启动调查。",
+      "turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20"
+    },
+    {
+      "role": "assistant_tool_calls",
+      "tool_names": [
+        "query_investigation_options"
+      ],
+      "turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20"
+    },
+    {
+      "role": "assistant_tool_calls",
+      "tool_names": [
+        "read_resource",
+        "read_resource"
+      ],
+      "turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20"
+    },
+    {
+      "role": "assistant_tool_calls",
+      "tool_names": [
+        "read_resource",
+        "read_resource"
+      ],
+      "turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20"
+    },
+    {
+      "role": "assistant_tool_calls",
+      "tool_names": [
+        "tool_describe"
+      ],
+      "turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20"
+    },
+    {
+      "role": "assistant_tool_calls",
+      "tool_names": [
+        "read_resource"
+      ],
+      "turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20"
+    },
+    {
+      "role": "assistant_tool_calls",
+      "tool_names": [
+        "tool_describe"
+      ],
+      "turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20"
+    },
+    {
+      "role": "assistant_tool_calls",
+      "tool_names": [
+        "configure_investigation_draft"
+      ],
+      "turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20"
+    },
+    {
+      "role": "assistant",
+      "content": "调查草案已生成，未启动采集。\n\n**草案配置**\n- **标题**：克拉玛依欠薪舆情调查\n- **平台**：抖音\n- **调查地域**：克拉玛依市（新疆维吾尔自治区）\n- **审核规则**：独立测试通用舆情规则（原样使用）\n- **黑话库**：独立测试通用舆情词库（原样使用，实际搜索词为“舆情事件”）\n- **状态**：草稿（DRAFT），未启动\n\n两点说明：\n1. 按你“原样使用、不修改”的要求，规则和词库都直接引用现有资源，未做任何改动、未生成、未保存新资源。\n2. 系统当前提示**抖音采集服务不可用**、**地域执行能力尚未接通**，所以这个草案暂时无法确认启动。这不影响草案本身已创建成功。\n\n你说“继续”时，我会只核对当前草案配置并告知调查地域，不启动调查。",
+      "turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20"
+    },
+    {
+      "role": "assistant_tool_calls",
+      "tool_names": [
+        "tool_call",
+        "tool_call",
+        "tool_call",
+        "tool_call",
+        "tool_call",
+        "tool_describe",
+        "tool_call",
+        "tool_describe",
+        "tool_call"
+      ],
+      "turn_id": "investigation-turn:dd966be1def14fc5b00fabb4f5f38b20"
+    },
+    {
+      "role": "user",
+      "content": "继续",
+      "turn_id": "investigation-turn:709cd09af63c464da55aab2b4d1b6a39"
+    },
+    {
+      "role": "assistant_tool_calls",
+      "tool_names": [
+        "get_investigation_draft"
+      ],
+      "turn_id": "investigation-turn:709cd09af63c464da55aab2b4d1b6a39"
+    },
+    {
+      "role": "assistant",
+      "content": "当前草案已核对，未启动调查。\n\n当前草案配置中，**调查地域显示为「吉林省」**，而不是你最初要求的「克拉玛依」。草案当前 revision 为 2，标题和目标仍是“克拉玛依欠薪舆情调查”，但地域范围已经变成了吉林省——这与本次“克拉玛依欠薪”的调查意图不符。\n\n我没有启动调查。需要你确认：调查地域应以「克拉玛依」为准，还是确实要改成「吉林省」？如果要改回克拉玛依，我可以帮你修正草案地域。",
+      "turn_id": "investigation-turn:709cd09af63c464da55aab2b4d1b6a39"
+    },
+    {
+      "role": "assistant_tool_calls",
+      "tool_names": [
+        "tool_call"
+      ],
+      "turn_id": "investigation-turn:709cd09af63c464da55aab2b4d1b6a39"
+    }
+  ],
+  "region_events": [
+    {
+      "draft_id": "investigation-draft:f0ce9dcc74664fdea2f5ad45c9aa58b4",
+      "expected_revision": 1,
+      "committed_revision": 2,
+      "target_text": "吉林省",
+      "region_code": "220000",
+      "conversation_sequence": 19
+    }
+  ],
+  "creation_receipts": [
+    {
+      "tool_name": "configure_investigation_draft",
+      "status": "SUCCEEDED",
+      "is_mutation": 1,
+      "turn_id": "investigation-session:df20bb8a6a7346a9b4429b5c32d28cfe:investigation-turn:dd966be1def14fc5b00fabb4f5f38b20:230d7fdf"
+    }
+  ],
+  "observation": "模型正确读到吉林省及revision2，并因旧标题和目标仍为克拉玛依而请求核对；没有擅自改回。前端建议卡的通用文案遮盖了这段真实最终回答，原文在本文件中。",
+  "environment_recovery": "首次误用缺openai的主项目解释器，零模型调用；切换现有audit-agent-demo/.venv后恢复。初始草案经旧专用en0中继生成；UI修改后只说继续的正式验证使用香港01独立代理。"
+}

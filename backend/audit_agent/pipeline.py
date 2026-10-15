@@ -13,6 +13,7 @@ import threading
 import tempfile
 import traceback
 from contextlib import ExitStack, nullcontext, contextmanager
+from functools import wraps
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from time import perf_counter, time_ns
@@ -55,6 +56,32 @@ from .triage import (TriageEngine, legacy_collected_keywords, load_collected_sel
 from .video_processor import DemoAudioProcessor, DemoFrameExtractor
 
 
+
+def _geographic_commit(method):
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        with self._geographic_commit_guard():
+            return method(self, *args, **kwargs)
+    return guarded
+
+
+class _GeographicFencedStore:
+    """Fence short writes without holding the Run lock across model/crawler calls."""
+    def __init__(self, store, pipeline, writes):
+        self._store = store
+        self._pipeline = pipeline
+        self._writes = writes
+
+    def __getattr__(self, name):
+        value = getattr(self._store, name)
+        if name not in self._writes:
+            return value
+        @wraps(value)
+        def guarded(*args, **kwargs):
+            with self._pipeline._geographic_commit_guard():
+                return value(*args, **kwargs)
+        return guarded
+
 _crawler_lock = threading.Lock()
 _analysis_locks_guard = threading.Lock()
 _analysis_locks: dict[str, threading.RLock] = {}
@@ -63,6 +90,19 @@ _analysis_locks: dict[str, threading.RLock] = {}
 def _analysis_lock_for(job_id: str) -> threading.RLock:
     with _analysis_locks_guard:
         return _analysis_locks.setdefault(job_id, threading.RLock())
+
+
+def _geographic_progress_message(report: dict) -> str:
+    progress = report.get("progress") if isinstance(report.get("progress"), dict) else {}
+    query = str(progress.get("query") or "").strip()
+    rank = progress.get("rank")
+    if report.get("stage") == "capture_started" and query:
+        return f"地域预筛：正在抓取候选「{query}」"
+    if report.get("stage") == "risk_started" and query and type(rank) is int:
+        return f"地域预筛：正在对「{query}」第 {rank} 条候选进行风险筛选"
+    if report.get("stage") == "geo_started" and query and type(rank) is int:
+        return f"地域预筛：正在对「{query}」第 {rank} 条候选进行地域判断"
+    return ""
 
 
 def _authorized_crawler_account_ids(job_id: str) -> frozenset[str] | None:
@@ -177,7 +217,10 @@ class AuditPipeline:
     def _verified_m3_snapshot(self):
         validator = getattr(self, "_m3_snapshot_validator", None)
         if callable(validator):
-            return validator()
+            configuration = validator()
+            if configuration is not None:
+                self._geographic_entry = bool(configuration.get("geographic_plan"))
+            return configuration
         if not self.job_id.startswith("m3-"):
             return None
         # Direct Job resume must pass the same Run/Job/revision boundary as Worker.
@@ -186,7 +229,7 @@ class AuditPipeline:
         run = InvestigationCreationStore().get_run_for_job(self.job_id)
         if run is None:
             raise ValueError("M3 Job has no authoritative frozen Run")
-        if run.confirmed_configuration.get("schema_version") not in {"investigation-run-config-v3", "investigation-run-config-v4"}:
+        if run.confirmed_configuration.get("schema_version") not in {"investigation-run-config-v3", "investigation-run-config-v4", "investigation-run-config-v5"}:
             return None
         adapter = AuditPipelineExecutionAdapter()
         configuration = adapter.verify_run_job(run)
@@ -195,9 +238,46 @@ class AuditPipeline:
             schema_version=str(run.confirmed_configuration.get("schema_version") or ""),
             job_id=self.job_id,
         )
+        self._geographic_entry = bool(configuration.get("geographic_plan"))
+        if configuration.get("geographic_plan"):
+            token = run.claim_token
+            store = InvestigationCreationStore()
+            def geographic_lease_fence():
+                if not token or not store.owns_claim(run.id, token):
+                    from backend.investigation_creation.errors import LeaseLostError
+                    raise LeaseLostError("geographic worker lease expired")
+            self._geographic_lease_fence = geographic_lease_fence
+            from backend.investigation_creation.geographic_runtime import hold_geographic_claim
+            self._geographic_lease_guard = lambda: hold_geographic_claim(store, run.id, token)
         return configuration
 
+    def _assert_geographic_lease(self) -> None:
+        fence = getattr(self, "_geographic_lease_fence", None)
+        if callable(fence):
+            fence()
+
+    def _geographic_commit_guard(self):
+        guard = getattr(self, "_geographic_lease_guard", None)
+        if callable(guard):
+            return guard()
+        self._assert_geographic_lease()
+        return nullcontext()
+
+    def _fenced_job_store(self):
+        if not (getattr(self, "_geographic_entry", False)
+                or callable(getattr(self, "_geographic_lease_fence", None))
+                or callable(getattr(self, "_geographic_lease_guard", None))):
+            return job_store
+        if not isinstance(self.ingestion, _GeographicFencedStore):
+            self.ingestion = _GeographicFencedStore(self.ingestion, self, {
+                "claim_content_for_analysis", "mark_content_status",
+                "mark_task_content_status", "reset_analyzing_for_task", "ingest_batch",
+            })
+        return _GeographicFencedStore(job_store, self, {"update", "update_control", "log"})
+
     def run(self, request, crawl_epoch: int | None = None) -> None:
+        self._geographic_entry = bool(getattr(request, "geographic_plan", None))
+        job_store = self._fenced_job_store()
         if settings.app_auth_mode == "required":
             from backend.task_admission.execution import assert_execution, current_execution
             assert_execution(self.job_id)
@@ -208,6 +288,11 @@ class AuditPipeline:
         crawler_account_id = ""
         self._stream_route_error = None
         try:
+            # Geographic entry must establish the Run fence before its first Job write.
+            geographic_entry = bool(getattr(request, "geographic_plan", None))
+            verified = self._verified_m3_snapshot() if geographic_entry else None
+            if geographic_entry and verified is None:
+                raise ValueError("geographic execution requires a verified frozen Run")
             job_snapshot = job_store.get(self.job_id) or {}
             initial_control = dict(job_snapshot.get("control") or {})
             active_crawl_epoch = int(
@@ -217,6 +302,7 @@ class AuditPipeline:
             )
 
             def control() -> dict:
+                self._assert_geographic_lease()
                 result = job_store.control(self.job_id)
                 if settings.app_auth_mode == "required":
                     from backend.task_admission.execution import assert_execution
@@ -249,7 +335,9 @@ class AuditPipeline:
             )
             job_store.update_control(self.job_id, failure={})
             job_store.log(self.job_id, "开始任务")
-            verified = self._verified_m3_snapshot()
+            verified = verified if geographic_entry else self._verified_m3_snapshot()
+            if getattr(request, "geographic_plan", None) and verified is None:
+                raise ValueError("geographic execution requires a verified frozen Run")
             if verified is not None:
                 from types import SimpleNamespace
                 request = SimpleNamespace(**{**verified, "_authoritative_m3_contract": True,
@@ -274,6 +362,7 @@ class AuditPipeline:
                     action="skip_image_and_video_analysis",
                 )
 
+            geographic = bool(getattr(request, "geographic_plan", None))
             configured_total_notes = int(
                 getattr(request, "max_total_notes", 0) or 0
             )
@@ -370,7 +459,7 @@ class AuditPipeline:
                 raw_items_dir = source_root / "raw_items"
                 stop_flusher = threading.Event()
                 auto_analyze_crawled_content = bool(
-                    settings.auto_analyze_crawled_content
+                    (True if geographic else settings.auto_analyze_crawled_content)
                     and getattr(request, "auto_analyze", True)
                     and analyze_limit > 0
                 )
@@ -386,7 +475,7 @@ class AuditPipeline:
                 if analysis_media_scope == "image_text":
                     job_store.log(self.job_id, "当前分析范围：仅分析图文内容，视频内容只入库不审核")
                 stream_items_enabled = (
-                    settings.stream_crawl_analysis or selection_limit is not None
+                    settings.stream_crawl_analysis or selection_limit is not None or geographic
                 )
                 use_batch_ingestion = selection_limit is not None or (
                     stream_items_enabled and settings.batch_ingestion_enabled
@@ -471,6 +560,14 @@ class AuditPipeline:
                         if borrowed is not None:
                             bundle = borrowed.__enter__()
                         stream_queue.put(("route_entry", entry, bundle, borrowed))
+
+                def enqueue_geographic_refs(refs) -> None:
+                    # The geographic delivery ledger has already committed these
+                    # exact evidence files and membership in one transaction.
+                    refresh_selected_contents()
+                    if stream_analysis:
+                        for ref in refs:
+                            put_stream_entry(ref)
 
                 def enqueue_stream_batch(
                     contents: list[dict], comments: list[dict]
@@ -728,6 +825,11 @@ class AuditPipeline:
                         job_store.update_control(self.job_id, analysis_stop_requested=True)
                     except Exception as exc:
                         analysis_errors.append(exc)
+                        from backend.investigation_creation.errors import LeaseLostError
+                        try:
+                            self._assert_geographic_lease()
+                        except LeaseLostError:
+                            return
                         job_store.update_control(self.job_id, analysis_stop_requested=True)
                         job_store.log(
                             self.job_id,
@@ -873,6 +975,52 @@ class AuditPipeline:
                         )
                         def run_with_current_account(save_root: Path):
                             self._collection_route_context = get_current_route_context()
+                            if geographic:
+                                if request.crawl_mode != "search" or request.platform != "dy":
+                                    raise ValueError("unsupported geographic runtime path")
+                                from .geographic_pipeline import GeographicPipeline
+                                from .geographic_status import classify_geographic_status
+                                lease = getattr(self, "_geographic_lease_fence", None)
+                                if not callable(lease):
+                                    raise ValueError("geographic worker lease required")
+                                def fence(db):
+                                    lease()
+                                    row = db.execute("SELECT control FROM jobs WHERE id=?", (self.job_id,)).fetchone()
+                                    if row is None or int(json.loads(row[0] or '{}').get('crawl_epoch') or 0) != active_crawl_epoch:
+                                        raise ValueError("geographic crawl lease expired")
+                                    if settings.app_auth_mode == "required":
+                                        from backend.task_admission.execution import assert_execution
+                                        assert_execution(self.job_id, admission_execution)
+                                with ExitStack() as rotation_leases:
+                                    rotation = self._triage_account_rotation(
+                                        request.platform, account, account_auth_state, rotation_leases)
+                                    def publish_geographic_progress(report):
+                                        job_store.update_control(self.job_id, geographic_selection=report)
+                                        if message := _geographic_progress_message(report):
+                                            job_store.log(self.job_id, message, stage="crawl")
+
+                                    runner = GeographicPipeline(plan=request.geographic_plan,
+                                        binding=request._verified_geographic_binding,
+                                        crawler=self.crawler, ingestion=self.ingestion,
+                                        state_path=job_store.db_path, save_root=crawl_dir,
+                                        risk_client=self.qwen, geo_client=self.qwen, accounts=rotation,
+                                        lease_fence=fence, stop=crawl_stop_requested,
+                                        on_delivery=enqueue_geographic_refs, retire=self._retire_rotation_account,
+                                        progress_callback=log_crawl_progress,
+                                        on_progress=publish_geographic_progress,
+                                        route_operation=lambda selected_id: self._geographic_route_operation(
+                                            request.platform, selected_id, {item['id'] for item in rotation}),
+                                        state_lock=job_store._lock)
+                                    summary = None
+                                    try:
+                                        summary, result = runner.run()
+                                    finally:
+                                        # A stale worker may neither change state nor publish progress.
+                                        runner.fence()
+                                        summary = summary if summary is not None else runner.execution.report()
+                                        job_store.update_control(self.job_id, geographic_selection=summary,
+                                            geographic_incomplete=classify_geographic_status(summary)['status'] == 'incomplete')
+                                    return result
                             if request.crawl_mode == "creator":
                                 creator_ref = request.creator_url or request.creator_id
                                 job_store.log(self.job_id, f"启动 MediaCrawler 博主主页爬取 {request.platform}: {creator_ref}")
@@ -1009,12 +1157,14 @@ class AuditPipeline:
                                     else crawl_dir / f"rotation-{crawler_account_id or candidate_index}"
                                 )
                                 try:
-                                    if request.crawl_mode == "search" and str(getattr(settings, "triage_mode", "off") or "off") in {"select", "compare"}:
+                                    if geographic or (request.crawl_mode == "search" and str(getattr(settings, "triage_mode", "off") or "off") in {"select", "compare"}):
                                         candidate_output = run_with_current_account(save_root)
                                     else:
                                         with self._route_operation(crawler_account_id):
                                             candidate_output = run_with_current_account(save_root)
                                 except CollectionRouteError as exc:
+                                    if geographic:
+                                        raise
                                     if exc.code not in {'PROXY_EXPIRED','PROXY_TRANSPORT_FAILED','PROXY_CONNECTION_REFUSED','PROXY_AUTH_FAILED'}:
                                         raise
                                     last_account_error = exc
@@ -1056,6 +1206,7 @@ class AuditPipeline:
 
                                 if (
                                     request.crawl_mode == "search"
+                                    and not geographic
                                     and str(getattr(settings, "triage_mode", "off") or "off") not in {"select", "compare"}
                                     and not candidate_output.contents
                                     and crawler_account_id
@@ -1071,6 +1222,7 @@ class AuditPipeline:
                                     continue
                                 if (
                                     crawler_account_id
+                                    and not geographic
                                     and not crawl_stop_requested()
                                     and not (
                                         request.crawl_mode == "search"
@@ -1122,7 +1274,7 @@ class AuditPipeline:
                         for batch_path in batch_writer.flush_due(force=True):
                             ingest_completed_batch(batch_path)
                     if crawl_returned and crawl_epoch_is_current():
-                        crawl_was_stopped = crawl_stop_requested()
+                        crawl_was_stopped = crawl_stop_requested() or (geographic and bool(control().get("geographic_incomplete")))
                         job_store.update(
                             self.job_id,
                             status="crawl_paused" if crawl_was_stopped else "analysis_running",
@@ -1176,7 +1328,8 @@ class AuditPipeline:
             )
             if selection_limit is not None:
                 if request.run_crawler:
-                    enqueue_stream_batch(output.contents, output.comments)
+                    if not geographic:
+                        enqueue_stream_batch(output.contents, output.comments)
                     (
                         selected_memberships,
                         selected_refs,
@@ -1198,6 +1351,7 @@ class AuditPipeline:
                         )
                 if (
                     request.run_crawler
+                    and not geographic
                     and not selected_memberships
                     and not job_store.control(self.job_id).get("no_suspicious_content")
                 ):
@@ -1230,7 +1384,10 @@ class AuditPipeline:
             ):
                 job_store.log(self.job_id, self._empty_crawl_hint(crawl_dir, request.platform))
             ingested_refs_by_key = {}
-            if selection_limit is not None and request.run_crawler:
+            if geographic and request.run_crawler:
+                selected_memberships, selected_refs = self.ingestion.validated_selection_for_task(self.job_id)
+                ingested_refs_by_key = self._refs_by_content_key(selected_refs)
+            elif selection_limit is not None and request.run_crawler:
                 ingested_refs_by_key = self._refs_by_content_key(selected_refs)
             elif not skip_final_supplement and output.contents:
                 ingested_refs_by_key = self._ingest_loaded_output(
@@ -1385,7 +1542,7 @@ class AuditPipeline:
                     items=results,
                 )
                 job_store.log(self.job_id, "任务采集结束，分析保持暂停")
-            elif final_control.get("crawl_stop_requested"):
+            elif final_control.get("crawl_stop_requested") or (geographic and final_control.get("geographic_incomplete")):
                 job_store.update(
                     self.job_id,
                     status="crawl_paused",
@@ -1404,6 +1561,7 @@ class AuditPipeline:
                 )
                 job_store.log(self.job_id, "任务完成")
         except AuditProviderUnavailableError as exc:
+            self._assert_geographic_lease()
             if getattr(request, "run_crawler", False) and not crawl_epoch_is_current():
                 job_store.log(self.job_id, "旧采集轮次审核服务不可用，未覆盖当前轮次状态")
                 return
@@ -1429,6 +1587,7 @@ class AuditPipeline:
                 action="retry_later",
             )
         except AuditProviderCallError as exc:
+            self._assert_geographic_lease()
             if getattr(request, "run_crawler", False) and not crawl_epoch_is_current():
                 job_store.log(self.job_id, "旧采集轮次审核调用失败，未覆盖当前轮次状态")
                 return
@@ -1452,10 +1611,12 @@ class AuditPipeline:
                 action="retry_later",
             )
         except CollectionRouteError as exc:
+            self._assert_geographic_lease()
             first_error = getattr(self, "_stream_route_error", None) or exc
             self._record_route_block(first_error)
             raise first_error from None
         except Exception as exc:
+            self._assert_geographic_lease()
             stream_route_error = getattr(self, "_stream_route_error", None)
             if stream_route_error is not None:
                 self._record_route_block(stream_route_error)
@@ -1515,12 +1676,33 @@ class AuditPipeline:
             )
 
     @contextmanager
-    def _route_operation(self, account_id: str):
+    def _geographic_route_operation(self, platform: str, account_id: str, leased_ids: set[str]):
+        # The outer account lease and rotation leases stay held for the whole
+        # geographic run. Recheck eligibility and grants before every network call.
+        self._assert_geographic_lease()
+        allowed = _authorized_crawler_account_ids(self.job_id)
+        if account_id not in leased_ids or (allowed is not None and account_id not in allowed):
+            raise PermissionError("geographic account is not authorized and leased")
+        if account_id not in {item['id'] for item in crawler_account_store.available_accounts(platform)}:
+            raise CollectionRouteError("SUPPLEMENT_DEFERRED")
+        with self._route_operation(account_id, retain_direct=True) as route:
+            self._assert_geographic_lease()
+            allowed = _authorized_crawler_account_ids(self.job_id)
+            if allowed is not None and account_id not in allowed:
+                raise PermissionError("geographic account authorization changed")
+            if account_id not in {item['id'] for item in crawler_account_store.available_accounts(platform)}:
+                raise CollectionRouteError("SUPPLEMENT_DEFERRED")
+            crawler_account_store.mark_used(account_id)
+            yield route
+
+    @contextmanager
+    def _route_operation(self, account_id: str, *, retain_direct: bool = False):
         account = crawler_account_store.get(account_id) if account_id else None
         current = get_current_route_context()
         if (account or {}).get("proxy_required") or getattr(current, "snapshot", None) is not None:
             job_store.update_control(self.job_id, collection_proxy_required=True)
-        if current is not None and current.account_id == account_id:
+        if (current is not None and current.account_id == account_id
+                and (not retain_direct or getattr(current, "snapshot", None) is not None)):
             with current.borrow(execution_id=self.job_id, account_id=account_id) as borrowed:
                 previous = getattr(self, "_collection_route_context", None)
                 self._collection_route_context = borrowed
@@ -1534,7 +1716,7 @@ class AuditPipeline:
                     finally:
                         self._collection_route_context = previous
             return
-        if not account_id or (not getattr(settings, "crawler_proxy_enabled", False) and not (account or {}).get("proxy_required")):
+        if not account_id or (not retain_direct and not getattr(settings, "crawler_proxy_enabled", False) and not (account or {}).get("proxy_required")):
             yield None
             return
         job = job_store.get(self.job_id) or {}
@@ -1595,6 +1777,7 @@ class AuditPipeline:
             self.qwen.provider_failure = ""
 
     def _record_subject_failure(self, platform, content_key, subject, exc) -> None:
+        self._assert_geographic_lease()
         if content_key:
             self.ingestion.mark_content_status(platform, content_key, "failed", task_id=self.job_id)
         chain = []
@@ -1620,7 +1803,6 @@ class AuditPipeline:
         content_blocked = is_content_blocked(exc)
         self._begin_subject_audit()
         folder = settings.outputs_dir / self.job_id / "post_failures"
-        folder.mkdir(parents=True, exist_ok=True)
         if oom:
             reason = "语音转写 GPU 显存不足，当前帖子未完成审核"
             error_code = "asr_gpu_out_of_memory"
@@ -1662,18 +1844,20 @@ class AuditPipeline:
             e.audio_extraction_diagnostic for e in chain
             if getattr(e, "audio_extraction_diagnostic", None)
         ]
-        (folder / f"{subject.note_id}-{time_ns()}.json").write_text(
-            json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
-        job_store.log(
-            self.job_id,
-            f"笔记 {subject.note_id}：{reason}；已记录并跳过",
-            level="error",
-            reason=reason,
-            error_code=error_code,
-            retryable=bool(provider_failure and not oom and not content_blocked
-                           and not any(code in {401, 402, 403} for code in statuses)),
-            action=record["action"],
-        )
+        with self._geographic_commit_guard():
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / f"{subject.note_id}-{time_ns()}.json").write_text(
+                json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+            job_store.log(
+                self.job_id,
+                f"笔记 {subject.note_id}：{reason}；已记录并跳过",
+                level="error",
+                reason=reason,
+                error_code=error_code,
+                retryable=bool(provider_failure and not oom and not content_blocked
+                               and not any(code in {401, 402, 403} for code in statuses)),
+                action=record["action"],
+            )
 
     def _assert_authoritative_provider_healthy(self) -> None:
         if not getattr(self, "authoritative_m3", False):
@@ -1745,11 +1929,17 @@ class AuditPipeline:
             self._resume_pending_analysis(analyze_limit, analysis_batch_size)
 
     def _resume_pending_analysis(self, analyze_limit: int = 0, analysis_batch_size: int = 5) -> None:
+        job_store = self._fenced_job_store()
         try:
             job = job_store.get(self.job_id)
             if not job:
                 return
             verified = self._verified_m3_snapshot()
+            if job.get("geographic_plan") and not (verified or {}).get("geographic_plan"):
+                raise ValueError("geographic analysis requires a verified frozen Run")
+            if verified is not None:
+                self._geographic_entry = bool(verified.get("geographic_plan"))
+            job_store = self._fenced_job_store()
             if verified is not None:
                 job = {**job, **verified, "current_audit_config_revision_id": verified["_verified_audit_config_revision_id"]}
                 analyze_limit = verified["analyze_limit"]
@@ -1962,6 +2152,7 @@ class AuditPipeline:
                 action="inspect_input_and_retry",
             )
 
+    @_geographic_commit
     def _persist_audit_result(
         self,
         *,
@@ -2725,6 +2916,7 @@ class AuditPipeline:
             return str(ref.get("content_key") or subject.note_id)
         return subject.note_id or subject.url
 
+    @_geographic_commit
     def _write_result_json(self, note_id: str, result: dict) -> Path:
         result_dir = settings.outputs_dir / self.job_id / "results"
         result_dir.mkdir(parents=True, exist_ok=True)
@@ -8100,7 +8292,17 @@ class AuditPipeline:
     def _download_subject_media(self, subject: AuditSubject, url: str, target: Path):
         job = job_store.get(self.job_id) or {}
         owner_id = str(job.get("owner_user_id") or "local-user")
-        route_context = getattr(getattr(self, "_media_route_context", None), "value", None) or getattr(self, "_collection_route_context", None)
+        route_context = getattr(getattr(self, "_media_route_context", None), "value", None)
+        if getattr(self, "_geographic_entry", False):
+            source = subject.collection_route_provenance or {}
+            # Only the capability retained at approved Geo delivery may authorize
+            # a supplement. A producer's current account is not its source.
+            if (route_context is None or getattr(route_context, "snapshot", None) is None
+                    or not source.get("source_account_id")
+                    or source["source_account_id"] != route_context.account_id):
+                raise CollectionRouteError("SUPPLEMENT_DEFERRED")
+        else:
+            route_context = route_context or getattr(self, "_collection_route_context", None)
         configured_account = crawler_account_store.get(str(job.get("crawler_account_id") or ""))
         required_route = bool((job.get("control") or {}).get("collection_proxy_required") or
                               job.get("proxy_required") or (configured_account or {}).get("proxy_required"))

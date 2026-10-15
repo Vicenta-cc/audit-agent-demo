@@ -1,0 +1,103 @@
+{
+  "kind": "pre_holdout_evaluation_freeze",
+  "version": "geo-intent-p0-real-v2",
+  "frozen_at_utc": "2026-10-14T07:52:08.742419+00:00",
+  "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "branch": "codex/geographic-relevance-p0",
+  "model": "deepseek-v4-pro-ga-260813",
+  "provider_host": "api.qhose.net",
+  "configuration_source": "/Users/ext.wanghongtao6/Documents/Codex/acceptance/unified-draft-frontend-20261012/environment.private.json",
+  "injected_fields": [
+    "CONVERSATION_MODEL",
+    "CONVERSATION_BASE_URL",
+    "CONVERSATION_API_KEY"
+  ],
+  "data_version": "geo-intent-synthetic-v1",
+  "counts": {
+    "dev": 18,
+    "holdout": 16,
+    "holdout_set": 6
+  },
+  "limits": {
+    "responses_per_case": 4,
+    "tool_requests_per_case": 12,
+    "timeout_seconds": 45,
+    "automatic_retries": 0
+  },
+  "sources_and_snapshots_match": true,
+  "evaluation_metadata_leak_checks": 34,
+  "sha256": {
+    "experiments/geographic_scope_intent/__init__.py": "88483891e5c7baf064a27cacf262dd163b2c0049ebedfc40e26cc3698307a5f9",
+    "experiments/geographic_scope_intent/baseline_prompt.txt": "dd91b3c92ff4bf197b2423f9cf5e9cf497ac6b653c176dc70a423e696919b8a0",
+    "experiments/geographic_scope_intent/baseline_tools.json": "ab0138e3e60d2f46d872286363b44c4f3c7222f6e40ad507bb7416b7367f87a8",
+    "experiments/geographic_scope_intent/candidate_guidance.txt": "19a7a291370376dfce3f91e4e34c2ff6e358887bbb9848bb6a51b2ba9fcdd81f",
+    "experiments/geographic_scope_intent/candidate_schema.json": "3342205e7451d5d582f4bf2194088a48c7ee2b6226bff8b42b12d46ed7e76028",
+    "experiments/geographic_scope_intent/cases.jsonl": "f79a162ea5e54b27471cbe045d698573ada51e52950d1239e920b3731d0fda38",
+    "experiments/geographic_scope_intent/continuity_guidance.txt": "955b301831ca86bdf013da200e09412084128dc881a4b05918eadefedb65d155",
+    "experiments/geographic_scope_intent/contract.py": "3a40cd3227922e3cee988c0f711e3db6624c22cf70109f9ab1484231f6b7a9d6",
+    "experiments/geographic_scope_intent/data.py": "d93a964af32748d4c36002bf6aec645ef2141b039f63a218a9be349bfeb2dca2",
+    "experiments/geographic_scope_intent/manifest.json": "4f94ba66546d544517c3db8af74dea1b25796f851f68d7ecad295b76c3965b6c",
+    "experiments/geographic_scope_intent/rounds_guidance.txt": "7b00b3132903ceb56cd1a961c758bc25f1d76bfea47b45264ea1529182449f92",
+    "experiments/geographic_scope_intent/runner.py": "3742a4abb3b3af78bc1cec6cc88803e1541c17fec2c636c860bbd30919bd3047",
+    "experiments/geographic_scope_intent/sandbox.py": "1a1c3070e0d84fa4dd49926e7fd7a4d451c90f3af070465299dc75df1e007fa7",
+    "experiments/geographic_scope_intent/scoring.py": "0c3802e4773437205ee5329bbf05fdfeed5db86b306557e7c8f9a946f45bcf7b",
+    "experiments/geographic_scope_intent/scripted_smoke.json": "338940d59a483737ce86c5369140db464ace3b3ac8031182e8ce740e135cc8ba",
+    "experiments/geographic_scope_intent/snapshot.py": "f60cfc39ddbcbf3c5ab8fcbc8b726883a249079c2b26978b38b20c9962793922",
+    "outputs/geographic-scope-intent/run-authorized-eval.py": "c9576e3b43db6ec1b48e38e71fac35fe061a0a07e7a5ab6e124e89329c3be01c",
+    "tests/test_geographic_scope_contract.py": "17782e758d3013d199522aea9870f06c0ccd02ffbeaa3cba0dec61463f9801f4",
+    "tests/test_geographic_scope_data.py": "0fd7276cbaaeb742351a0654f2ea6cd1858a5334bcb7b738eed08a54a077146c",
+    "tests/test_geographic_scope_runner.py": "7f63186d7bfbd7258b27dc6f91d0f54eb1ef29ad3e0cd6e35bf38a2833ba4ad6",
+    "tests/test_geographic_scope_scoring.py": "56834c31669244b1e3ee1a1158746826a5e8fec9625c256e4658da12362b4242"
+  },
+  "initial_request_sha256": {
+    "city-kelamayi": "13456f7f7570a79d0d2e79d19055e54d91fe60c03a69c3cde0f40f98a1fc9d5f",
+    "city-hangzhou": "2f3dbaf36d0104a6de038afa1a00819ff473107dd9673f5cf007c2b66063c7d6",
+    "province-xinjiang": "bce1b820078fb1e7b9461a922497de97f41844f9f17fc3b462d616b81a8139e8",
+    "province-sichuan": "af77948a6943ecf62e5f251a389b5d224d61151082863435ea17493059563350",
+    "only-kelamayi": "958523eb7387f2e0bd0379bfa191e9d30639f6cfdc37df0c22c6ae72670163cb",
+    "only-suzhou": "c5104209bfaf9fac389bc1d80452be01b57aef49eaa5da31d9dbfe8d525c9c9d",
+    "change-daqing": "15fc07ad82575fdc2ff8ac0accd1eb7f826372d53ee46f0682e1183a9341e67c",
+    "change-province": "3ebe0a68cb95e87442716af2befa64a001470df50d9fe3f76b6aa0deae4c35e4",
+    "clear-unlimited": "17a4d171766438f8b7e5dabf9f1c294c9f3a0ef496262760ab2ffe787246a66a",
+    "clear-national": "5f7c1266cec113ab06690b70e0cf190c393a147525ef7494a21f5e396cf9836d",
+    "keep-title": "32e0dea65466c8e5e13689fd60584cb37e5c43c5f10b908ef4248fb7607b9137",
+    "keep-lexicon": "8dc0d25003535949682fe61ee2fbea4a293859390d61919ec3e5a0c481cdafae",
+    "keep-rules": "658e951829ee4b0b0694be047e954b7e5960f30e1937a946a1d280c1e558e6c5",
+    "creator-kelamayi": "0a5d24b5d55b44ff32917c78013d81ed406f7d641ad0b164a67c1782a0d13dc0",
+    "creator-province": "44afafcc5118f9f2847551553fa2f92a8ec322fe6d3f83c05ba1b20020004a7e",
+    "named-resource": "b2cb325c2268b8f04d0664f2de4652eb4ef7120577e1a3b16a70659b3fb5fed1",
+    "quoted-example": "9b0e302e10600c4d94fe4b2e1ed5bd2ad3cfbaf1651389bd25a2f0348b678bb5",
+    "pasted-post": "a58e753f89bbe120544ac714c7a7f6b45c2451cdb4e0fbb299553bbcc0128ac0",
+    "pasted-comment": "6e0146864bf2202d8476f7a310ff1132c6a44fed77f3164a20b2c4fb02b2d286",
+    "ambiguous-chaoyang": "fb903c1e7749f25b3736851ba76079d893eb4ac607d9c7bbb68cf7980e9e0973",
+    "ambiguous-there": "dac0ade0ced0fcf405cbaf86d1c01cb3a79709109a9e871a28800aa7a09f9d1d",
+    "defer-missing-all": "d92702551154c44b0b9297ed2f1fd597bc960ba685c4e11941718577e87fe1c3",
+    "defer-missing-rules": "a8adcba713437a0895830f8bf2f9ad2eaff886b60cba40df8771992888fa548e",
+    "denied-city": "8d2fbcc71fb619a285b4a4ab471a56287e0b713e97443d1b4ad1c20bc9d88046",
+    "quoted-instruction": "35a0f5fb96233641d16420240d76bf96414efa4f141d144ae8f0e42a3fa977e0",
+    "keep-denial-clear": "2996701b7138f29597c62a82aa3bdc3e587b5d8a60a0ec66ae445948d5eef7b5",
+    "adoption-temp-first": "1b81decc34f55d04413a175daecbadd2516417b5cbf85d1c09f9e9af5b10b57e",
+    "adoption-temp-later": "a1f20a8fa28e03464f2edf55024c831765b0b9c9b0793c766e59282003f4105b",
+    "adoption-formal-first": "e79b2dbd4925d5650309977d5bebc9d0b22afb7007bdce714da3712b886bd432",
+    "adoption-formal-later": "0efa591799b2323e578edb2337562105b484064175872ec5377b09a877514f0e",
+    "new-round-national": "1a50d8b39e22a60bb81418d9d06c8e0444d209801e71a494fc07c7921f7b4414",
+    "new-round-city": "5913ae7f90422a1b1ab5097a78be216cf2b8b806d50172ba03a6375d790fa8a0",
+    "assistant-city": "e2354f721f1cbf24069a10f8af2eece45c19ba9fdedaf908e1b491681a9facfd",
+    "defer-unadopted": "ba2748ed55c46524d6be55a6cae36acc7eb4e1b1d010be3f62786c6452093967"
+  },
+  "dev_result_sha256": {
+    "real-dev-v1.json": "9821a7cefde2617677aa47740351c1d57400a8e3ef766757d29a9c9c1bf03cb4",
+    "real-dev-v2.json": "936c32479243bc2afd70f80375c1e713c9a9a80d762afa1c8044ecda856bb5f4"
+  },
+  "dev_review_sha256": {
+    "real-dev-v1-human-review.json": "e5851b4db36da9e87f1e60bbb7222002d467ada1d67b0094e56bd89c58f4a579",
+    "real-dev-v2-human-review.json": "44cf32dcb55edbcebbfa30af7c54746c56e16f24f42ecfcb5ca23c5c07e79e18"
+  },
+  "dev_analysis": "v1 8/18；读取 fixture 缺口与模型漏设分别归因。v2 15/18，set precision3/3 recall3/5；剩余新疆、多轮采用漏设及全国例循环上限如实保留，不进行第三轮。",
+  "holdout_policy": "在此版本完整一次，禁止单例或整轮重新调用刷分；保留失败、超时和原判分。",
+  "reproduce_commands": [
+    ".venv-python -B outputs/geographic-scope-intent/run-authorized-eval.py dev v1",
+    ".venv-python -B outputs/geographic-scope-intent/run-authorized-eval.py dev v2",
+    ".venv-python -B outputs/geographic-scope-intent/run-authorized-eval.py holdout v1"
+  ]
+}

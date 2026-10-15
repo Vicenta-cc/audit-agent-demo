@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-15",
+  "backend": {
+    "passed": 385,
+    "failed": 4,
+    "subtests_passed": 23,
+    "baseline_failure_ids_match": true,
+    "failure_ids": [
+      "tests/test_creation_prompt_isolation.py::test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes",
+      "tests/test_creation_prompt_isolation.py::test_global_prompt_keeps_authority_but_not_authoring_payloads",
+      "tests/test_creation_prompt_isolation.py::test_guidance_is_available_through_native_deferred_describe",
+      "tests/test_creation_prompt_isolation.py::test_original_prompt_lines_are_preserved_or_explicitly_accounted_for"
+    ],
+    "new_geography_catalog_tests_passed": 137,
+    "new_test_breakdown": {
+      "city_scope_source_draft_and_national": 78,
+      "catalog_and_import": 59
+    },
+    "log": "backend-city-final.log",
+    "command": "backend-city-final-command.json"
+  },
+  "frontend": {
+    "playwright_passed": 65,
+    "typecheck": "passed",
+    "build": "passed",
+    "logs": [
+      "frontend-final-typecheck.log",
+      "frontend-final-build.log",
+      "frontend-final-playwright.log"
+    ]
+  },
+  "static": {
+    "python_ast_files": 36,
+    "git_diff_check": "passed",
+    "lint": "No project lint script configured; not claimed."
+  },
+  "review": {
+    "unresolved_findings": 0,
+    "production_catalog_names_checked": 3218,
+    "status_differences": 0
+  },
+  "boundaries": {
+    "real_model_requests": 0,
+    "collection_requests": 0,
+    "production_database_writes": 0,
+    "commits": 0,
+    "pushes": 0,
+    "deployments": 0,
+    "p2_started": false,
+    "p3_modified": false
+  }
+}

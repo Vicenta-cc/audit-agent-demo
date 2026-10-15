@@ -1,0 +1,73 @@
+{
+  "kind": "original_bridge_retest_final_audit",
+  "audited_at": "2026-10-14T20:32:31.294144+08:00",
+  "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "branch": "codex/geographic-relevance-p0",
+  "freeze_sha256": "a27d201ec0a89d305c614dd2ec3b858d8a1fc082346ba24ade8775d68cc4e1d9",
+  "original_frozen_files_unchanged": 31,
+  "wrapper_unchanged_since_freeze": true,
+  "first_requests_identical": 18,
+  "assessment_metadata_leak_checks": 18,
+  "historical_artifacts_unchanged": 96,
+  "other_business_changes_unchanged": 11,
+  "other_workspace_files_unchanged": {
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo": 96,
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo": 242,
+    "/Users/ext.wanghongtao6/.codex/worktrees/unified-report-query-phase1/xhs-audit-agent-demo": 11
+  },
+  "ledger_counts": {
+    "request": 48,
+    "response": 46,
+    "error": 2
+  },
+  "each_request_has_exactly_one_outcome": true,
+  "no_automatic_retry": true,
+  "all_cases_once": 18,
+  "budget_used": 48,
+  "budget_limit": 72,
+  "timeouts": [
+    {
+      "event": "error",
+      "index": 27,
+      "case_id": "adoption-temp-first",
+      "arm": "bridge",
+      "error_type": "ReadTimeout",
+      "elapsed_seconds": 45.32694579201052
+    },
+    {
+      "event": "error",
+      "index": 30,
+      "case_id": "new-round-national",
+      "arm": "bridge",
+      "error_type": "ReadTimeout",
+      "elapsed_seconds": 45.32141179201426
+    }
+  ],
+  "all_36_tool_receipts_simulated": true,
+  "usage": {
+    "prompt_tokens": 1152149,
+    "completion_tokens": 6373,
+    "total_tokens": 1158522
+  },
+  "secret_scan_files": 14,
+  "secret_or_authorization_header_exposure": false,
+  "raw_artifacts_sha256": {
+    "outputs/geographic-scope-intent/bridge-original-retest-v1/run.py": "d9ed588dfd2c25077b27fceb79b8b9e921cb2cf5b53eba2ab6ac9a3777d32c77",
+    "outputs/geographic-scope-intent/bridge-original-retest-v1/prepared.json": "61374ba5bee4aaf7b397dd841af349bb7118baf61fe16190f0187c9d7f8e8117",
+    "outputs/geographic-scope-intent/bridge-original-retest-v1/run-status.json": "e8ea496ca2c9dd60d97569725eed78b578bb92b10b97c0c7634b9ae1e2353cd3",
+    "outputs/geographic-scope-intent/bridge-original-retest-v1/progress.txt": "af8f8df2a0f61b418fcfa357f3f74ca75f62cde67facd2e2b6512793079b5f48",
+    "outputs/geographic-scope-intent/bridge-original-retest-v1/local-checks.json": "12881ad21c739207b8dfdc8b40ee8a8f94c3907314a0abb0b141f4463d899237",
+    "outputs/geographic-scope-intent/bridge-original-retest-v1/results.json": "df536d9183a429c7106b9d902c89dd693c12f2b1a77c80a6af9783aee0c64b1e",
+    "outputs/geographic-scope-intent/bridge-original-retest-v1/http-ledger.jsonl": "a3e63fb2d7036cad2d5f6747e1b9061ab40a07b43930ebeeef79d8561e7fa328",
+    "outputs/geographic-scope-intent/bridge-original-retest-v1/freeze.json": "a27d201ec0a89d305c614dd2ec3b858d8a1fc082346ba24ade8775d68cc4e1d9"
+  },
+  "review_sha256": "055743e24280e42283aa59614345a87ee5f8bb45f318cb21d614790770dc238f",
+  "summary_sha256": "15995397d56b92c56a5f4af84a14c18ceb58cab87c814105355e4bca0ea6daaf",
+  "documents_sha256": {
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/README.md": "0f3af95732e3c7fe3644cb9eb1a0506f5154f61dc5b6c10f9f5208e0322e3fa1",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/REPORT.md": "05d601219893ddba6fbef4d9f4b8b9e0ededd49a3c6b0d33230edca3af0877fd",
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.omx/plans/geographic-relevance-p0-handoff.md": "437b975a5bc0dda8be11465dd0ba678d94ec18d133b60610b93bf3b2f56b5b89",
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.omx/plans/geographic-relevance-implementation.md": "3b3eb39b3c485c72634fa756e9f6cf82efb6678c2d6943247ba186c413e45d3e"
+  },
+  "status": "P0 真实模型复测已完成、待原会话验收；P0 未整体通过"
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -70,7 +71,11 @@ def seed_audit(
             }}],
         })
         ingestion.mark_content_status("dy", str(10001 + index), "completed", task_id="new-search-task", audit_result_id=result["id"])
-    return CanonicalReportSource(db, tmp_path / "outputs"), ReportStore(db)
+    source, store = CanonicalReportSource(db, tmp_path / "outputs"), ReportStore(db)
+    # This fixture is read as an immutable snapshot, including after WAL writes.
+    with sqlite3.connect(db) as connection:
+        assert connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0] == 0
+    return source, store
 
 
 @pytest.mark.parametrize("count", [1, 5])

@@ -1,0 +1,17 @@
+{
+  "schema": "p234-local-checkpoint-archive-v1",
+  "archive": "/Users/ext.wanghongtao6/Documents/Codex/handoffs/geographic-p234-offline-20261015/offline-source-and-evidence.tar.gz",
+  "archive_bytes": 121834152,
+  "archive_sha256": "42420c9f38cc55c7fcdd096a8ca219ff58354b584b6e5a03917207777aa16fd0",
+  "members": 387,
+  "all_members_verified_against_manifests": true,
+  "original_files_retained": true,
+  "github_main_repository": "Vicenta-cc/audit-agent-demo",
+  "github_main_observed": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "local_corresponding_branch": "codex/investigation-rounds-phase2",
+  "configured_origin_repository": "Vicenta-cc/saas-demo",
+  "configured_origin_main_observed": "5b6694d1b27b394e33a9141d424415a645bd2eaa",
+  "checkpoint_branch": "codex/geographic-relevance-p234-offline",
+  "checkpoint_parent": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+  "push_or_deploy": false
+}

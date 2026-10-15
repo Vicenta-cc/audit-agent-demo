@@ -43,6 +43,7 @@ from .store import InvestigationCreationStore
 from . import draft_operations
 from .principal import Principal
 from .approval import UseRuleSetProposalInput, reject
+from . import scope_intent
 
 
 class InvestigationCreationService:
@@ -82,7 +83,8 @@ class InvestigationCreationService:
                             principal: Principal, tool_call_id: str = "", runtime_turn_id: str = "",
                             resource_ref: str | None = None,
                             create_operation: tuple[str, str] | None = None,
-                            draft_patch: dict | None = None, mutation_receipt: str | None = None) -> InvestigationDraft:
+                            draft_patch: dict | None = None, mutation_receipt: str | None = None,
+                            scope_change=None, scope_turn_id: str = '') -> InvestigationDraft:
         with draft_operations.validation_phase(create_operation is not None):
             if self.conversation_store is None or not turn_id or not tool_call_id:
                 reject("PROPOSAL_APPROVAL_REQUIRED", "An authoritative current conversation turn is required.")
@@ -92,6 +94,9 @@ class InvestigationCreationService:
                 if resource_ref:
                     self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, session_id=session_id, connection=resource_connection)
                 def normalize(configuration: InvestigationDraftConfiguration, *, previous) -> InvestigationDraftConfiguration:
+                    configuration = self._geographic_configuration(configuration, previous=previous,
+                        principal=principal, session_id=session_id, draft_id=command.draft_id or '',
+                        scope_change=scope_change, scope_turn_id=scope_turn_id)
                     self._reject_legacy_creation_platform(configuration)
                     configuration = self._normalize_edit_origin(configuration, previous=previous, resource_ref=resource_ref, session_id=session_id, principal=principal)
                     sources = self._temporary_provenance(configuration)
@@ -122,14 +127,16 @@ class InvestigationCreationService:
         )
 
     def create_ruleset_proposal(
-        self, content: RuleSetContent | dict, *, session_id: str
+        self, content: RuleSetContent | dict, *, session_id: str,
+        mutation_receipt: str | None = None, principal: Principal | None = None,
     ) -> TemporaryRuleSetProposal:
         session_id = self._required_identifier(session_id, "session_id")
         content = self._validated_proposal_content(content)
         digest = content_hash(content)
         compile_ruleset_content(content)
         return self.store.create_ruleset_proposal(
-            session_id=session_id, content=content, content_hash=digest
+            session_id=session_id, content=content, content_hash=digest,
+            mutation_receipt=mutation_receipt, principal=principal.id if principal else '',
         )
 
     def get_ruleset_proposal(
@@ -142,7 +149,8 @@ class InvestigationCreationService:
 
     def update_ruleset_proposal(
         self, proposal_id: str, *, session_id: str, expected_version: int,
-        content: RuleSetContent | dict,
+        content: RuleSetContent | dict, mutation_receipt: str | None = None,
+        principal: Principal | None = None,
     ) -> TemporaryRuleSetProposal:
         current = self.get_ruleset_proposal(proposal_id, session_id=session_id)
         self.store.check_proposal_version(current, expected_version)
@@ -151,6 +159,7 @@ class InvestigationCreationService:
         return self.store.update_ruleset_proposal(
             current.proposal_id, session_id=current.session_id, expected_version=expected_version,
             content=content, content_hash=content_hash(content),
+            mutation_receipt=mutation_receipt, principal=principal.id if principal else '',
         )
 
     @staticmethod
@@ -163,13 +172,16 @@ class InvestigationCreationService:
         self, command: CreateDraftCommand, *, principal: Principal, resource_ref: str | None = None,
         session_id: str = "",
         create_operation: tuple[str, str] | None = None,
+        scope_change=None, scope_turn_id: str = '',
     ) -> InvestigationDraft:
         with draft_operations.validation_phase(create_operation is not None):
             command = CreateDraftCommand.model_validate(
                 command.model_dump(mode="json", warnings=False)
             )
             self._reject_legacy_creation_platform(command.configuration)
-            configuration = command.configuration
+            configuration = self._geographic_configuration(command.configuration,
+                principal=principal, session_id=session_id, scope_change=scope_change,
+                scope_turn_id=scope_turn_id)
             self.store.protect_temporary_judgement(configuration)
         if isinstance(configuration, InvestigationDraftConfiguration):
             if self.resource_service is None:
@@ -225,10 +237,20 @@ class InvestigationCreationService:
             objective=source.objective, configuration=source.configuration,
             create_operation=create_operation, copy_source=(session_id, source_draft_id))
 
+    def select_relevance_scope(self, draft_id: str, *, session_id: str,
+                               expected_revision: int, operation_id: str,
+                               target_text: str, principal: Principal,
+                               clarification_target_text: str | None = None) -> InvestigationDraft:
+        from .scope_selection import select
+        return select(self, draft_id, session_id=session_id, principal=principal,
+                      expected_revision=expected_revision, operation_id=operation_id,
+                      target_text=target_text, clarification_target_text=clarification_target_text)
+
     def update_draft(
         self, command: UpdateDraftCommand, *, principal: Principal, resource_ref: str | None = None,
         mutation_receipt: str | None = None,
         session_id: str = "",
+        scope_change=None, scope_turn_id: str = '',
     ) -> InvestigationDraft:
         command = UpdateDraftCommand.model_validate(
             command.model_dump(mode="json", warnings=False)
@@ -246,6 +268,9 @@ class InvestigationCreationService:
             if command.configuration is not None
             else draft.configuration
         )
+        effective_configuration = self._geographic_configuration(effective_configuration,
+            previous=draft.configuration, principal=principal, session_id=session_id,
+            draft_id=draft.id, scope_change=scope_change, scope_turn_id=scope_turn_id)
         self._reject_legacy_creation_platform(effective_configuration)
         self.store.protect_temporary_judgement(effective_configuration, draft.configuration)
         if isinstance(effective_configuration, InvestigationDraftConfiguration):
@@ -286,6 +311,48 @@ class InvestigationCreationService:
             configuration=effective_configuration,
             mutation_receipt=mutation_receipt,
         )
+
+    def _geographic_configuration(self, configuration, *, principal, previous=None,
+                                 session_id='', draft_id='', scope_change=None, scope_turn_id=''):
+        """Only the conversation tool may create provenance; omitted API fields preserve it."""
+        if not isinstance(configuration, InvestigationDraftConfiguration):
+            return configuration
+        body = configuration.model_dump(mode='json')
+        for key in ('relevance_scope', 'relevance_scope_state'):
+            old = getattr(previous, key, None)
+            if key in configuration.model_fields_set and getattr(configuration, key) != old:
+                raise ConfigurationValidationError('地域修改请通过当前调查对话配置。',
+                    code='RELEVANCE_SCOPE_TOOL_REQUIRED', details={'mutation_applied': False})
+            if old is None:
+                body.pop(key, None)
+            else:
+                body[key] = old.model_dump(mode='json')
+        if scope_change is not None:
+            scope, state = scope_intent.prepare_change(scope_change, application=self,
+                principal=principal, session_id=session_id, application_turn_id=scope_turn_id,
+                draft_id=draft_id)
+            body['relevance_scope_state'] = state.model_dump(mode='json')
+            if state.status == 'cleared':
+                body.pop('relevance_scope', None)
+            elif scope is not None:
+                body['relevance_scope'] = scope.model_dump(mode='json')
+        return InvestigationDraftConfiguration.model_validate(body)
+
+    def public_configuration_input(self, configuration, *, principal, draft_id=''):
+        """Accept an unchanged public round trip without accepting client provenance."""
+        previous = self.get_draft(draft_id, principal=principal).configuration if draft_id else None
+        body = configuration.model_dump(mode='json')
+        for key in ('relevance_scope', 'relevance_scope_state'):
+            old = getattr(previous, key, None)
+            public = scope_intent.project_state(old) if key == 'relevance_scope_state' else old
+            if key in configuration.model_fields_set and getattr(configuration, key) != public:
+                raise ConfigurationValidationError('地域修改请通过当前调查对话配置。',
+                    code='RELEVANCE_SCOPE_TOOL_REQUIRED', details={'mutation_applied': False})
+            if old is None:
+                body.pop(key, None)
+            else:
+                body[key] = old.model_dump(mode='json')
+        return InvestigationDraftConfiguration.model_validate(body)
 
     def _normalize_edit_origin(self, configuration, *, previous=None, resource_ref=None,
                               session_id='', principal):
@@ -501,6 +568,7 @@ class InvestigationCreationService:
         draft_configuration = type(draft.configuration).model_validate(
             draft.configuration.model_dump(mode="json")
         )
+        scope_intent.ensure_execution_ready(draft_configuration, capability=getattr(self, 'geographic_capability', None))
         confirmation_resolution = None
         if isinstance(
             draft_configuration, LegacyInvestigationDraftConfigurationV3
@@ -538,16 +606,37 @@ class InvestigationCreationService:
                         principal=principal,
                         resource_connection=resource_connection,
                     )
-                    run = self._store_confirmation(
-                        command,
-                        principal=principal,
-                        resolved_model=resolution.execution,
-                        configuration_hash=resolution.config_hash,
-                        confirmation_resolution=resolution.model_dump(mode="json"),
-                        search_terms_resolver=lambda configuration: self.resource_service.execution_search_terms(
-                            configuration, resource_connection=resource_connection
-                        ),
-                    )
+                    from contextlib import nullcontext
+                    geographic_fence = nullcontext()
+                    if draft_configuration.relevance_scope is not None:
+                        from .geographic_runtime import capture_confirmed_authority
+                        from .scope_search_plan import build_confirmed_scope_search_plan
+                        def freeze(current):
+                            authority = capture_confirmed_authority(self, current, principal=principal,
+                                resource_connection=resource_connection)
+                            return build_confirmed_scope_search_plan(authority,
+                                expected_identity=authority['identity']).model_dump(mode='json')
+                        plan = freeze(draft)
+                        payload = resolution.model_dump(mode='json')
+                        payload['execution']['geographic_plan'] = plan
+                        payload['config_hash'] = confirmed_configuration_hash({k: payload[k] for k in (
+                            'mode', 'platform', 'resolved_search_terms', 'creator_url', 'recall_plan', 'execution')}
+                            | resolution.source_payload())
+                        from .contracts import ConfirmationResolution
+                        resolution = ConfirmationResolution.model_validate(payload)
+                        geographic_fence = self.geographic_capability.confirmation(freeze)
+                    with geographic_fence:
+                        run = self._store_confirmation(
+                            command,
+                            principal=principal,
+                            resolved_model=resolution.execution,
+                            configuration_hash=resolution.config_hash,
+                            confirmation_resolution=resolution.model_dump(mode="json"),
+                            search_terms_resolver=lambda configuration: self.resource_service.execution_search_terms(
+                                configuration, resource_connection=resource_connection
+                            ),
+                        )
+
             return self._prepare_run(run)
         else:
             resolved_model = ResolvedExecutionConfiguration.model_validate(

@@ -17,6 +17,7 @@ from backend.investigation.public_stream import (
     PublicAnswerDeltaPayload,
     PublicAnswerResetPayload,
 )
+from backend.investigation_creation.scope_selection import RegionSelectionHistory
 
 
 class PublicApiModel(BaseModel):
@@ -238,6 +239,7 @@ class InvestigationWorkspaceStateResponse(PublicApiModel):
     report_messages: tuple[InvestigationMessageResponse, ...] = ()
     latest_report_turn: InvestigationWorkspaceTurnStatusResponse | None = None
     activity_events: tuple[InvestigationActivityEventResponse, ...] = ()
+    region_selection_history: tuple[RegionSelectionHistory, ...] = ()
     creation_answer_draft: InvestigationAnswerDraftResponse | None = None
     report_answer_draft: InvestigationAnswerDraftResponse | None = None
 

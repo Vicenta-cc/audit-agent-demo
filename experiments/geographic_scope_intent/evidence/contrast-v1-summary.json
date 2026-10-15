@@ -1,0 +1,382 @@
+{
+  "version": "geo-intent-p0-contrast-v1",
+  "status": "P0 真实模型评测已完成、待原会话验收",
+  "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "branch": "codex/geographic-relevance-p0",
+  "model": "deepseek-v4-pro-ga-260813",
+  "provider_host": "api.qhose.net",
+  "configuration_source": "/Users/ext.wanghongtao6/Documents/Codex/acceptance/unified-draft-frontend-20261012/environment.private.json",
+  "configuration_root": "/Users/ext.wanghongtao6/.codex/worktrees/unified-report-query-phase1/xhs-audit-agent-demo",
+  "freeze_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/evidence/contrast-v1-freeze.json",
+  "freeze_sha256": "441824f4ab5a6452123d3df568309e65035cd1785abe65e09c05d847232b6ae7",
+  "frozen_at_utc": "2026-10-14T10:31:15.862907+00:00",
+  "counts": {
+    "unique_cases": 18,
+    "case_runs": 54,
+    "intent_set_cases_per_arm": 7,
+    "eligible_draft_set_cases_per_full_bridge_arm": 5,
+    "critical_cases_per_arm": 10,
+    "request_budget": 162,
+    "requests": 119,
+    "responses": 119,
+    "unused_budget": 43,
+    "runtime_failures": 0,
+    "automatic_retries": 0,
+    "tool_requests": 104
+  },
+  "elapsed_wall_seconds": 1028.760431666975,
+  "cost": "unknown",
+  "automatic": {
+    "full": {
+      "arm": "full",
+      "evaluated": 18,
+      "missing_case_ids": [],
+      "intent": {
+        "passed": 4,
+        "accuracy": {
+          "numerator": 4,
+          "denominator": 18,
+          "value": 0.2222222222222222
+        },
+        "set_precision": {
+          "numerator": 3,
+          "denominator": 3,
+          "value": 1.0
+        },
+        "set_recall": {
+          "numerator": 3,
+          "denominator": 7,
+          "value": 0.42857142857142855
+        },
+        "not_observable": 14,
+        "false_sets": 0,
+        "false_clears": 0,
+        "source_errors": 14,
+        "policy_errors": 14
+      },
+      "landing": {
+        "set_precision": {
+          "numerator": 3,
+          "denominator": 3,
+          "value": 1.0
+        },
+        "set_recall": {
+          "numerator": 3,
+          "denominator": 5,
+          "value": 0.6
+        },
+        "complete_passed": 13,
+        "recorded_but_missed_landing": 0
+      },
+      "boundary": {
+        "failures": 3,
+        "errors": {},
+        "completion_claim_heuristic_flags": 3,
+        "original_complete_failures": 5
+      },
+      "requests": 48,
+      "responses": 48,
+      "tool_requests": 38,
+      "termination_counts": {
+        "loop_limit": 1,
+        "final": 17
+      },
+      "usage": {
+        "completion_tokens": 7279,
+        "prompt_tokens": 1169891,
+        "total_tokens": 1177170
+      },
+      "usage_available": 18,
+      "elapsed_seconds": 420.77524445793824,
+      "cost": "unknown"
+    },
+    "bridge": {
+      "arm": "bridge",
+      "evaluated": 18,
+      "missing_case_ids": [],
+      "intent": {
+        "passed": 16,
+        "accuracy": {
+          "numerator": 16,
+          "denominator": 18,
+          "value": 0.8888888888888888
+        },
+        "set_precision": {
+          "numerator": 7,
+          "denominator": 7,
+          "value": 1.0
+        },
+        "set_recall": {
+          "numerator": 7,
+          "denominator": 7,
+          "value": 1.0
+        },
+        "not_observable": 0,
+        "false_sets": 0,
+        "false_clears": 0,
+        "source_errors": 2,
+        "policy_errors": 2
+      },
+      "landing": {
+        "set_precision": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1.0
+        },
+        "set_recall": {
+          "numerator": 4,
+          "denominator": 5,
+          "value": 0.8
+        },
+        "complete_passed": 13,
+        "recorded_but_missed_landing": 1
+      },
+      "boundary": {
+        "failures": 0,
+        "errors": {},
+        "completion_claim_heuristic_flags": 0,
+        "original_complete_failures": 5
+      },
+      "requests": 53,
+      "responses": 53,
+      "tool_requests": 48,
+      "termination_counts": {
+        "loop_limit": 5,
+        "final": 13
+      },
+      "usage": {
+        "completion_tokens": 6870,
+        "prompt_tokens": 1328320,
+        "total_tokens": 1335190
+      },
+      "usage_available": 18,
+      "elapsed_seconds": 530.5316079169861,
+      "cost": "unknown"
+    },
+    "simple": {
+      "arm": "simple",
+      "evaluated": 18,
+      "missing_case_ids": [],
+      "intent": {
+        "passed": 17,
+        "accuracy": {
+          "numerator": 17,
+          "denominator": 18,
+          "value": 0.9444444444444444
+        },
+        "set_precision": {
+          "numerator": 7,
+          "denominator": 8,
+          "value": 0.875
+        },
+        "set_recall": {
+          "numerator": 7,
+          "denominator": 7,
+          "value": 1.0
+        },
+        "not_observable": 0,
+        "false_sets": 1,
+        "false_clears": 0,
+        "source_errors": 1,
+        "policy_errors": 1
+      },
+      "landing": null,
+      "boundary": {
+        "failures": 0,
+        "errors": {},
+        "completion_claim_heuristic_flags": 0,
+        "original_complete_failures": 0
+      },
+      "requests": 18,
+      "responses": 18,
+      "tool_requests": 18,
+      "termination_counts": {
+        "recorded": 18
+      },
+      "usage": {
+        "completion_tokens": 1473,
+        "prompt_tokens": 24070,
+        "total_tokens": 25543
+      },
+      "usage_available": 18,
+      "elapsed_seconds": 68.83677487407112,
+      "cost": "unknown"
+    }
+  },
+  "offline_review": {
+    "full": {
+      "observable_action_target_correct": 15,
+      "observable_action_target_incorrect": 2,
+      "observable_action_target_unobservable": 1,
+      "structured_intent_pass": 4,
+      "draft_landing_pass": 16,
+      "original_complete_pass": 13,
+      "offline_revised_complete_pass": 15,
+      "regex_false_positives": 3,
+      "real_execution_attempts": 0,
+      "false_actual_start_claims": 0,
+      "critical_negatives": 10,
+      "critical_negative_actual_mis_set": 0,
+      "critical_negative_actual_mis_clear": 0,
+      "eligible_draft_set_pass": 3,
+      "eligible_draft_set_denominator": 5,
+      "eligible_draft_clear_pass": 1,
+      "eligible_draft_clear_denominator": 1,
+      "natural_policy_errors": 1,
+      "fabricated_prior_user_constraint": 1
+    },
+    "bridge": {
+      "reviewed": 18,
+      "structured_correct": 16,
+      "observable_action_target_correct": 18,
+      "set_precision": {
+        "numerator": 7,
+        "denominator": 7
+      },
+      "set_recall": {
+        "numerator": 7,
+        "denominator": 7
+      },
+      "actual_wrong_geographic_source": 0,
+      "actual_wrong_policy_on_expected_set": 0,
+      "missing_record_ids": [
+        "keep-rules",
+        "ambiguous-chaoyang"
+      ],
+      "critical_false_set_ids": [],
+      "original_complete_correct": 13,
+      "landing_set_correct": 4,
+      "landing_set_expected": 5,
+      "execution_claims": 0,
+      "execution_attempts": 0,
+      "regex_false_positive_count": 0,
+      "fixture_rejections": 0,
+      "loop_limit_case_ids": [
+        "city-kelamayi",
+        "only-kelamayi",
+        "keep-rules",
+        "new-round-national",
+        "named-resource"
+      ]
+    },
+    "simple": {
+      "reviewed": 18,
+      "structured_correct": 17,
+      "observable_action_target_correct": 17,
+      "set_precision": {
+        "numerator": 7,
+        "denominator": 8
+      },
+      "set_recall": {
+        "numerator": 7,
+        "denominator": 7
+      },
+      "actual_wrong_geographic_source": 1,
+      "actual_wrong_policy_on_expected_set": 0,
+      "missing_record_ids": [],
+      "critical_false_set_ids": [
+        "creator-kelamayi"
+      ],
+      "original_complete_correct": null,
+      "landing_set_correct": null,
+      "landing_set_expected": null,
+      "execution_claims": 0,
+      "execution_attempts": 0,
+      "regex_false_positive_count": 0,
+      "fixture_rejections": 0,
+      "loop_limit_case_ids": []
+    }
+  },
+  "paired_draft_set": [
+    {
+      "case_id": "city-kelamayi",
+      "full_landed": true,
+      "bridge_landed": false
+    },
+    {
+      "case_id": "province-xinjiang",
+      "full_landed": false,
+      "bridge_landed": true
+    },
+    {
+      "case_id": "only-kelamayi",
+      "full_landed": true,
+      "bridge_landed": true
+    },
+    {
+      "case_id": "change-daqing",
+      "full_landed": true,
+      "bridge_landed": true
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "full_landed": false,
+      "bridge_landed": true
+    }
+  ],
+  "paired_draft_set_bridge_wins": 2,
+  "paired_draft_set_full_wins": 1,
+  "total_usage": {
+    "prompt_tokens": 2522281,
+    "completion_tokens": 15622,
+    "total_tokens": 2537903
+  },
+  "usage_available_case_runs": 54,
+  "framework_tests": {
+    "targeted_passed": 390,
+    "existing_regression_passed": 25,
+    "frozen_code_changed_after_evaluation": false
+  },
+  "historical_totals_before_contrast": {
+    "requests": 110,
+    "responses": 109
+  },
+  "cumulative_real_totals": {
+    "requests": 229,
+    "responses": 228,
+    "case_runs": 106,
+    "unique_synthetic_cases": 34
+  },
+  "original_and_offline_revised_complete": {
+    "full": {
+      "original": 13,
+      "revised": 15,
+      "denominator": 18,
+      "regex_false_positive_ids": [
+        "adoption-temp-later",
+        "new-round-national",
+        "named-resource"
+      ]
+    },
+    "bridge": {
+      "original": 13,
+      "revised": 13,
+      "denominator": 18
+    },
+    "simple": null
+  },
+  "raw_results": {
+    "full": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/contrast-v1/full.json",
+    "bridge": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/contrast-v1/bridge.json",
+    "simple": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/contrast-v1/simple.json"
+  },
+  "http_ledger": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/contrast-v1/http-ledger.jsonl",
+  "review_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/evidence/contrast-v1-review.json",
+  "audit_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/evidence/contrast-final-audit.json",
+  "interpretation": [
+    "桥接解决新疆资源适配门槛与多轮临时采用两例漏设；另有一例正确记录却受四轮上限未落地。",
+    "精简组仍把作者所在地误作调查范围；耦合不是唯一原因，关键反例失败保留。",
+    "B−A同时改变独立出口和记录职责；C−B同时简化提示与工具，并改变后续流程/响应额度，不是纯工具数量的因果试验。",
+    "A缺少独立记录工具，14例未可结构化观察不能解读为14例不理解。",
+    "18条复用合成开发样本、单轮无重试，不是独立留出或生产稳定证明；不改正式业务、不进入P1。"
+  ],
+  "raw_sha256": {
+    "outputs/geographic-scope-intent/contrast-v1/bridge.json": "8387a70495d348e897db9d4bf43ccee2563ab690a4d57512e7dfd36202200738",
+    "outputs/geographic-scope-intent/contrast-v1/simple.json": "a665c070f7ce230e6af249263ce291e1501ec63a562c2bfcb61f04f3291b3ce2",
+    "outputs/geographic-scope-intent/contrast-v1/prepared.json": "db84ae91643fc7c31210de0eff73f4a7235912772169ba4cb357166d095d86a8",
+    "outputs/geographic-scope-intent/contrast-v1/run-status.json": "a955f6995cbfb3fd7a050a52b7630f5ac114e6550c806e45197d0ace46252d3d",
+    "outputs/geographic-scope-intent/contrast-v1/progress.txt": "93d6cb9fe01cebae129979d0bbb84050b5db4d004b4bfe92b5cd179da0923332",
+    "outputs/geographic-scope-intent/contrast-v1/full.json": "cf2d52ce1ae594f742fee408ba69ed592fd01b67a827553424d6808a36b740e5",
+    "outputs/geographic-scope-intent/contrast-v1/http-ledger.jsonl": "a0b9a5026de762bbbd9beebfbae785f45d6fabedd4c4b739784b058b1c2da3c9"
+  }
+}

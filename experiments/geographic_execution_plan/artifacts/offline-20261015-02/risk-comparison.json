@@ -1,0 +1,1764 @@
+{
+  "after_geography": [
+    {
+      "contexts": [
+        {
+          "comments": [
+            {
+              "comment_id": "a",
+              "content": "欠薪"
+            }
+          ],
+          "content_key": "dy:same",
+          "item": {
+            "source_keyword": "克拉玛依市包过",
+            "title": "克拉玛依市 包过 保过 欠薪"
+          },
+          "rank": 1,
+          "search_keyword": "克拉玛依市包过"
+        },
+        {
+          "comments": [],
+          "content_key": "dy:same",
+          "item": {
+            "source_keyword": "北京路欠薪",
+            "title": "克拉玛依市 包过 保过 欠薪"
+          },
+          "rank": 7,
+          "search_keyword": "北京路欠薪"
+        },
+        {
+          "comments": [
+            {
+              "comment_id": "a",
+              "content": "欠薪"
+            }
+          ],
+          "content_key": "dy:same",
+          "item": {
+            "source_keyword": "克拉玛依市包过",
+            "title": "克拉玛依市 包过 保过 欠薪"
+          },
+          "rank": 9,
+          "search_keyword": "克拉玛依市包过"
+        },
+        {
+          "comments": [],
+          "content_key": "official",
+          "item": {
+            "enterprise_verify_reason": "公安官方",
+            "source_keyword": "克拉玛依市包过",
+            "title": "克拉玛依市 包过 保过 欠薪"
+          },
+          "rank": 2,
+          "search_keyword": "克拉玛依市包过"
+        },
+        {
+          "comments": [],
+          "content_key": "followers",
+          "item": {
+            "follower_count": 11,
+            "source_keyword": "克拉玛依市包过",
+            "title": "克拉玛依市 包过 保过 欠薪"
+          },
+          "rank": 3,
+          "search_keyword": "克拉玛依市包过"
+        },
+        {
+          "comments": [],
+          "content_key": "personal",
+          "item": {
+            "custom_verify": "认证",
+            "follower_count": 6,
+            "source_keyword": "克拉玛依市包过",
+            "title": "克拉玛依市 包过 保过 欠薪"
+          },
+          "rank": 4,
+          "search_keyword": "克拉玛依市包过"
+        }
+      ],
+      "fixture_eligible": true,
+      "geo_tier": "local",
+      "manual_responses": [
+        {
+          "matched_terms": [],
+          "reason": "人工固定响应",
+          "risk_score": 85,
+          "suspicion": "strong"
+        },
+        {
+          "matched_terms": [],
+          "reason": "人工固定响应",
+          "risk_score": 85,
+          "suspicion": "strong"
+        },
+        {
+          "matched_terms": [],
+          "reason": "人工固定响应",
+          "risk_score": 85,
+          "suspicion": "strong"
+        }
+      ],
+      "p3_candidate": {
+        "comments": [
+          {
+            "comment_id": "a",
+            "content": "欠薪"
+          }
+        ],
+        "content_key": "dy:same",
+        "platform": "dy",
+        "post": {
+          "id": "same",
+          "title": "克拉玛依市 包过 保过 欠薪"
+        },
+        "raw_ref": "fixture:one",
+        "source_queries": [
+          "克拉玛依市包过"
+        ]
+      },
+      "p3_decision": {
+        "admin_catalog_digest": "0b0a106d5a770c8334b319d5af1c68a923d9b7b9f49737c7e9adf9d7d4556eb8",
+        "basis": "direct_text",
+        "catalog_digest": "89a13f1b0928da9e6f809cccc069274e7e57b50e01ef9c96d8fc8d3664ddc021",
+        "conflict_refs": [],
+        "context_sufficient": true,
+        "errors": [],
+        "evaluation_status": "completed",
+        "evidence_refs": [
+          {
+            "ambiguous": false,
+            "derived_tier": "local",
+            "entities": [
+              {
+                "admin_code": "650200",
+                "administrative_type": "地级市",
+                "aliases": [
+                  "克拉玛依",
+                  "克拉瑪依",
+                  "克拉瑪依市"
+                ],
+                "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1+content-place-spelling-v1",
+                "city": "克拉玛依市",
+                "city_aliases": [
+                  "克拉玛依",
+                  "克拉瑪依",
+                  "克拉瑪依市"
+                ],
+                "city_code": "650200",
+                "id": "admin-650200",
+                "level": "city",
+                "name": "克拉玛依市",
+                "province": "新疆维吾尔自治区",
+                "province_aliases": [
+                  "新疆"
+                ],
+                "province_code": "650000",
+                "source_url": "https://github.com/kk-418/cn-division/tree/88f2021ea21769bdb95d93699d8a625fcd9165ef"
+              }
+            ],
+            "field": "title",
+            "place": "克拉玛依市",
+            "quote": "克拉玛依市 包过 保过 欠薪",
+            "spans": [
+              {
+                "end": 5,
+                "quote": "克拉玛依市",
+                "start": 0
+              }
+            ]
+          }
+        ],
+        "geo_tier": "local",
+        "ip_stats": {
+          "author_ip_conflict": false,
+          "author_sources": [
+            {
+              "field": "author_ip_location",
+              "input_name": "",
+              "matches": [],
+              "normalized": null,
+              "province_code": null,
+              "province_name": null,
+              "raw": null,
+              "status": "missing"
+            },
+            {
+              "field": "ip_location",
+              "input_name": "",
+              "matches": [],
+              "normalized": null,
+              "province_code": null,
+              "province_name": null,
+              "raw": null,
+              "status": "missing"
+            }
+          ],
+          "author_support": false,
+          "catalog_provenance": {
+            "catalog_digest": "0b0a106d5a770c8334b319d5af1c68a923d9b7b9f49737c7e9adf9d7d4556eb8",
+            "records_sha256": "34324bc22cd202c30d91b529f18a694a10a58d64c933bd40b54305429c0e128f",
+            "schema_version": "geographic-catalog-v1",
+            "version": "cn-division-2026.0.1-reviewed-p1-v1"
+          },
+          "comment_distribution_support": false,
+          "conflicting_ip_commenters": 0,
+          "interpretation": "publisher_provenance_only_not_event_location",
+          "ip_support": false,
+          "normalization_audit": {
+            "comments": [
+              {
+                "comment_id": "a",
+                "eligible_identity": false,
+                "input_name": "",
+                "matches": [],
+                "province_code": null,
+                "province_name": null,
+                "raw": null,
+                "source_index": 0,
+                "status": "missing"
+              }
+            ],
+            "normalization": "exact_catalog_name_or_alias_all_candidates_same_province",
+            "target_province_code": "650000",
+            "unknown_ip_commenters": 0,
+            "unknown_policy": "not_in_valid_province_denominator"
+          },
+          "policy": {
+            "min_target_share": 0.6,
+            "min_valid_coverage": 0.5,
+            "min_valid_users": 10,
+            "province_aliases": {}
+          },
+          "sampled_comment_count": 1,
+          "target_province_commenters": 0,
+          "target_share": null,
+          "unidentified_comment_count": 1,
+          "unique_commenters": 0,
+          "valid_coverage": null,
+          "valid_ip_commenters": 0
+        },
+        "model": "fixture-manual",
+        "model_input_digest": "137252f127fd30f2931c23ee1fbfefb89bc6e8364c4410013250e10518bf3660",
+        "name_binding": "same-field-sent-canonical-unique-entity-v1",
+        "name_bindings": [
+          {
+            "candidate_sources": [
+              "克拉玛依市"
+            ],
+            "entity_ids": [
+              "admin-650200"
+            ],
+            "field": "title",
+            "match": "literal",
+            "model_place": "克拉玛依市",
+            "source_place": "克拉玛依市"
+          }
+        ],
+        "place_alias_overlay": {
+          "aliases": [
+            "克拉瑪依",
+            "克拉瑪依市"
+          ],
+          "code": "650200",
+          "name": "克拉玛依市",
+          "origin": "program-reviewed spelling variants; not a new administrative publication",
+          "version": "content-place-spelling-v1"
+        },
+        "policy_digest": "3141ed141a4c75d745dba659abc56d0760378e94d58894efac4176b918f19ac6",
+        "prompt_version": "post-only-source-role-v1",
+        "raw_evidence_digest": "94c8cc9b25c4dd7498d1c39b434d253645b05521dcd4f0e952f83eb50aa04dbf",
+        "raw_response": {
+          "locations": [
+            {
+              "field": "title",
+              "place": "克拉玛依市"
+            }
+          ],
+          "status": "located"
+        },
+        "reason_codes": [
+          "DIRECT_CONTENT_LOCATION"
+        ],
+        "schema_version": "post-only-simple-names-v2",
+        "scope_digest": "2909fba083de2cd7c9dad72e801c8cc5185807244102444fa53781bbbf42c9e0",
+        "scope_origin": "fixture",
+        "status": "located",
+        "topic_match": "not_requested"
+      },
+      "risk_order": [
+        {
+          "band": "strong",
+          "content_key": "dy:same",
+          "engagement": 0,
+          "hits": [
+            {
+              "category_id": "fixture",
+              "entry_group": "包过",
+              "field": "title",
+              "keyword": "包过",
+              "match_type": "模糊",
+              "risk_level": "高",
+              "snippet": "克拉玛依市包过保过欠薪"
+            },
+            {
+              "category_id": "fixture",
+              "entry_group": "包过",
+              "field": "title",
+              "keyword": "保过",
+              "match_type": "模糊",
+              "risk_level": "高",
+              "snippet": "克拉玛依市包过保过欠薪"
+            }
+          ],
+          "model": {
+            "locations": [],
+            "matched_terms": [],
+            "reason": "人工固定响应",
+            "risk_score": 85,
+            "suspicion": "strong"
+          },
+          "model_risk": 85,
+          "rank": 7,
+          "reason": "词库命中 包过(高)、保过(高) +600；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 1 处不计分）",
+          "score": 800
+        },
+        {
+          "band": "strong",
+          "content_key": "dy:same",
+          "engagement": 0,
+          "hits": [
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "title",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "克拉玛依市包过保过欠薪"
+            },
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "comment:a",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "欠薪"
+            }
+          ],
+          "model": {
+            "locations": [],
+            "matched_terms": [],
+            "reason": "人工固定响应",
+            "risk_score": 85,
+            "suspicion": "strong"
+          },
+          "model_risk": 85,
+          "rank": 9,
+          "reason": "词库命中 欠薪(中)×2 +200；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 2 处不计分）",
+          "score": 400
+        },
+        {
+          "band": "strong",
+          "content_key": "dy:same",
+          "engagement": 0,
+          "hits": [
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "title",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "克拉玛依市包过保过欠薪"
+            },
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "comment:a",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "欠薪"
+            }
+          ],
+          "model": {
+            "locations": [],
+            "matched_terms": [],
+            "reason": "人工固定响应",
+            "risk_score": 85,
+            "suspicion": "strong"
+          },
+          "model_risk": 85,
+          "rank": 1,
+          "reason": "词库命中 欠薪(中)×2 +200；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 2 处不计分）",
+          "score": 400
+        },
+        {
+          "band": "discard",
+          "content_key": "personal",
+          "engagement": 0,
+          "hits": [],
+          "model": null,
+          "model_risk": null,
+          "rank": 4,
+          "reason": "个人认证账号（认证）粉丝 6 超过 5，不进精审",
+          "score": -1000
+        },
+        {
+          "band": "discard",
+          "content_key": "followers",
+          "engagement": 0,
+          "hits": [],
+          "model": null,
+          "model_risk": null,
+          "rank": 3,
+          "reason": "粉丝 11 超过 10，不进精审",
+          "score": -1000
+        },
+        {
+          "band": "discard",
+          "content_key": "official",
+          "engagement": 0,
+          "hits": [],
+          "model": null,
+          "model_risk": null,
+          "rank": 2,
+          "reason": "官方/机构认证账号（公安官方），不进精审",
+          "score": -1000
+        }
+      ],
+      "risk_requests": [
+        [
+          "你是内容风险初筛器，任务是判断一条社交平台帖子是否值得进入深度多模态审核。lexicon_terms 是本次调查的黑话词与变体清单，请把它当作识别暗语、谐音、拆字、拼音缩写的参考，不要只做字面匹配。评论区往往是隐藏交易的接头处，要逐条看。\n审核目标：固定审核规则\n证据规则：\n人工测试\n词库命中：欠薪@title，欠薪@comment:a\n只输出合法 JSON，不要输出 Markdown：\n{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\",\"suspicion\":\"none|weak|strong\",\"risk_score\":0-100,\"matched_terms\":[\"命中的词或变体\"],\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\ncontent_type 只是描述性标签，不参与判定。risk_score 为按上述判定规则评估的可疑程度（0 最安全，100 最确定违规），与 suspicion 一致：none 通常 0-30，weak 31-69，strong 70-100。matched_terms 与 locations 各最多列 5 项，只列最有代表性的，不要穷举。\n按上述判定规则判断这条内容：符合高危定义答 strong，符合中危定义答 weak，属于低危、放行或安全语境答 none。\n输入 JSON：\n{\"post\":{\"title\":\"克拉玛依市 包过 保过 欠薪\",\"desc\":\"\",\"author\":\"\",\"signature\":\"\",\"verify\":\"\",\"followers\":\"\",\"stats\":{\"liked\":\"\",\"comments\":\"\",\"shares\":\"\"},\"source_keyword\":\"克拉玛依市包过\"},\"comments\":[{\"id\":\"a\",\"text\":\"欠薪\"}],\"lexicon_terms\":[\"保过\",\"包过\",\"欠薪\"]}",
+          {
+            "enable_thinking": false,
+            "max_tokens": 800,
+            "model": "fixture-manual",
+            "request_timeout": 10
+          }
+        ],
+        [
+          "你是内容风险初筛器，任务是判断一条社交平台帖子是否值得进入深度多模态审核。lexicon_terms 是本次调查的黑话词与变体清单，请把它当作识别暗语、谐音、拆字、拼音缩写的参考，不要只做字面匹配。评论区往往是隐藏交易的接头处，要逐条看。\n审核目标：固定审核规则\n证据规则：\n人工测试\n词库命中：包过@title，保过@title\n只输出合法 JSON，不要输出 Markdown：\n{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\",\"suspicion\":\"none|weak|strong\",\"risk_score\":0-100,\"matched_terms\":[\"命中的词或变体\"],\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\ncontent_type 只是描述性标签，不参与判定。risk_score 为按上述判定规则评估的可疑程度（0 最安全，100 最确定违规），与 suspicion 一致：none 通常 0-30，weak 31-69，strong 70-100。matched_terms 与 locations 各最多列 5 项，只列最有代表性的，不要穷举。\n按上述判定规则判断这条内容：符合高危定义答 strong，符合中危定义答 weak，属于低危、放行或安全语境答 none。\n输入 JSON：\n{\"post\":{\"title\":\"克拉玛依市 包过 保过 欠薪\",\"desc\":\"\",\"author\":\"\",\"signature\":\"\",\"verify\":\"\",\"followers\":\"\",\"stats\":{\"liked\":\"\",\"comments\":\"\",\"shares\":\"\"},\"source_keyword\":\"北京路欠薪\"},\"comments\":[],\"lexicon_terms\":[\"保过\",\"包过\",\"欠薪\"]}",
+          {
+            "enable_thinking": false,
+            "max_tokens": 800,
+            "model": "fixture-manual",
+            "request_timeout": 10
+          }
+        ],
+        [
+          "你是内容风险初筛器，任务是判断一条社交平台帖子是否值得进入深度多模态审核。lexicon_terms 是本次调查的黑话词与变体清单，请把它当作识别暗语、谐音、拆字、拼音缩写的参考，不要只做字面匹配。评论区往往是隐藏交易的接头处，要逐条看。\n审核目标：固定审核规则\n证据规则：\n人工测试\n词库命中：欠薪@title，欠薪@comment:a\n只输出合法 JSON，不要输出 Markdown：\n{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\",\"suspicion\":\"none|weak|strong\",\"risk_score\":0-100,\"matched_terms\":[\"命中的词或变体\"],\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\ncontent_type 只是描述性标签，不参与判定。risk_score 为按上述判定规则评估的可疑程度（0 最安全，100 最确定违规），与 suspicion 一致：none 通常 0-30，weak 31-69，strong 70-100。matched_terms 与 locations 各最多列 5 项，只列最有代表性的，不要穷举。\n按上述判定规则判断这条内容：符合高危定义答 strong，符合中危定义答 weak，属于低危、放行或安全语境答 none。\n输入 JSON：\n{\"post\":{\"title\":\"克拉玛依市 包过 保过 欠薪\",\"desc\":\"\",\"author\":\"\",\"signature\":\"\",\"verify\":\"\",\"followers\":\"\",\"stats\":{\"liked\":\"\",\"comments\":\"\",\"shares\":\"\"},\"source_keyword\":\"克拉玛依市包过\"},\"comments\":[{\"id\":\"a\",\"text\":\"欠薪\"}],\"lexicon_terms\":[\"保过\",\"包过\",\"欠薪\"]}",
+          {
+            "enable_thinking": false,
+            "max_tokens": 800,
+            "model": "fixture-manual",
+            "request_timeout": 10
+          }
+        ]
+      ],
+      "risk_results": [
+        {
+          "band": "strong",
+          "content_key": "dy:same",
+          "engagement": 0,
+          "hits": [
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "title",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "克拉玛依市包过保过欠薪"
+            },
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "comment:a",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "欠薪"
+            }
+          ],
+          "model": {
+            "locations": [],
+            "matched_terms": [],
+            "reason": "人工固定响应",
+            "risk_score": 85,
+            "suspicion": "strong"
+          },
+          "model_risk": 85,
+          "rank": 1,
+          "reason": "词库命中 欠薪(中)×2 +200；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 2 处不计分）",
+          "score": 400
+        },
+        {
+          "band": "strong",
+          "content_key": "dy:same",
+          "engagement": 0,
+          "hits": [
+            {
+              "category_id": "fixture",
+              "entry_group": "包过",
+              "field": "title",
+              "keyword": "包过",
+              "match_type": "模糊",
+              "risk_level": "高",
+              "snippet": "克拉玛依市包过保过欠薪"
+            },
+            {
+              "category_id": "fixture",
+              "entry_group": "包过",
+              "field": "title",
+              "keyword": "保过",
+              "match_type": "模糊",
+              "risk_level": "高",
+              "snippet": "克拉玛依市包过保过欠薪"
+            }
+          ],
+          "model": {
+            "locations": [],
+            "matched_terms": [],
+            "reason": "人工固定响应",
+            "risk_score": 85,
+            "suspicion": "strong"
+          },
+          "model_risk": 85,
+          "rank": 7,
+          "reason": "词库命中 包过(高)、保过(高) +600；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 1 处不计分）",
+          "score": 800
+        },
+        {
+          "band": "strong",
+          "content_key": "dy:same",
+          "engagement": 0,
+          "hits": [
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "title",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "克拉玛依市包过保过欠薪"
+            },
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "comment:a",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "欠薪"
+            }
+          ],
+          "model": {
+            "locations": [],
+            "matched_terms": [],
+            "reason": "人工固定响应",
+            "risk_score": 85,
+            "suspicion": "strong"
+          },
+          "model_risk": 85,
+          "rank": 9,
+          "reason": "词库命中 欠薪(中)×2 +200；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 2 处不计分）",
+          "score": 400
+        },
+        {
+          "band": "discard",
+          "content_key": "official",
+          "engagement": 0,
+          "hits": [],
+          "model": null,
+          "model_risk": null,
+          "rank": 2,
+          "reason": "官方/机构认证账号（公安官方），不进精审",
+          "score": -1000
+        },
+        {
+          "band": "discard",
+          "content_key": "followers",
+          "engagement": 0,
+          "hits": [],
+          "model": null,
+          "model_risk": null,
+          "rank": 3,
+          "reason": "粉丝 11 超过 10，不进精审",
+          "score": -1000
+        },
+        {
+          "band": "discard",
+          "content_key": "personal",
+          "engagement": 0,
+          "hits": [],
+          "model": null,
+          "model_risk": null,
+          "rank": 4,
+          "reason": "个人认证账号（认证）粉丝 6 超过 5，不进精审",
+          "score": -1000
+        }
+      ],
+      "target_code": "650200"
+    },
+    {
+      "contexts": [
+        {
+          "comments": [
+            {
+              "comment_id": "a",
+              "content": "欠薪"
+            }
+          ],
+          "content_key": "dy:same",
+          "item": {
+            "source_keyword": "克拉玛依市包过",
+            "title": "克拉玛依市 包过 保过 欠薪"
+          },
+          "rank": 1,
+          "search_keyword": "克拉玛依市包过"
+        },
+        {
+          "comments": [],
+          "content_key": "dy:same",
+          "item": {
+            "source_keyword": "北京路欠薪",
+            "title": "克拉玛依市 包过 保过 欠薪"
+          },
+          "rank": 7,
+          "search_keyword": "北京路欠薪"
+        },
+        {
+          "comments": [
+            {
+              "comment_id": "a",
+              "content": "欠薪"
+            }
+          ],
+          "content_key": "dy:same",
+          "item": {
+            "source_keyword": "克拉玛依市包过",
+            "title": "克拉玛依市 包过 保过 欠薪"
+          },
+          "rank": 9,
+          "search_keyword": "克拉玛依市包过"
+        },
+        {
+          "comments": [],
+          "content_key": "official",
+          "item": {
+            "enterprise_verify_reason": "公安官方",
+            "source_keyword": "克拉玛依市包过",
+            "title": "克拉玛依市 包过 保过 欠薪"
+          },
+          "rank": 2,
+          "search_keyword": "克拉玛依市包过"
+        },
+        {
+          "comments": [],
+          "content_key": "followers",
+          "item": {
+            "follower_count": 11,
+            "source_keyword": "克拉玛依市包过",
+            "title": "克拉玛依市 包过 保过 欠薪"
+          },
+          "rank": 3,
+          "search_keyword": "克拉玛依市包过"
+        },
+        {
+          "comments": [],
+          "content_key": "personal",
+          "item": {
+            "custom_verify": "认证",
+            "follower_count": 6,
+            "source_keyword": "克拉玛依市包过",
+            "title": "克拉玛依市 包过 保过 欠薪"
+          },
+          "rank": 4,
+          "search_keyword": "克拉玛依市包过"
+        }
+      ],
+      "fixture_eligible": false,
+      "geo_tier": "other_region",
+      "manual_responses": [
+        {
+          "matched_terms": [],
+          "reason": "人工固定响应",
+          "risk_score": 85,
+          "suspicion": "strong"
+        },
+        {
+          "matched_terms": [],
+          "reason": "人工固定响应",
+          "risk_score": 85,
+          "suspicion": "strong"
+        },
+        {
+          "matched_terms": [],
+          "reason": "人工固定响应",
+          "risk_score": 85,
+          "suspicion": "strong"
+        }
+      ],
+      "p3_candidate": {
+        "comments": [
+          {
+            "comment_id": "a",
+            "content": "欠薪"
+          }
+        ],
+        "content_key": "dy:same",
+        "platform": "dy",
+        "post": {
+          "id": "same",
+          "title": "克拉玛依市 包过 保过 欠薪"
+        },
+        "raw_ref": "fixture:one",
+        "source_queries": [
+          "克拉玛依市包过"
+        ]
+      },
+      "p3_decision": {
+        "admin_catalog_digest": "0b0a106d5a770c8334b319d5af1c68a923d9b7b9f49737c7e9adf9d7d4556eb8",
+        "basis": "direct_text",
+        "catalog_digest": "89a13f1b0928da9e6f809cccc069274e7e57b50e01ef9c96d8fc8d3664ddc021",
+        "conflict_refs": [],
+        "context_sufficient": true,
+        "errors": [],
+        "evaluation_status": "completed",
+        "evidence_refs": [
+          {
+            "ambiguous": false,
+            "derived_tier": "other_region",
+            "entities": [
+              {
+                "admin_code": "650200",
+                "administrative_type": "地级市",
+                "aliases": [
+                  "克拉玛依",
+                  "克拉瑪依",
+                  "克拉瑪依市"
+                ],
+                "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1+content-place-spelling-v1",
+                "city": "克拉玛依市",
+                "city_aliases": [
+                  "克拉玛依",
+                  "克拉瑪依",
+                  "克拉瑪依市"
+                ],
+                "city_code": "650200",
+                "id": "admin-650200",
+                "level": "city",
+                "name": "克拉玛依市",
+                "province": "新疆维吾尔自治区",
+                "province_aliases": [
+                  "新疆"
+                ],
+                "province_code": "650000",
+                "source_url": "https://github.com/kk-418/cn-division/tree/88f2021ea21769bdb95d93699d8a625fcd9165ef"
+              }
+            ],
+            "field": "title",
+            "place": "克拉玛依市",
+            "quote": "克拉玛依市 包过 保过 欠薪",
+            "spans": [
+              {
+                "end": 5,
+                "quote": "克拉玛依市",
+                "start": 0
+              }
+            ]
+          }
+        ],
+        "geo_tier": "other_region",
+        "ip_stats": {
+          "author_ip_conflict": false,
+          "author_sources": [
+            {
+              "field": "author_ip_location",
+              "input_name": "",
+              "matches": [],
+              "normalized": null,
+              "province_code": null,
+              "province_name": null,
+              "raw": null,
+              "status": "missing"
+            },
+            {
+              "field": "ip_location",
+              "input_name": "",
+              "matches": [],
+              "normalized": null,
+              "province_code": null,
+              "province_name": null,
+              "raw": null,
+              "status": "missing"
+            }
+          ],
+          "author_support": false,
+          "catalog_provenance": {
+            "catalog_digest": "0b0a106d5a770c8334b319d5af1c68a923d9b7b9f49737c7e9adf9d7d4556eb8",
+            "records_sha256": "34324bc22cd202c30d91b529f18a694a10a58d64c933bd40b54305429c0e128f",
+            "schema_version": "geographic-catalog-v1",
+            "version": "cn-division-2026.0.1-reviewed-p1-v1"
+          },
+          "comment_distribution_support": false,
+          "conflicting_ip_commenters": 0,
+          "interpretation": "publisher_provenance_only_not_event_location",
+          "ip_support": false,
+          "normalization_audit": {
+            "comments": [
+              {
+                "comment_id": "a",
+                "eligible_identity": false,
+                "input_name": "",
+                "matches": [],
+                "province_code": null,
+                "province_name": null,
+                "raw": null,
+                "source_index": 0,
+                "status": "missing"
+              }
+            ],
+            "normalization": "exact_catalog_name_or_alias_all_candidates_same_province",
+            "target_province_code": "440000",
+            "unknown_ip_commenters": 0,
+            "unknown_policy": "not_in_valid_province_denominator"
+          },
+          "policy": {
+            "min_target_share": 0.6,
+            "min_valid_coverage": 0.5,
+            "min_valid_users": 10,
+            "province_aliases": {}
+          },
+          "sampled_comment_count": 1,
+          "target_province_commenters": 0,
+          "target_share": null,
+          "unidentified_comment_count": 1,
+          "unique_commenters": 0,
+          "valid_coverage": null,
+          "valid_ip_commenters": 0
+        },
+        "model": "fixture-manual",
+        "model_input_digest": "137252f127fd30f2931c23ee1fbfefb89bc6e8364c4410013250e10518bf3660",
+        "name_binding": "same-field-sent-canonical-unique-entity-v1",
+        "name_bindings": [
+          {
+            "candidate_sources": [
+              "克拉玛依市"
+            ],
+            "entity_ids": [
+              "admin-650200"
+            ],
+            "field": "title",
+            "match": "literal",
+            "model_place": "克拉玛依市",
+            "source_place": "克拉玛依市"
+          }
+        ],
+        "place_alias_overlay": {
+          "aliases": [
+            "克拉瑪依",
+            "克拉瑪依市"
+          ],
+          "code": "650200",
+          "name": "克拉玛依市",
+          "origin": "program-reviewed spelling variants; not a new administrative publication",
+          "version": "content-place-spelling-v1"
+        },
+        "policy_digest": "3141ed141a4c75d745dba659abc56d0760378e94d58894efac4176b918f19ac6",
+        "prompt_version": "post-only-source-role-v1",
+        "raw_evidence_digest": "94c8cc9b25c4dd7498d1c39b434d253645b05521dcd4f0e952f83eb50aa04dbf",
+        "raw_response": {
+          "locations": [
+            {
+              "field": "title",
+              "place": "克拉玛依市"
+            }
+          ],
+          "status": "located"
+        },
+        "reason_codes": [
+          "DIRECT_CONTENT_LOCATION"
+        ],
+        "schema_version": "post-only-simple-names-v2",
+        "scope_digest": "9fcc2dcb4985ff3b0757776343103f776d454fc3aa7dece68d0863c4751c3bdc",
+        "scope_origin": "fixture",
+        "status": "located",
+        "topic_match": "not_requested"
+      },
+      "risk_order": [
+        {
+          "band": "strong",
+          "content_key": "dy:same",
+          "engagement": 0,
+          "hits": [
+            {
+              "category_id": "fixture",
+              "entry_group": "包过",
+              "field": "title",
+              "keyword": "包过",
+              "match_type": "模糊",
+              "risk_level": "高",
+              "snippet": "克拉玛依市包过保过欠薪"
+            },
+            {
+              "category_id": "fixture",
+              "entry_group": "包过",
+              "field": "title",
+              "keyword": "保过",
+              "match_type": "模糊",
+              "risk_level": "高",
+              "snippet": "克拉玛依市包过保过欠薪"
+            }
+          ],
+          "model": {
+            "locations": [],
+            "matched_terms": [],
+            "reason": "人工固定响应",
+            "risk_score": 85,
+            "suspicion": "strong"
+          },
+          "model_risk": 85,
+          "rank": 7,
+          "reason": "词库命中 包过(高)、保过(高) +600；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 1 处不计分）",
+          "score": 800
+        },
+        {
+          "band": "strong",
+          "content_key": "dy:same",
+          "engagement": 0,
+          "hits": [
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "title",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "克拉玛依市包过保过欠薪"
+            },
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "comment:a",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "欠薪"
+            }
+          ],
+          "model": {
+            "locations": [],
+            "matched_terms": [],
+            "reason": "人工固定响应",
+            "risk_score": 85,
+            "suspicion": "strong"
+          },
+          "model_risk": 85,
+          "rank": 9,
+          "reason": "词库命中 欠薪(中)×2 +200；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 2 处不计分）",
+          "score": 400
+        },
+        {
+          "band": "strong",
+          "content_key": "dy:same",
+          "engagement": 0,
+          "hits": [
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "title",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "克拉玛依市包过保过欠薪"
+            },
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "comment:a",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "欠薪"
+            }
+          ],
+          "model": {
+            "locations": [],
+            "matched_terms": [],
+            "reason": "人工固定响应",
+            "risk_score": 85,
+            "suspicion": "strong"
+          },
+          "model_risk": 85,
+          "rank": 1,
+          "reason": "词库命中 欠薪(中)×2 +200；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 2 处不计分）",
+          "score": 400
+        },
+        {
+          "band": "discard",
+          "content_key": "personal",
+          "engagement": 0,
+          "hits": [],
+          "model": null,
+          "model_risk": null,
+          "rank": 4,
+          "reason": "个人认证账号（认证）粉丝 6 超过 5，不进精审",
+          "score": -1000
+        },
+        {
+          "band": "discard",
+          "content_key": "followers",
+          "engagement": 0,
+          "hits": [],
+          "model": null,
+          "model_risk": null,
+          "rank": 3,
+          "reason": "粉丝 11 超过 10，不进精审",
+          "score": -1000
+        },
+        {
+          "band": "discard",
+          "content_key": "official",
+          "engagement": 0,
+          "hits": [],
+          "model": null,
+          "model_risk": null,
+          "rank": 2,
+          "reason": "官方/机构认证账号（公安官方），不进精审",
+          "score": -1000
+        }
+      ],
+      "risk_requests": [
+        [
+          "你是内容风险初筛器，任务是判断一条社交平台帖子是否值得进入深度多模态审核。lexicon_terms 是本次调查的黑话词与变体清单，请把它当作识别暗语、谐音、拆字、拼音缩写的参考，不要只做字面匹配。评论区往往是隐藏交易的接头处，要逐条看。\n审核目标：固定审核规则\n证据规则：\n人工测试\n词库命中：欠薪@title，欠薪@comment:a\n只输出合法 JSON，不要输出 Markdown：\n{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\",\"suspicion\":\"none|weak|strong\",\"risk_score\":0-100,\"matched_terms\":[\"命中的词或变体\"],\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\ncontent_type 只是描述性标签，不参与判定。risk_score 为按上述判定规则评估的可疑程度（0 最安全，100 最确定违规），与 suspicion 一致：none 通常 0-30，weak 31-69，strong 70-100。matched_terms 与 locations 各最多列 5 项，只列最有代表性的，不要穷举。\n按上述判定规则判断这条内容：符合高危定义答 strong，符合中危定义答 weak，属于低危、放行或安全语境答 none。\n输入 JSON：\n{\"post\":{\"title\":\"克拉玛依市 包过 保过 欠薪\",\"desc\":\"\",\"author\":\"\",\"signature\":\"\",\"verify\":\"\",\"followers\":\"\",\"stats\":{\"liked\":\"\",\"comments\":\"\",\"shares\":\"\"},\"source_keyword\":\"克拉玛依市包过\"},\"comments\":[{\"id\":\"a\",\"text\":\"欠薪\"}],\"lexicon_terms\":[\"保过\",\"包过\",\"欠薪\"]}",
+          {
+            "enable_thinking": false,
+            "max_tokens": 800,
+            "model": "fixture-manual",
+            "request_timeout": 10
+          }
+        ],
+        [
+          "你是内容风险初筛器，任务是判断一条社交平台帖子是否值得进入深度多模态审核。lexicon_terms 是本次调查的黑话词与变体清单，请把它当作识别暗语、谐音、拆字、拼音缩写的参考，不要只做字面匹配。评论区往往是隐藏交易的接头处，要逐条看。\n审核目标：固定审核规则\n证据规则：\n人工测试\n词库命中：包过@title，保过@title\n只输出合法 JSON，不要输出 Markdown：\n{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\",\"suspicion\":\"none|weak|strong\",\"risk_score\":0-100,\"matched_terms\":[\"命中的词或变体\"],\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\ncontent_type 只是描述性标签，不参与判定。risk_score 为按上述判定规则评估的可疑程度（0 最安全，100 最确定违规），与 suspicion 一致：none 通常 0-30，weak 31-69，strong 70-100。matched_terms 与 locations 各最多列 5 项，只列最有代表性的，不要穷举。\n按上述判定规则判断这条内容：符合高危定义答 strong，符合中危定义答 weak，属于低危、放行或安全语境答 none。\n输入 JSON：\n{\"post\":{\"title\":\"克拉玛依市 包过 保过 欠薪\",\"desc\":\"\",\"author\":\"\",\"signature\":\"\",\"verify\":\"\",\"followers\":\"\",\"stats\":{\"liked\":\"\",\"comments\":\"\",\"shares\":\"\"},\"source_keyword\":\"北京路欠薪\"},\"comments\":[],\"lexicon_terms\":[\"保过\",\"包过\",\"欠薪\"]}",
+          {
+            "enable_thinking": false,
+            "max_tokens": 800,
+            "model": "fixture-manual",
+            "request_timeout": 10
+          }
+        ],
+        [
+          "你是内容风险初筛器，任务是判断一条社交平台帖子是否值得进入深度多模态审核。lexicon_terms 是本次调查的黑话词与变体清单，请把它当作识别暗语、谐音、拆字、拼音缩写的参考，不要只做字面匹配。评论区往往是隐藏交易的接头处，要逐条看。\n审核目标：固定审核规则\n证据规则：\n人工测试\n词库命中：欠薪@title，欠薪@comment:a\n只输出合法 JSON，不要输出 Markdown：\n{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\",\"suspicion\":\"none|weak|strong\",\"risk_score\":0-100,\"matched_terms\":[\"命中的词或变体\"],\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\ncontent_type 只是描述性标签，不参与判定。risk_score 为按上述判定规则评估的可疑程度（0 最安全，100 最确定违规），与 suspicion 一致：none 通常 0-30，weak 31-69，strong 70-100。matched_terms 与 locations 各最多列 5 项，只列最有代表性的，不要穷举。\n按上述判定规则判断这条内容：符合高危定义答 strong，符合中危定义答 weak，属于低危、放行或安全语境答 none。\n输入 JSON：\n{\"post\":{\"title\":\"克拉玛依市 包过 保过 欠薪\",\"desc\":\"\",\"author\":\"\",\"signature\":\"\",\"verify\":\"\",\"followers\":\"\",\"stats\":{\"liked\":\"\",\"comments\":\"\",\"shares\":\"\"},\"source_keyword\":\"克拉玛依市包过\"},\"comments\":[{\"id\":\"a\",\"text\":\"欠薪\"}],\"lexicon_terms\":[\"保过\",\"包过\",\"欠薪\"]}",
+          {
+            "enable_thinking": false,
+            "max_tokens": 800,
+            "model": "fixture-manual",
+            "request_timeout": 10
+          }
+        ]
+      ],
+      "risk_results": [
+        {
+          "band": "strong",
+          "content_key": "dy:same",
+          "engagement": 0,
+          "hits": [
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "title",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "克拉玛依市包过保过欠薪"
+            },
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "comment:a",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "欠薪"
+            }
+          ],
+          "model": {
+            "locations": [],
+            "matched_terms": [],
+            "reason": "人工固定响应",
+            "risk_score": 85,
+            "suspicion": "strong"
+          },
+          "model_risk": 85,
+          "rank": 1,
+          "reason": "词库命中 欠薪(中)×2 +200；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 2 处不计分）",
+          "score": 400
+        },
+        {
+          "band": "strong",
+          "content_key": "dy:same",
+          "engagement": 0,
+          "hits": [
+            {
+              "category_id": "fixture",
+              "entry_group": "包过",
+              "field": "title",
+              "keyword": "包过",
+              "match_type": "模糊",
+              "risk_level": "高",
+              "snippet": "克拉玛依市包过保过欠薪"
+            },
+            {
+              "category_id": "fixture",
+              "entry_group": "包过",
+              "field": "title",
+              "keyword": "保过",
+              "match_type": "模糊",
+              "risk_level": "高",
+              "snippet": "克拉玛依市包过保过欠薪"
+            }
+          ],
+          "model": {
+            "locations": [],
+            "matched_terms": [],
+            "reason": "人工固定响应",
+            "risk_score": 85,
+            "suspicion": "strong"
+          },
+          "model_risk": 85,
+          "rank": 7,
+          "reason": "词库命中 包过(高)、保过(高) +600；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 1 处不计分）",
+          "score": 800
+        },
+        {
+          "band": "strong",
+          "content_key": "dy:same",
+          "engagement": 0,
+          "hits": [
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "title",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "克拉玛依市包过保过欠薪"
+            },
+            {
+              "category_id": "fixture",
+              "entry_group": "欠薪",
+              "field": "comment:a",
+              "keyword": "欠薪",
+              "match_type": "模糊",
+              "risk_level": "中",
+              "snippet": "欠薪"
+            }
+          ],
+          "model": {
+            "locations": [],
+            "matched_terms": [],
+            "reason": "人工固定响应",
+            "risk_score": 85,
+            "suspicion": "strong"
+          },
+          "model_risk": 85,
+          "rank": 9,
+          "reason": "词库命中 欠薪(中)×2 +200；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 2 处不计分）",
+          "score": 400
+        },
+        {
+          "band": "discard",
+          "content_key": "official",
+          "engagement": 0,
+          "hits": [],
+          "model": null,
+          "model_risk": null,
+          "rank": 2,
+          "reason": "官方/机构认证账号（公安官方），不进精审",
+          "score": -1000
+        },
+        {
+          "band": "discard",
+          "content_key": "followers",
+          "engagement": 0,
+          "hits": [],
+          "model": null,
+          "model_risk": null,
+          "rank": 3,
+          "reason": "粉丝 11 超过 10，不进精审",
+          "score": -1000
+        },
+        {
+          "band": "discard",
+          "content_key": "personal",
+          "engagement": 0,
+          "hits": [],
+          "model": null,
+          "model_risk": null,
+          "rank": 4,
+          "reason": "个人认证账号（认证）粉丝 6 超过 5，不进精审",
+          "score": -1000
+        }
+      ],
+      "target_code": "440300"
+    }
+  ],
+  "assertions": {
+    "identical_complete_risk_inputs": true,
+    "identical_hits_and_self_hit_exclusions": true,
+    "identical_identity_exclusions": true,
+    "identical_requests": true,
+    "identical_scores_and_risk_order": true,
+    "target_changes_only_fixture_eligibility": true
+  },
+  "before_geography": {
+    "contexts": [
+      {
+        "comments": [
+          {
+            "comment_id": "a",
+            "content": "欠薪"
+          }
+        ],
+        "content_key": "dy:same",
+        "item": {
+          "source_keyword": "克拉玛依市包过",
+          "title": "克拉玛依市 包过 保过 欠薪"
+        },
+        "rank": 1,
+        "search_keyword": "克拉玛依市包过"
+      },
+      {
+        "comments": [],
+        "content_key": "dy:same",
+        "item": {
+          "source_keyword": "北京路欠薪",
+          "title": "克拉玛依市 包过 保过 欠薪"
+        },
+        "rank": 7,
+        "search_keyword": "北京路欠薪"
+      },
+      {
+        "comments": [
+          {
+            "comment_id": "a",
+            "content": "欠薪"
+          }
+        ],
+        "content_key": "dy:same",
+        "item": {
+          "source_keyword": "克拉玛依市包过",
+          "title": "克拉玛依市 包过 保过 欠薪"
+        },
+        "rank": 9,
+        "search_keyword": "克拉玛依市包过"
+      },
+      {
+        "comments": [],
+        "content_key": "official",
+        "item": {
+          "enterprise_verify_reason": "公安官方",
+          "source_keyword": "克拉玛依市包过",
+          "title": "克拉玛依市 包过 保过 欠薪"
+        },
+        "rank": 2,
+        "search_keyword": "克拉玛依市包过"
+      },
+      {
+        "comments": [],
+        "content_key": "followers",
+        "item": {
+          "follower_count": 11,
+          "source_keyword": "克拉玛依市包过",
+          "title": "克拉玛依市 包过 保过 欠薪"
+        },
+        "rank": 3,
+        "search_keyword": "克拉玛依市包过"
+      },
+      {
+        "comments": [],
+        "content_key": "personal",
+        "item": {
+          "custom_verify": "认证",
+          "follower_count": 6,
+          "source_keyword": "克拉玛依市包过",
+          "title": "克拉玛依市 包过 保过 欠薪"
+        },
+        "rank": 4,
+        "search_keyword": "克拉玛依市包过"
+      }
+    ],
+    "manual_responses": [
+      {
+        "matched_terms": [],
+        "reason": "人工固定响应",
+        "risk_score": 85,
+        "suspicion": "strong"
+      },
+      {
+        "matched_terms": [],
+        "reason": "人工固定响应",
+        "risk_score": 85,
+        "suspicion": "strong"
+      },
+      {
+        "matched_terms": [],
+        "reason": "人工固定响应",
+        "risk_score": 85,
+        "suspicion": "strong"
+      }
+    ],
+    "risk_order": [
+      {
+        "band": "strong",
+        "content_key": "dy:same",
+        "engagement": 0,
+        "hits": [
+          {
+            "category_id": "fixture",
+            "entry_group": "包过",
+            "field": "title",
+            "keyword": "包过",
+            "match_type": "模糊",
+            "risk_level": "高",
+            "snippet": "克拉玛依市包过保过欠薪"
+          },
+          {
+            "category_id": "fixture",
+            "entry_group": "包过",
+            "field": "title",
+            "keyword": "保过",
+            "match_type": "模糊",
+            "risk_level": "高",
+            "snippet": "克拉玛依市包过保过欠薪"
+          }
+        ],
+        "model": {
+          "locations": [],
+          "matched_terms": [],
+          "reason": "人工固定响应",
+          "risk_score": 85,
+          "suspicion": "strong"
+        },
+        "model_risk": 85,
+        "rank": 7,
+        "reason": "词库命中 包过(高)、保过(高) +600；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 1 处不计分）",
+        "score": 800
+      },
+      {
+        "band": "strong",
+        "content_key": "dy:same",
+        "engagement": 0,
+        "hits": [
+          {
+            "category_id": "fixture",
+            "entry_group": "欠薪",
+            "field": "title",
+            "keyword": "欠薪",
+            "match_type": "模糊",
+            "risk_level": "中",
+            "snippet": "克拉玛依市包过保过欠薪"
+          },
+          {
+            "category_id": "fixture",
+            "entry_group": "欠薪",
+            "field": "comment:a",
+            "keyword": "欠薪",
+            "match_type": "模糊",
+            "risk_level": "中",
+            "snippet": "欠薪"
+          }
+        ],
+        "model": {
+          "locations": [],
+          "matched_terms": [],
+          "reason": "人工固定响应",
+          "risk_score": 85,
+          "suspicion": "strong"
+        },
+        "model_risk": 85,
+        "rank": 9,
+        "reason": "词库命中 欠薪(中)×2 +200；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 2 处不计分）",
+        "score": 400
+      },
+      {
+        "band": "strong",
+        "content_key": "dy:same",
+        "engagement": 0,
+        "hits": [
+          {
+            "category_id": "fixture",
+            "entry_group": "欠薪",
+            "field": "title",
+            "keyword": "欠薪",
+            "match_type": "模糊",
+            "risk_level": "中",
+            "snippet": "克拉玛依市包过保过欠薪"
+          },
+          {
+            "category_id": "fixture",
+            "entry_group": "欠薪",
+            "field": "comment:a",
+            "keyword": "欠薪",
+            "match_type": "模糊",
+            "risk_level": "中",
+            "snippet": "欠薪"
+          }
+        ],
+        "model": {
+          "locations": [],
+          "matched_terms": [],
+          "reason": "人工固定响应",
+          "risk_score": 85,
+          "suspicion": "strong"
+        },
+        "model_risk": 85,
+        "rank": 1,
+        "reason": "词库命中 欠薪(中)×2 +200；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 2 处不计分）",
+        "score": 400
+      },
+      {
+        "band": "discard",
+        "content_key": "personal",
+        "engagement": 0,
+        "hits": [],
+        "model": null,
+        "model_risk": null,
+        "rank": 4,
+        "reason": "个人认证账号（认证）粉丝 6 超过 5，不进精审",
+        "score": -1000
+      },
+      {
+        "band": "discard",
+        "content_key": "followers",
+        "engagement": 0,
+        "hits": [],
+        "model": null,
+        "model_risk": null,
+        "rank": 3,
+        "reason": "粉丝 11 超过 10，不进精审",
+        "score": -1000
+      },
+      {
+        "band": "discard",
+        "content_key": "official",
+        "engagement": 0,
+        "hits": [],
+        "model": null,
+        "model_risk": null,
+        "rank": 2,
+        "reason": "官方/机构认证账号（公安官方），不进精审",
+        "score": -1000
+      }
+    ],
+    "risk_requests": [
+      [
+        "你是内容风险初筛器，任务是判断一条社交平台帖子是否值得进入深度多模态审核。lexicon_terms 是本次调查的黑话词与变体清单，请把它当作识别暗语、谐音、拆字、拼音缩写的参考，不要只做字面匹配。评论区往往是隐藏交易的接头处，要逐条看。\n审核目标：固定审核规则\n证据规则：\n人工测试\n词库命中：欠薪@title，欠薪@comment:a\n只输出合法 JSON，不要输出 Markdown：\n{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\",\"suspicion\":\"none|weak|strong\",\"risk_score\":0-100,\"matched_terms\":[\"命中的词或变体\"],\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\ncontent_type 只是描述性标签，不参与判定。risk_score 为按上述判定规则评估的可疑程度（0 最安全，100 最确定违规），与 suspicion 一致：none 通常 0-30，weak 31-69，strong 70-100。matched_terms 与 locations 各最多列 5 项，只列最有代表性的，不要穷举。\n按上述判定规则判断这条内容：符合高危定义答 strong，符合中危定义答 weak，属于低危、放行或安全语境答 none。\n输入 JSON：\n{\"post\":{\"title\":\"克拉玛依市 包过 保过 欠薪\",\"desc\":\"\",\"author\":\"\",\"signature\":\"\",\"verify\":\"\",\"followers\":\"\",\"stats\":{\"liked\":\"\",\"comments\":\"\",\"shares\":\"\"},\"source_keyword\":\"克拉玛依市包过\"},\"comments\":[{\"id\":\"a\",\"text\":\"欠薪\"}],\"lexicon_terms\":[\"保过\",\"包过\",\"欠薪\"]}",
+        {
+          "enable_thinking": false,
+          "max_tokens": 800,
+          "model": "fixture-manual",
+          "request_timeout": 10
+        }
+      ],
+      [
+        "你是内容风险初筛器，任务是判断一条社交平台帖子是否值得进入深度多模态审核。lexicon_terms 是本次调查的黑话词与变体清单，请把它当作识别暗语、谐音、拆字、拼音缩写的参考，不要只做字面匹配。评论区往往是隐藏交易的接头处，要逐条看。\n审核目标：固定审核规则\n证据规则：\n人工测试\n词库命中：包过@title，保过@title\n只输出合法 JSON，不要输出 Markdown：\n{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\",\"suspicion\":\"none|weak|strong\",\"risk_score\":0-100,\"matched_terms\":[\"命中的词或变体\"],\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\ncontent_type 只是描述性标签，不参与判定。risk_score 为按上述判定规则评估的可疑程度（0 最安全，100 最确定违规），与 suspicion 一致：none 通常 0-30，weak 31-69，strong 70-100。matched_terms 与 locations 各最多列 5 项，只列最有代表性的，不要穷举。\n按上述判定规则判断这条内容：符合高危定义答 strong，符合中危定义答 weak，属于低危、放行或安全语境答 none。\n输入 JSON：\n{\"post\":{\"title\":\"克拉玛依市 包过 保过 欠薪\",\"desc\":\"\",\"author\":\"\",\"signature\":\"\",\"verify\":\"\",\"followers\":\"\",\"stats\":{\"liked\":\"\",\"comments\":\"\",\"shares\":\"\"},\"source_keyword\":\"北京路欠薪\"},\"comments\":[],\"lexicon_terms\":[\"保过\",\"包过\",\"欠薪\"]}",
+        {
+          "enable_thinking": false,
+          "max_tokens": 800,
+          "model": "fixture-manual",
+          "request_timeout": 10
+        }
+      ],
+      [
+        "你是内容风险初筛器，任务是判断一条社交平台帖子是否值得进入深度多模态审核。lexicon_terms 是本次调查的黑话词与变体清单，请把它当作识别暗语、谐音、拆字、拼音缩写的参考，不要只做字面匹配。评论区往往是隐藏交易的接头处，要逐条看。\n审核目标：固定审核规则\n证据规则：\n人工测试\n词库命中：欠薪@title，欠薪@comment:a\n只输出合法 JSON，不要输出 Markdown：\n{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\",\"suspicion\":\"none|weak|strong\",\"risk_score\":0-100,\"matched_terms\":[\"命中的词或变体\"],\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\ncontent_type 只是描述性标签，不参与判定。risk_score 为按上述判定规则评估的可疑程度（0 最安全，100 最确定违规），与 suspicion 一致：none 通常 0-30，weak 31-69，strong 70-100。matched_terms 与 locations 各最多列 5 项，只列最有代表性的，不要穷举。\n按上述判定规则判断这条内容：符合高危定义答 strong，符合中危定义答 weak，属于低危、放行或安全语境答 none。\n输入 JSON：\n{\"post\":{\"title\":\"克拉玛依市 包过 保过 欠薪\",\"desc\":\"\",\"author\":\"\",\"signature\":\"\",\"verify\":\"\",\"followers\":\"\",\"stats\":{\"liked\":\"\",\"comments\":\"\",\"shares\":\"\"},\"source_keyword\":\"克拉玛依市包过\"},\"comments\":[{\"id\":\"a\",\"text\":\"欠薪\"}],\"lexicon_terms\":[\"保过\",\"包过\",\"欠薪\"]}",
+        {
+          "enable_thinking": false,
+          "max_tokens": 800,
+          "model": "fixture-manual",
+          "request_timeout": 10
+        }
+      ]
+    ],
+    "risk_results": [
+      {
+        "band": "strong",
+        "content_key": "dy:same",
+        "engagement": 0,
+        "hits": [
+          {
+            "category_id": "fixture",
+            "entry_group": "欠薪",
+            "field": "title",
+            "keyword": "欠薪",
+            "match_type": "模糊",
+            "risk_level": "中",
+            "snippet": "克拉玛依市包过保过欠薪"
+          },
+          {
+            "category_id": "fixture",
+            "entry_group": "欠薪",
+            "field": "comment:a",
+            "keyword": "欠薪",
+            "match_type": "模糊",
+            "risk_level": "中",
+            "snippet": "欠薪"
+          }
+        ],
+        "model": {
+          "locations": [],
+          "matched_terms": [],
+          "reason": "人工固定响应",
+          "risk_score": 85,
+          "suspicion": "strong"
+        },
+        "model_risk": 85,
+        "rank": 1,
+        "reason": "词库命中 欠薪(中)×2 +200；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 2 处不计分）",
+        "score": 400
+      },
+      {
+        "band": "strong",
+        "content_key": "dy:same",
+        "engagement": 0,
+        "hits": [
+          {
+            "category_id": "fixture",
+            "entry_group": "包过",
+            "field": "title",
+            "keyword": "包过",
+            "match_type": "模糊",
+            "risk_level": "高",
+            "snippet": "克拉玛依市包过保过欠薪"
+          },
+          {
+            "category_id": "fixture",
+            "entry_group": "包过",
+            "field": "title",
+            "keyword": "保过",
+            "match_type": "模糊",
+            "risk_level": "高",
+            "snippet": "克拉玛依市包过保过欠薪"
+          }
+        ],
+        "model": {
+          "locations": [],
+          "matched_terms": [],
+          "reason": "人工固定响应",
+          "risk_score": 85,
+          "suspicion": "strong"
+        },
+        "model_risk": 85,
+        "rank": 7,
+        "reason": "词库命中 包过(高)、保过(高) +600；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 1 处不计分）",
+        "score": 800
+      },
+      {
+        "band": "strong",
+        "content_key": "dy:same",
+        "engagement": 0,
+        "hits": [
+          {
+            "category_id": "fixture",
+            "entry_group": "欠薪",
+            "field": "title",
+            "keyword": "欠薪",
+            "match_type": "模糊",
+            "risk_level": "中",
+            "snippet": "克拉玛依市包过保过欠薪"
+          },
+          {
+            "category_id": "fixture",
+            "entry_group": "欠薪",
+            "field": "comment:a",
+            "keyword": "欠薪",
+            "match_type": "模糊",
+            "risk_level": "中",
+            "snippet": "欠薪"
+          }
+        ],
+        "model": {
+          "locations": [],
+          "matched_terms": [],
+          "reason": "人工固定响应",
+          "risk_score": 85,
+          "suspicion": "strong"
+        },
+        "model_risk": 85,
+        "rank": 9,
+        "reason": "词库命中 欠薪(中)×2 +200；模型 strong +200：人工固定响应，可疑分 85（搜索词所在词条命中 2 处不计分）",
+        "score": 400
+      },
+      {
+        "band": "discard",
+        "content_key": "official",
+        "engagement": 0,
+        "hits": [],
+        "model": null,
+        "model_risk": null,
+        "rank": 2,
+        "reason": "官方/机构认证账号（公安官方），不进精审",
+        "score": -1000
+      },
+      {
+        "band": "discard",
+        "content_key": "followers",
+        "engagement": 0,
+        "hits": [],
+        "model": null,
+        "model_risk": null,
+        "rank": 3,
+        "reason": "粉丝 11 超过 10，不进精审",
+        "score": -1000
+      },
+      {
+        "band": "discard",
+        "content_key": "personal",
+        "engagement": 0,
+        "hits": [],
+        "model": null,
+        "model_risk": null,
+        "rank": 4,
+        "reason": "个人认证账号（认证）粉丝 6 超过 5，不进精审",
+        "score": -1000
+      }
+    ]
+  },
+  "fixture_only": true,
+  "frozen_risk_inputs": {
+    "category_ids": [
+      "fixture"
+    ],
+    "digest": "5468e06f59090dd07d3830905595553d4339a10f8334a0b006db4a283e027d78",
+    "identity": {
+      "max_followers_personal_verified": 5,
+      "max_followers_unverified": 10,
+      "official_verify_patterns": [
+        "官方",
+        "政务",
+        "公安",
+        "警",
+        "法院",
+        "检察",
+        "政府",
+        "委员会",
+        "管理中心",
+        "人民",
+        "电视台",
+        "广播",
+        "电台",
+        "日报",
+        "晚报",
+        "新闻",
+        "通讯社",
+        "融媒体",
+        "传媒中心",
+        "银行",
+        "大学",
+        "学院",
+        "学校",
+        "医院",
+        "协会",
+        "学会",
+        "基金会",
+        "工会",
+        "妇联",
+        "团委",
+        "消防",
+        "交警",
+        "派出所",
+        "街道",
+        "社区",
+        "局$",
+        "厅$",
+        "部$",
+        "署$",
+        "委$",
+        "院$",
+        "中心$"
+      ]
+    },
+    "model": {
+      "max_comments": 2,
+      "name": "fixture-manual",
+      "request_timeout": 10
+    },
+    "prompt": {
+      "engine_sha256": "a8c8d9c1ac3bbd339a4f49feeeff9e5ccf8415388d9cdb86c788c657df072f6b",
+      "version": "p1-triage-031e0cd"
+    },
+    "rules": {
+      "audit_goal": "固定审核规则",
+      "evidence_rules": "人工测试"
+    },
+    "schema_version": "geo-frozen-risk-v1",
+    "scoring": {
+      "discard_score": -1000,
+      "model_scores": {
+        "none": 0,
+        "strong": 200,
+        "weak": 100
+      },
+      "prompt_hit_limit": 5,
+      "rule_score_cap": 900,
+      "rule_score_high": 300,
+      "rule_score_low": 50,
+      "rule_score_medium": 100
+    },
+    "search_groups": {
+      "保过": "包过",
+      "克拉玛依市包过": "包过",
+      "包过": "包过",
+      "北京路欠薪": "欠薪"
+    },
+    "terms": [
+      {
+        "category_id": "fixture",
+        "entry_group": "包过",
+        "entry_kind": "main",
+        "keyword": "包过",
+        "match_type": "模糊",
+        "risk_level": "高"
+      },
+      {
+        "category_id": "fixture",
+        "entry_group": "包过",
+        "entry_kind": "variant",
+        "keyword": "保过",
+        "match_type": "模糊",
+        "risk_level": "高"
+      },
+      {
+        "category_id": "fixture",
+        "entry_group": "欠薪",
+        "entry_kind": "main",
+        "keyword": "欠薪",
+        "match_type": "模糊",
+        "risk_level": "中"
+      }
+    ]
+  },
+  "identity_filtered": [
+    {
+      "content_key": "official",
+      "reason": "官方/机构认证账号（公安官方），不进精审",
+      "score": -1000
+    },
+    {
+      "content_key": "followers",
+      "reason": "粉丝 11 超过 10，不进精审",
+      "score": -1000
+    },
+    {
+      "content_key": "personal",
+      "reason": "个人认证账号（认证）粉丝 6 超过 5，不进精审",
+      "score": -1000
+    }
+  ],
+  "model_semantic_quality_evidence": false,
+  "schema_version": "p2-risk-comparison-fixture-v1"
+}

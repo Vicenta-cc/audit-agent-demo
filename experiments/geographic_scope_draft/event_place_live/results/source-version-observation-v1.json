@@ -1,0 +1,10 @@
+{
+  "recorded_at": "2026-10-15T08:59:53.791411+00:00",
+  "backend_autoreload": false,
+  "turn_execution": "fresh python subprocess per turn; future source mutations affect newly started workers",
+  "files": {
+    "backend/investigation_creation/configure.py": "09d0483e301461936c0f929ed7a2fdd68bd3c23b01cd288f2d41ab3b7dddf298",
+    "backend/investigation_creation/conversation.py": "696cb339074b0cbd4bbbe9cae37016158a71d730a259ceb3dcc12650b3a06593",
+    "backend/investigation_creation/scope_intent.py": "ee11b71245d22b8a291218b8701221fbced91645e6af0fd5592a1ac8cdbe3f1d"
+  }
+}

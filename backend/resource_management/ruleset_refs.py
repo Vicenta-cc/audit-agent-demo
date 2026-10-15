@@ -1,5 +1,6 @@
 """Exact ruleset handles. References identify versions; they never grant adoption."""
 import json
+from contextlib import nullcontext
 from uuid import uuid4
 
 from .contracts import ResourceError
@@ -20,6 +21,28 @@ def issue(conn, binding, *, principal, session_id=''):
     ref = 'resource-ref:' + uuid4().hex
     conn.execute('INSERT INTO ruleset_resource_refs VALUES (?,?,?,?)', (ref, principal.id, session_id, encoded))
     return ref
+
+
+def proposal_view(store, proposal, *, principal, session_id, connection=None):
+    """Expose one exact proposal snapshot and its handle, without adopting it."""
+    if proposal.session_id != session_id:
+        raise ResourceError('规则不属于当前会话。', code='RESOURCE_REF_INVALID')
+    with (nullcontext(connection) if connection is not None else store._connect()) as conn:
+        if connection is None:
+            conn.execute('BEGIN IMMEDIATE')
+        current = store._owned_proposal(conn, proposal.proposal_id, session_id)
+        if current.version != proposal.version or current.content_hash != proposal.content_hash:
+            raise ResourceError('规则已变化，请读取并展示准确版本后再采用。', code='RESOURCE_REF_STALE')
+        ref = issue(conn, {'strategy': 'temporary_ruleset',
+            'proposal_id': proposal.proposal_id, 'proposal_version': proposal.version,
+            'content_hash': proposal.content_hash}, principal=principal, session_id=session_id)
+    return {
+        'kind': 'ruleset', 'edit_id': proposal.proposal_id,
+        'proposal_id': proposal.proposal_id, 'version': proposal.version,
+        'resource_ref': ref, 'proposal_snapshot': proposal.model_dump(mode='json'),
+        'read_arguments': {'edit_id': proposal.proposal_id},
+        'update_arguments': {'edit_id': proposal.proposal_id, 'expected_version': proposal.version},
+    }
 
 
 def resolve(service, ref, *, principal, session_id, turn_id):

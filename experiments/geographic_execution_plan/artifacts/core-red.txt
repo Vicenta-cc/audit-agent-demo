@@ -1,0 +1,41 @@
+F
+=================================== FAILURES ===================================
+_________ test_real_four_resources_and_both_sources[False-False-False] _________
+
+creation_stack = {'principals': <test_investigation_creation_conversation.MutablePrincipalProvider object at 0x11bc77bf0>, 'resource_db...6f90>, 'app_service': <backend.investigation_creation.service.InvestigationCreationService object at 0x11bbbc560>, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+formal_rules = False, formal_lexicon = False, ui = False
+
+    @pytest.mark.parametrize('formal_rules', [False, True])
+    @pytest.mark.parametrize('formal_lexicon', [False, True])
+    @pytest.mark.parametrize('ui', [False, True])
+    def test_real_four_resources_and_both_sources(creation_stack, content, formal_rules, formal_lexicon, ui):
+>       authority = make_authority(creation_stack, content,
+            formal_rules=formal_rules, formal_lexicon=formal_lexicon, ui=ui)
+
+tests/test_geographic_execution_plan.py:41: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stack = {'principals': <test_investigation_creation_conversation.MutablePrincipalProvider object at 0x11bc77bf0>, 'resource_db...6f90>, 'app_service': <backend.investigation_creation.service.InvestigationCreationService object at 0x11bbbc560>, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+formal_rules = False, formal_lexicon = False, ui = False
+
+    def make_authority(stack, content, *, formal_rules=False, formal_lexicon=False, ui=False):
+>       from experiments.geographic_execution_plan.authority import capture_fixture_authority
+E       ModuleNotFoundError: No module named 'experiments.geographic_execution_plan.authority'
+
+tests/test_geographic_execution_plan.py:15: ModuleNotFoundError
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_execution_plan.py::test_real_four_resources_and_both_sources[False-False-False]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 2 warnings in 1.33s

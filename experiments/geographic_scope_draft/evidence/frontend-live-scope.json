@@ -1,0 +1,15 @@
+{
+  "scope": "isolated frontend and real DeepSeek; no crawl or formal data",
+  "observations": [
+    {
+      "label": "after_initial_adoption_and_nonexplicit_review",
+      "at": "2026-10-15T08:26:32.254292+00:00",
+      "draft_id": "investigation-draft:46dc12cfa7224b2eb1658f5c0f92103e",
+      "revision": 1,
+      "title": "克拉玛依大火抖音舆情调查",
+      "relevance_scope": null,
+      "relevance_scope_state": null,
+      "result": "FAIL: event place omitted by real model; subsequent generic review also omitted scope after local guidance change; not counted as semantic pass"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+........................................................................ [ 16%]
+............................................................... [ 30%]
+.......................................................... [ 43%]
+........................................................................ [ 60%]
+...............................FFFF..................................... [ 76%]
+........................................................................ [ 92%]
+................................                                         [100%]
+=================================== FAILURES ===================================
+_________ test_guidance_is_available_through_native_deferred_describe __________
+tests/test_creation_prompt_isolation.py:74: in test_guidance_is_available_through_native_deferred_describe
+    assert result["name"] == name, result
+           ^^^^^^^^^^^^^^
+E   KeyError: 'name'
+________ test_global_prompt_keeps_authority_but_not_authoring_payloads _________
+tests/test_creation_prompt_isolation.py:116: in test_global_prompt_keeps_authority_but_not_authoring_payloads
+    assert boundary in product
+E   AssertionError: assert 'Only use_ruleset_proposal' in '用用户提问的语言自然回答，原名、原文引用和必要术语保持原样。\n地域配置：本次调查对象、议题或事件名称包含地域时，默认将其作为调查地域，不要求用户另外强调某地的舆情或明确限定地域。\n例如“调查克拉玛依大火”“调查深圳楼市”“调查新疆...知查询原回执，保存用原 operation_id 查询 get_resource_save。没有成功回执不能宣称完成。\n生成拦截、截断或失败时，本轮不换说法、content 或模型重试。保留已成功步骤，仅继续未完成且获授权的部分。\n'
+__ test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes ___
+tests/test_creation_prompt_isolation.py:135: in test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes
+    assert instruction in CREATION_SYSTEM_PROMPT
+E   assert 'reuse the resource_ref recall_plan' in "用用户提问的语言自然回答，原名、原文引用和必要术语保持原样。\n地域配置：本次调查对象、议题或事件名称包含地域时，默认将其作为调查地域，不要求用户另外强调某地的舆情或明确限定地域。\n例如“调查克拉玛依大火”“调查深圳楼市”“调查新疆...\nauthoritative. When a Draft or Run tool succeeds, briefly explain its public artifact in the user's\nlanguage.\n\n\n"
+_____ test_original_prompt_lines_are_preserved_or_explicitly_accounted_for _____
+tests/test_creation_prompt_isolation.py:269: in test_original_prompt_lines_are_preserved_or_explicitly_accounted_for
+    assert normalize(_current_fallback_wording(line)) in current, (name, index, line)
+E   AssertionError: ('CREATION_SYSTEM_PROMPT', 38, 'create_investigation_draft. A final assistant answer does not need canonical decision JSON.')
+E   assert 'create_investigation_draft.AfinalassistantanswerdoesnotneedcanonicaldecisionJSON.' in '用用户提问的语言自然回答，原名、原文引用和必要术语保持原样。地域配置：本次调查对象、议题或事件名称包含地域时，默认将其作为调查地域，不要求用户另外强调某地的舆情或明确限定地域。例如“调查克拉玛依大火”“调查深圳楼市”“调查新疆棉花争议...main/variant/tag)、parent_id、enabled；变体指向主词。这是同一编辑稿生命周期，不是临时/正式两套词库。不正式保存、不采用、不启动。生成失败时不得改走content编造成功；如实报告错误，保留此前成功操作。'
+E    +  where 'create_investigation_draft.AfinalassistantanswerdoesnotneedcanonicaldecisionJSON.' = <function test_original_prompt_lines_are_preserved_or_explicitly_accounted_for.<locals>.<lambda> at 0x12339ab60>('create_investigation_draft. A final assistant answer does not need canonical decision JSON.')
+E    +    where 'create_investigation_draft. A final assistant answer does not need canonical decision JSON.' = _current_fallback_wording('create_investigation_draft. A final assistant answer does not need canonical decision JSON.')
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/xhs-audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+tests/test_investigation_creation_m3.py::LegacyApiCompatibilityTest::test_old_post_jobs_accepts_existing_creator_url_and_legacy_id
+  /Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/backend/main.py:1361: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_investigation_creation_m3.py::LegacyApiCompatibilityTest::test_old_post_jobs_accepts_existing_creator_url_and_legacy_id
+tests/test_investigation_creation_m3.py::LegacyApiCompatibilityTest::test_old_post_jobs_accepts_existing_creator_url_and_legacy_id
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.venv/lib/python3.12/site-packages/fastapi/applications.py:4495: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+tests/test_investigation_creation_m3.py::LegacyApiCompatibilityTest::test_old_post_jobs_accepts_existing_creator_url_and_legacy_id
+  /Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/backend/main.py:1382: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_creation_prompt_isolation.py::test_guidance_is_available_through_native_deferred_describe
+FAILED tests/test_creation_prompt_isolation.py::test_global_prompt_keeps_authority_but_not_authoring_payloads
+FAILED tests/test_creation_prompt_isolation.py::test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes
+FAILED tests/test_creation_prompt_isolation.py::test_original_prompt_lines_are_preserved_or_explicitly_accounted_for
+4 failed, 437 passed, 5 warnings, 23 subtests passed in 67.96s (0:01:07)

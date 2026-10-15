@@ -1,0 +1,87 @@
+.FF                                                                      [100%]
+=================================== FAILURES ===================================
+____ test_hermes_creation_product_mode_registers_only_m3_application_tools _____
+
+    def test_hermes_creation_product_mode_registers_only_m3_application_tools():
+        context = _HermesStubContext()
+    
+        class Agent:
+            _api_max_retries = 0
+    
+        environment = {
+            "HERMES_INVESTIGATION_CREATION_MODE": "1",
+            "HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE": "1",
+            "HERMES_INVESTIGATION_REAL_REPORT_MODE": "1",
+            "HERMES_INVESTIGATION_REPORT_TASK_MODE": "1",
+            "HERMES_INVESTIGATION_TASK_MODE": "1",
+        }
+        with patch.dict(os.environ, environment, clear=False):
+            HermesRuntimeBinding().create_agent(
+                session_id="m3-creation-product",
+                product_mode="creation",
+                agent_factory=lambda **_options: Agent(),
+            )
+            assert os.environ["HERMES_INVESTIGATION_CREATION_MODE"] == "1"
+            assert os.environ["HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE"] == "0"
+            assert os.environ["HERMES_INVESTIGATION_REAL_REPORT_MODE"] == "0"
+            assert os.environ["HERMES_INVESTIGATION_REPORT_TASK_MODE"] == "0"
+            assert os.environ["HERMES_INVESTIGATION_TASK_MODE"] == "0"
+            register_hermes_plugin(context)
+        from backend.resource_management.tools import RESOURCE_TOOL_INPUTS
+>       assert context.names == [
+            "use_ruleset_proposal",
+            "query_investigation_options",
+            "create_investigation_draft",
+            "update_investigation_draft",
+            "get_investigation_draft",
+            "save_draft_lexicon",
+            "save_draft_ruleset",
+            "confirm_and_queue_investigation",
+            "get_investigation_run",
+            "create_ruleset_proposal",
+            "update_ruleset_proposal",
+            "get_ruleset_proposal",
+        ] + list(RESOURCE_TOOL_INPUTS)
+E       AssertionError: assert ['query_inves...ion_run', ...] == ['use_ruleset...lexicon', ...]
+E         
+E         At index 0 diff: 'query_investigation_options' != 'use_ruleset_proposal'
+E         Use -v to get more diff
+
+tests/test_investigation_draft_configuration_m3.py:3359: AssertionError
+_________ test_hermes_account_activity_product_mode_keeps_m22_catalog __________
+
+    def test_hermes_account_activity_product_mode_keeps_m22_catalog():
+        context = _HermesStubContext()
+        environment = {
+            "HERMES_INVESTIGATION_CREATION_MODE": "1",
+            "HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE": "0",
+            "HERMES_INVESTIGATION_REAL_REPORT_MODE": "0",
+            "HERMES_INVESTIGATION_REPORT_TASK_MODE": "0",
+            "HERMES_INVESTIGATION_TASK_MODE": "0",
+        }
+        with patch.dict(os.environ, environment, clear=False):
+            HermesRuntimeBinding.activate_product_mode()
+            assert os.environ["HERMES_INVESTIGATION_CREATION_MODE"] == "0"
+            assert os.environ["HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE"] == "1"
+            register_hermes_plugin(context)
+>       assert context.names == [item["name"] for item in M2_ACCOUNT_ACTIVITY_TOOLS]
+E       AssertionError: assert ['read_report...vidence', ...] == ['read_report...vidence', ...]
+E         
+E         Left contains 2 more items, first extra item: 'read_user_manual'
+E         Use -v to get more diff
+
+tests/test_investigation_draft_configuration_m3.py:3389: AssertionError
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_investigation_draft_configuration_m3.py::test_hermes_creation_product_mode_registers_only_m3_application_tools
+FAILED tests/test_investigation_draft_configuration_m3.py::test_hermes_account_activity_product_mode_keeps_m22_catalog
+2 failed, 1 passed, 2 warnings in 1.14s

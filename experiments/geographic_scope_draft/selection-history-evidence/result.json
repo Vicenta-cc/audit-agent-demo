@@ -1,0 +1,42 @@
+{
+  "session_id": "investigation-session:df20bb8a6a7346a9b4429b5c32d28cfe",
+  "draft_id": "investigation-draft:f0ce9dcc74664fdea2f5ad45c9aa58b4",
+  "final_revision": 4,
+  "final_region": "吉林省",
+  "successful_selection_history": [
+    {
+      "expected_revision": 1,
+      "committed_revision": 2,
+      "target_text": "吉林省",
+      "region_code": "220000",
+      "conversation_sequence": 19,
+      "created_at": "2026-10-15T11:14:21.077606+00:00"
+    },
+    {
+      "expected_revision": 2,
+      "committed_revision": 3,
+      "target_text": "吉林市",
+      "region_code": "220200",
+      "conversation_sequence": 24,
+      "created_at": "2026-10-15T11:22:51.615957+00:00"
+    },
+    {
+      "expected_revision": 3,
+      "committed_revision": 4,
+      "target_text": "吉林省",
+      "region_code": "220000",
+      "conversation_sequence": 24,
+      "created_at": "2026-10-15T11:23:02.451420+00:00"
+    }
+  ],
+  "resources_unchanged": true,
+  "resource_tables_verified": 19,
+  "non_geographic_configuration_unchanged": true,
+  "new_ai_turns": 0,
+  "existing_turn_count": 2,
+  "existing_model_calls": 10,
+  "existing_message_count": 24,
+  "browser_refresh_restored_history_count": 3,
+  "history_buttons_readonly": true,
+  "screenshot": "region-history.jpg"
+}

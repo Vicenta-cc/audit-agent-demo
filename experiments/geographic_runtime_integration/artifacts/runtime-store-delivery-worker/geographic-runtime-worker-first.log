@@ -1,0 +1,23 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_real_worker_pipeline_audit_and_native_report _______________
+tests/test_geographic_runtime_worker.py:62: in test_real_worker_pipeline_audit_and_native_report
+    assert result.status.value=='PUBLISHED', (result.error_code,result.error_message,adapter.ingestion_store.stats_for_task(job['id']),[(r.get('message'),r.get('error_code')) for r in job.get('logs',[])])
+E   AssertionError: ('report_generation_result_unknown', 'build_report_account_entries failed: a frozen Post or Comment is missing its sta...y', ''), ('账号 dy fixture account 处于慢速模式（新登录/刚解除风控）', ''), ('本任务轮换账号：dy fixture account', ''), ('边抓边分析：same', ''), ...])
+E   assert 'INTERRUPTED' == 'PUBLISHED'
+E     
+E     - PUBLISHED
+E     + INTERRUPTED
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_runtime_worker.py::test_real_worker_pipeline_audit_and_native_report
+1 failed, 2 warnings in 15.08s

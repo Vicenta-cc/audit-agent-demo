@@ -140,6 +140,7 @@ class InvestigationWorker:
                 if schema_version in {
                     "investigation-run-config-v3",
                     "investigation-run-config-v4",
+                    "investigation-run-config-v5",
                 }:
                     pipeline_configuration["_authoritative_m3_contract"] = True
                 self.execution_adapter.run_pipeline(job_id, pipeline_configuration)
@@ -309,6 +310,14 @@ class InvestigationWorker:
         if snapshot.execution.auto_analyze is not None and int((state.get("task_stats") or {}).get("queued_analysis_count") or 0) > 0:
             return self.store.mark_interrupted(run.id, run.claim_token,
                 error_code="analysis_pending", error_message="采集已完成，仍有待分析内容，可继续分析。")
+        if snapshot.execution.geographic_plan is not None:
+            from backend.audit_agent.geographic_status import classify_geographic_status
+            classification = classify_geographic_status((state.get("control") or {}).get("geographic_selection"))
+            if classification['status'] == 'incomplete':
+                return self.store.mark_interrupted(run.id, run.claim_token,
+                    error_code=classification['reason'], error_message="地域采集或交付尚未完成，需核对执行记录。")
+            if classification['status'] == 'empty' and int((state.get('task_stats') or {}).get('ingested_count') or 0) == 0:
+                return self.store.mark_audit_completed(run.id, run.claim_token)
         if (
             int((state.get("task_stats") or {}).get("ingested_count") or 0) == 0
             and (state.get("control") or {}).get("no_suspicious_content") is True
@@ -519,6 +528,7 @@ class InvestigationWorker:
             if snapshot.schema_version in {
                 "investigation-run-config-v3",
                 "investigation-run-config-v4",
+                "investigation-run-config-v5",
             }:
                 validator = getattr(
                     self.execution_adapter,
@@ -568,6 +578,7 @@ class InvestigationWorker:
             if callable(validator) and schema_version in {
                 "investigation-run-config-v3",
                 "investigation-run-config-v4",
+                "investigation-run-config-v5",
             }:
                 validator(configuration, schema_version=schema_version, job_id=job_id)
         except CrawlerAccountAuthenticationRequiredError:
@@ -593,13 +604,21 @@ class InvestigationWorker:
         authoritative_m3 = snapshot.schema_version in {
             "investigation-run-config-v3",
             "investigation-run-config-v4",
+            "investigation-run-config-v5",
         }
         analyze_limit = int(snapshot.execution.analyze_limit)
         state = state or self.execution_adapter.get_job_state(run.job_id)
         if state is None:
             return "job_result_missing", "Job state is unavailable before completion."
+        if snapshot.execution.geographic_plan is not None:
+            from backend.audit_agent.geographic_status import geographic_completion_failure
+            geographic_failure = geographic_completion_failure((state.get("control") or {}).get("geographic_selection"))
+            if geographic_failure:
+                return geographic_failure
         stats = dict(state.get("task_stats") or {})
         ingested = int(stats.get("ingested_count") or 0)
+        if snapshot.execution.geographic_plan is not None and (state.get("control") or {}).get("geographic_selection", {}).get("handed_off") != ingested:
+            return "geographic_membership_count_mismatch", "地域交付数量与正式入库数量不一致。"
         pending = int(stats.get("pending_analysis_count") or 0)
         analyzing = int(stats.get("analyzing_count") or 0)
         completed = int(stats.get("completed_analysis_count") or 0)

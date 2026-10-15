@@ -1,0 +1,1119 @@
+{
+  "version": "geo-intent-p0-bridge-handoff-v1",
+  "kind": "offline_historical_adapter_check",
+  "source_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/contrast-v1/bridge.json",
+  "source_sha256": "8387a70495d348e897db9d4bf43ccee2563ab690a4d57512e7dfd36202200738",
+  "repair_freeze_sha256": "8e5eef3b33f04740742b0c0bc5cedbb6f928fa00f85ebdb6cb2e886b0bf354e9",
+  "cases": 18,
+  "real_model_calls": 0,
+  "new_model_responses": 0,
+  "semantic_effect_evaluated": false,
+  "record_missing_ids": [
+    "keep-rules",
+    "ambiguous-chaoyang"
+  ],
+  "accepted_records": 16,
+  "adapted_configurations_accepted": 10,
+  "note": "Diagnostic reuse of old bridge outputs with explicitly controlled scope omission. Does not repair/replace historical model misses or scores.",
+  "rows": [
+    {
+      "case_id": "city-kelamayi",
+      "historical_termination": "loop_limit",
+      "historical_record_count": 1,
+      "historical_configuration_count": 0,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "source_quote": "在抖音调查克拉玛依最近的负面舆情",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "intent": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "source_quote": "在抖音调查克拉玛依最近的负面舆情",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "draft": null,
+      "pending_reason": null,
+      "configuration_applied": false
+    },
+    {
+      "case_id": "only-kelamayi",
+      "historical_termination": "loop_limit",
+      "historical_record_count": 1,
+      "historical_configuration_count": 1,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [
+        {
+          "historical_arguments": {
+            "operation": "create",
+            "title": "克拉玛依欠薪争议调查",
+            "objective": "在抖音调查克拉玛依地区的欠薪及公共服务争议",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "克拉玛依",
+              "source_quote": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+              "selection_policy": "local_only"
+            }
+          },
+          "adapted_arguments": {
+            "operation": "create",
+            "title": "克拉玛依欠薪争议调查",
+            "objective": "在抖音调查克拉玛依地区的欠薪及公共服务争议",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "effective_arguments": {
+            "operation": "create",
+            "title": "克拉玛依欠薪争议调查",
+            "objective": "在抖音调查克拉玛依地区的欠薪及公共服务争议",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "克拉玛依",
+              "source_quote": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+              "selection_policy": "local_only"
+            }
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:only-kelamayi",
+              "revision": 1,
+              "scope": {
+                "action": "set",
+                "target_text": "克拉玛依",
+                "source_quote": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+                "selection_policy": "local_only"
+              },
+              "title": "克拉玛依欠薪争议调查",
+              "objective": "在抖音调查克拉玛依地区的欠薪及公共服务争议",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "source_quote": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+        "selection_policy": "local_only"
+      },
+      "intent": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "source_quote": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+        "selection_policy": "local_only"
+      },
+      "draft": {
+        "draft_id": "simulated-draft:only-kelamayi",
+        "revision": 1,
+        "scope": {
+          "action": "set",
+          "target_text": "克拉玛依",
+          "source_quote": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+          "selection_policy": "local_only"
+        },
+        "title": "克拉玛依欠薪争议调查",
+        "objective": "在抖音调查克拉玛依地区的欠薪及公共服务争议",
+        "platform": "dy",
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "pending_reason": null,
+      "configuration_applied": true
+    },
+    {
+      "case_id": "keep-denial-clear",
+      "historical_termination": "final",
+      "historical_record_count": 1,
+      "historical_configuration_count": 1,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [
+        {
+          "historical_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "title": "复查"
+          },
+          "adapted_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "title": "复查"
+          },
+          "effective_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "title": "复查"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "fixture-draft",
+              "revision": 3,
+              "scope": {
+                "target_text": "克拉玛依",
+                "selection_policy": "local_first_with_supplement"
+              },
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+              "title": "复查"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "keep"
+      },
+      "intent": {
+        "action": "keep"
+      },
+      "draft": {
+        "draft_id": "fixture-draft",
+        "revision": 3,
+        "scope": {
+          "target_text": "克拉玛依",
+          "selection_policy": "local_first_with_supplement"
+        },
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+        "title": "复查"
+      },
+      "pending_reason": null,
+      "configuration_applied": true
+    },
+    {
+      "case_id": "change-daqing",
+      "historical_termination": "final",
+      "historical_record_count": 1,
+      "historical_configuration_count": 1,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [
+        {
+          "historical_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "大庆",
+              "source_quote": "改查大庆，规则和词库保持现在的。",
+              "selection_policy": "local_first_with_supplement"
+            }
+          },
+          "adapted_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2
+          },
+          "effective_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "大庆",
+              "source_quote": "改查大庆，规则和词库保持现在的。",
+              "selection_policy": "local_first_with_supplement"
+            }
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "fixture-draft",
+              "revision": 3,
+              "scope": {
+                "action": "set",
+                "target_text": "大庆",
+                "source_quote": "改查大庆，规则和词库保持现在的。",
+                "selection_policy": "local_first_with_supplement"
+              },
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "set",
+        "target_text": "大庆",
+        "source_quote": "改查大庆，规则和词库保持现在的。",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "intent": {
+        "action": "set",
+        "target_text": "大庆",
+        "source_quote": "改查大庆，规则和词库保持现在的。",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "draft": {
+        "draft_id": "fixture-draft",
+        "revision": 3,
+        "scope": {
+          "action": "set",
+          "target_text": "大庆",
+          "source_quote": "改查大庆，规则和词库保持现在的。",
+          "selection_policy": "local_first_with_supplement"
+        },
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "pending_reason": null,
+      "configuration_applied": true
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "historical_termination": "final",
+      "historical_record_count": 1,
+      "historical_configuration_count": 1,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [
+        {
+          "historical_arguments": {
+            "operation": "create",
+            "title": "克拉玛依欠薪舆情调查",
+            "objective": "调查克拉玛依地区欠薪相关舆情讨论",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "克拉玛依",
+              "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+              "selection_policy": "local_first_with_supplement"
+            }
+          },
+          "adapted_arguments": {
+            "operation": "create",
+            "title": "克拉玛依欠薪舆情调查",
+            "objective": "调查克拉玛依地区欠薪相关舆情讨论",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "effective_arguments": {
+            "operation": "create",
+            "title": "克拉玛依欠薪舆情调查",
+            "objective": "调查克拉玛依地区欠薪相关舆情讨论",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "克拉玛依",
+              "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+              "selection_policy": "local_first_with_supplement"
+            }
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:adoption-temp-later",
+              "revision": 1,
+              "scope": {
+                "action": "set",
+                "target_text": "克拉玛依",
+                "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+                "selection_policy": "local_first_with_supplement"
+              },
+              "title": "克拉玛依欠薪舆情调查",
+              "objective": "调查克拉玛依地区欠薪相关舆情讨论",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "intent": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "draft": {
+        "draft_id": "simulated-draft:adoption-temp-later",
+        "revision": 1,
+        "scope": {
+          "action": "set",
+          "target_text": "克拉玛依",
+          "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+          "selection_policy": "local_first_with_supplement"
+        },
+        "title": "克拉玛依欠薪舆情调查",
+        "objective": "调查克拉玛依地区欠薪相关舆情讨论",
+        "platform": "dy",
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "pending_reason": null,
+      "configuration_applied": true
+    },
+    {
+      "case_id": "province-xinjiang",
+      "historical_termination": "final",
+      "historical_record_count": 1,
+      "historical_configuration_count": 1,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [
+        {
+          "historical_arguments": {
+            "operation": "create",
+            "title": "新疆欠薪调查（抖音）",
+            "objective": "在抖音平台调查新疆地区欠薪相关的讨论内容",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "新疆",
+              "source_quote": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+              "selection_policy": "local_first_with_supplement"
+            }
+          },
+          "adapted_arguments": {
+            "operation": "create",
+            "title": "新疆欠薪调查（抖音）",
+            "objective": "在抖音平台调查新疆地区欠薪相关的讨论内容",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "effective_arguments": {
+            "operation": "create",
+            "title": "新疆欠薪调查（抖音）",
+            "objective": "在抖音平台调查新疆地区欠薪相关的讨论内容",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "新疆",
+              "source_quote": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+              "selection_policy": "local_first_with_supplement"
+            }
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:province-xinjiang",
+              "revision": 1,
+              "scope": {
+                "action": "set",
+                "target_text": "新疆",
+                "source_quote": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+                "selection_policy": "local_first_with_supplement"
+              },
+              "title": "新疆欠薪调查（抖音）",
+              "objective": "在抖音平台调查新疆地区欠薪相关的讨论内容",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "set",
+        "target_text": "新疆",
+        "source_quote": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "intent": {
+        "action": "set",
+        "target_text": "新疆",
+        "source_quote": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "draft": {
+        "draft_id": "simulated-draft:province-xinjiang",
+        "revision": 1,
+        "scope": {
+          "action": "set",
+          "target_text": "新疆",
+          "source_quote": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+          "selection_policy": "local_first_with_supplement"
+        },
+        "title": "新疆欠薪调查（抖音）",
+        "objective": "在抖音平台调查新疆地区欠薪相关的讨论内容",
+        "platform": "dy",
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "pending_reason": null,
+      "configuration_applied": true
+    },
+    {
+      "case_id": "keep-rules",
+      "historical_termination": "loop_limit",
+      "historical_record_count": 0,
+      "historical_configuration_count": 1,
+      "record_receipt": null,
+      "configuration_receipts": [
+        {
+          "historical_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111"
+          },
+          "adapted_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111"
+          },
+          "effective_arguments": null,
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": false,
+            "code": "INTENT_REQUIRED"
+          }
+        }
+      ],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "intent": null,
+      "draft": {
+        "draft_id": "fixture-draft",
+        "revision": 2,
+        "scope": {
+          "target_text": "成都",
+          "selection_policy": "local_first_with_supplement"
+        },
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "pending_reason": "intent_missing",
+      "configuration_applied": false
+    },
+    {
+      "case_id": "defer-missing-all",
+      "historical_termination": "final",
+      "historical_record_count": 1,
+      "historical_configuration_count": 0,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "set",
+        "target_text": "乌鲁木齐",
+        "source_quote": "调查乌鲁木齐欠薪",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "intent": {
+        "action": "set",
+        "target_text": "乌鲁木齐",
+        "source_quote": "调查乌鲁木齐欠薪",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "draft": null,
+      "pending_reason": "deferred_resources",
+      "configuration_applied": false
+    },
+    {
+      "case_id": "adoption-temp-first",
+      "historical_termination": "final",
+      "historical_record_count": 1,
+      "historical_configuration_count": 0,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "intent": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "draft": null,
+      "pending_reason": "deferred_resources",
+      "configuration_applied": false
+    },
+    {
+      "case_id": "ambiguous-chaoyang",
+      "historical_termination": "final",
+      "historical_record_count": 0,
+      "historical_configuration_count": 0,
+      "record_receipt": null,
+      "configuration_receipts": [],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "intent": null,
+      "draft": null,
+      "pending_reason": "intent_missing",
+      "configuration_applied": false
+    },
+    {
+      "case_id": "new-round-national",
+      "historical_termination": "loop_limit",
+      "historical_record_count": 1,
+      "historical_configuration_count": 1,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [
+        {
+          "historical_arguments": {
+            "operation": "create",
+            "title": "全国欠薪调查",
+            "objective": "调查抖音平台全国范围内的欠薪、拖欠工资相关讨论与争议内容",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "adapted_arguments": {
+            "operation": "create",
+            "title": "全国欠薪调查",
+            "objective": "调查抖音平台全国范围内的欠薪、拖欠工资相关讨论与争议内容",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "effective_arguments": {
+            "operation": "create",
+            "title": "全国欠薪调查",
+            "objective": "调查抖音平台全国范围内的欠薪、拖欠工资相关讨论与争议内容",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:new-round-national",
+              "revision": 1,
+              "scope": null,
+              "title": "全国欠薪调查",
+              "objective": "调查抖音平台全国范围内的欠薪、拖欠工资相关讨论与争议内容",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "keep"
+      },
+      "intent": {
+        "action": "keep"
+      },
+      "draft": {
+        "draft_id": "simulated-draft:new-round-national",
+        "revision": 1,
+        "scope": null,
+        "title": "全国欠薪调查",
+        "objective": "调查抖音平台全国范围内的欠薪、拖欠工资相关讨论与争议内容",
+        "platform": "dy",
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "pending_reason": null,
+      "configuration_applied": true
+    },
+    {
+      "case_id": "named-resource",
+      "historical_termination": "loop_limit",
+      "historical_record_count": 1,
+      "historical_configuration_count": 1,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [
+        {
+          "historical_arguments": {
+            "operation": "create",
+            "title": "全国欠薪调查",
+            "objective": "在全国范围内调查欠薪、拖欠工资相关舆情",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "adapted_arguments": {
+            "operation": "create",
+            "title": "全国欠薪调查",
+            "objective": "在全国范围内调查欠薪、拖欠工资相关舆情",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "effective_arguments": {
+            "operation": "create",
+            "title": "全国欠薪调查",
+            "objective": "在全国范围内调查欠薪、拖欠工资相关舆情",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:named-resource",
+              "revision": 1,
+              "scope": null,
+              "title": "全国欠薪调查",
+              "objective": "在全国范围内调查欠薪、拖欠工资相关舆情",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "keep"
+      },
+      "intent": {
+        "action": "keep"
+      },
+      "draft": {
+        "draft_id": "simulated-draft:named-resource",
+        "revision": 1,
+        "scope": null,
+        "title": "全国欠薪调查",
+        "objective": "在全国范围内调查欠薪、拖欠工资相关舆情",
+        "platform": "dy",
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "pending_reason": null,
+      "configuration_applied": true
+    },
+    {
+      "case_id": "pasted-post",
+      "historical_termination": "final",
+      "historical_record_count": 1,
+      "historical_configuration_count": 0,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "no_task"
+      },
+      "intent": {
+        "action": "no_task"
+      },
+      "draft": null,
+      "pending_reason": "no_task",
+      "configuration_applied": false
+    },
+    {
+      "case_id": "creator-kelamayi",
+      "historical_termination": "final",
+      "historical_record_count": 1,
+      "historical_configuration_count": 0,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "keep"
+      },
+      "intent": {
+        "action": "keep"
+      },
+      "draft": null,
+      "pending_reason": null,
+      "configuration_applied": false
+    },
+    {
+      "case_id": "denied-city",
+      "historical_termination": "final",
+      "historical_record_count": 1,
+      "historical_configuration_count": 0,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "keep"
+      },
+      "intent": {
+        "action": "keep"
+      },
+      "draft": null,
+      "pending_reason": null,
+      "configuration_applied": false
+    },
+    {
+      "case_id": "clear-unlimited",
+      "historical_termination": "final",
+      "historical_record_count": 1,
+      "historical_configuration_count": 1,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [
+        {
+          "historical_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "relevance_scope_change": {
+              "action": "clear",
+              "source_quote": "不限制地区了，其他设置不变。"
+            }
+          },
+          "adapted_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2
+          },
+          "effective_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "relevance_scope_change": {
+              "action": "clear",
+              "source_quote": "不限制地区了，其他设置不变。"
+            }
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "fixture-draft",
+              "revision": 3,
+              "scope": null,
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "clear",
+        "source_quote": "不限制地区了，其他设置不变。"
+      },
+      "intent": {
+        "action": "clear",
+        "source_quote": "不限制地区了，其他设置不变。"
+      },
+      "draft": {
+        "draft_id": "fixture-draft",
+        "revision": 3,
+        "scope": null,
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "pending_reason": null,
+      "configuration_applied": true
+    },
+    {
+      "case_id": "keep-title",
+      "historical_termination": "final",
+      "historical_record_count": 1,
+      "historical_configuration_count": 1,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [
+        {
+          "historical_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "title": "十月欠薪专项"
+          },
+          "adapted_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "title": "十月欠薪专项"
+          },
+          "effective_arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "title": "十月欠薪专项"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "fixture-draft",
+              "revision": 3,
+              "scope": {
+                "target_text": "克拉玛依",
+                "selection_policy": "local_first_with_supplement"
+              },
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+              "title": "十月欠薪专项"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "keep"
+      },
+      "intent": {
+        "action": "keep"
+      },
+      "draft": {
+        "draft_id": "fixture-draft",
+        "revision": 3,
+        "scope": {
+          "target_text": "克拉玛依",
+          "selection_policy": "local_first_with_supplement"
+        },
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+        "title": "十月欠薪专项"
+      },
+      "pending_reason": null,
+      "configuration_applied": true
+    },
+    {
+      "case_id": "assistant-city",
+      "historical_termination": "final",
+      "historical_record_count": 1,
+      "historical_configuration_count": 1,
+      "record_receipt": {
+        "simulated": true,
+        "mutation_applied": false,
+        "ok": true,
+        "code": "INTENT_RECORDED",
+        "captured_only": true,
+        "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+      },
+      "configuration_receipts": [
+        {
+          "historical_arguments": {
+            "operation": "create",
+            "title": "全国范围民族关系讨论调查",
+            "objective": "在全国范围内调查民族关系相关讨论内容，采用现有审核规则与黑话库进行检索与研判。",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "adapted_arguments": {
+            "operation": "create",
+            "title": "全国范围民族关系讨论调查",
+            "objective": "在全国范围内调查民族关系相关讨论内容，采用现有审核规则与黑话库进行检索与研判。",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "effective_arguments": {
+            "operation": "create",
+            "title": "全国范围民族关系讨论调查",
+            "objective": "在全国范围内调查民族关系相关讨论内容，采用现有审核规则与黑话库进行检索与研判。",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:assistant-city",
+              "revision": 1,
+              "scope": null,
+              "title": "全国范围民族关系讨论调查",
+              "objective": "在全国范围内调查民族关系相关讨论内容，采用现有审核规则与黑话库进行检索与研判。",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "adaptation": "Extract historical record/config inputs, remove duplicate scope field to test deterministic handoff; not a provider transcript replay.",
+      "record_arguments": {
+        "action": "keep"
+      },
+      "intent": {
+        "action": "keep"
+      },
+      "draft": {
+        "draft_id": "simulated-draft:assistant-city",
+        "revision": 1,
+        "scope": null,
+        "title": "全国范围民族关系讨论调查",
+        "objective": "在全国范围内调查民族关系相关讨论内容，采用现有审核规则与黑话库进行检索与研判。",
+        "platform": "dy",
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "pending_reason": null,
+      "configuration_applied": true
+    }
+  ]
+}

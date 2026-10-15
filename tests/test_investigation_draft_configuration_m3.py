@@ -3356,11 +3356,9 @@ def test_hermes_creation_product_mode_registers_only_m3_application_tools():
         assert os.environ["HERMES_INVESTIGATION_TASK_MODE"] == "0"
         register_hermes_plugin(context)
     from backend.resource_management.tools import RESOURCE_TOOL_INPUTS
+    from backend.product_help.tools import SCHEMAS as PRODUCT_READ_TOOL_SCHEMAS
     assert context.names == [
-        "use_ruleset_proposal",
         "query_investigation_options",
-        "create_investigation_draft",
-        "update_investigation_draft",
         "get_investigation_draft",
         "save_draft_lexicon",
         "save_draft_ruleset",
@@ -3369,7 +3367,11 @@ def test_hermes_creation_product_mode_registers_only_m3_application_tools():
         "create_ruleset_proposal",
         "update_ruleset_proposal",
         "get_ruleset_proposal",
-    ] + list(RESOURCE_TOOL_INPUTS)
+        "configure_investigation_draft",
+    ] + list(RESOURCE_TOOL_INPUTS) + ["import_resource"] + [
+        item["name"] for item in PRODUCT_READ_TOOL_SCHEMAS
+    ]
+    assert not {"use_ruleset_proposal", "create_investigation_draft", "update_investigation_draft"}.intersection(context.names)
 
 
 def test_hermes_account_activity_product_mode_keeps_m22_catalog():
@@ -3386,7 +3388,9 @@ def test_hermes_account_activity_product_mode_keeps_m22_catalog():
         assert os.environ["HERMES_INVESTIGATION_CREATION_MODE"] == "0"
         assert os.environ["HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE"] == "1"
         register_hermes_plugin(context)
-    assert context.names == [item["name"] for item in M2_ACCOUNT_ACTIVITY_TOOLS]
+    from backend.product_help.tools import SCHEMAS as PRODUCT_READ_TOOL_SCHEMAS
+    assert context.names == [item["name"] for item in (*M2_ACCOUNT_ACTIVITY_TOOLS, *PRODUCT_READ_TOOL_SCHEMAS)]
+    assert not {"configure_investigation_draft", "create_ruleset_proposal", "import_resource"}.intersection(context.names)
 
 
 @pytest.mark.parametrize("field", ["terms", "source_lexicon_ids"])

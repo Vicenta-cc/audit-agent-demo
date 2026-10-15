@@ -8,16 +8,19 @@ from test_triage_account_rotation import env, _run_pipeline, RotationCrawler
 from test_crawler_proxy_assets import source
 from backend.audit_agent import pipeline as pipeline_module
 from backend.audit_agent import asset_utils
+from backend.audit_agent import crawler_account_store as account_store_module
 from backend.audit_agent.ingestion import IngestionStore
 
 
 def test_interrupted_proxy_stream_keeps_local_audit_and_defers_old_remote_source(env,monkeypatch):
+    monkeypatch.setattr(account_store_module,'crawler_account_store',env.store)
     monkeypatch.setattr(pipeline_module.settings,'crawler_safety_enabled',True)
     monkeypatch.setattr(pipeline_module.settings,'crawler_proxy_enabled',False)
     monkeypatch.setattr(pipeline_module.settings,'batch_ingestion_enabled',True)
     monkeypatch.setattr(pipeline_module.settings,'stream_crawl_analysis',True)
     account=env.add('fixture')
     provenance=source(account['id'])
+    provenance['binding_revision']=account['binding_revision']+1
     local=env.tmp/'outputs'/'job-rot'/'assets'/'local'/'images'/'ready.png'
     local.parent.mkdir(parents=True)
     local.write_bytes(b'offline-local-fixture')

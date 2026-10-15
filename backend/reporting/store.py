@@ -982,6 +982,8 @@ class ReportStore:
         }
         if statistics.get("source_configuration"):
             snapshot_body["source_configuration_hash"] = stable_hash(statistics["source_configuration"])
+        if statistics.get("geographic_coverage"):
+            snapshot_body["geographic_coverage_hash"] = stable_hash(statistics["geographic_coverage"])
         snapshot_hash = stable_hash(snapshot_body)
         if manifest.get("snapshot_hash") and manifest["snapshot_hash"] != snapshot_hash:
             raise ReportGenerationError("frozen Snapshot hash does not match payloads")

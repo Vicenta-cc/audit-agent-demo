@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="9.020" timestamp="2026-10-15T23:11:16.770064+08:00" hostname="ZBMac-M59XV50W0H"><testcase classname="tests.test_geographic_runtime_pipeline" name="test_detail_auth_failure_cannot_restart_outer_account_sweep" time="8.058"><failure message="Failed: DID NOT RAISE CrawlerAuthenticationError">confirmed = (&lt;backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x11718e840&gt;, {'geographic_plan': {'...:bb78de14d8cb444fa97f47cae42dbe52'}, ...}, 'auto_analyze': True, 'collect_comments': True, 'collect_media': True, ...})
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-zippc48q/pytest/test_detail_auth_failure_canno0')
+
+    def test_detail_auth_failure_cannot_restart_outer_account_sweep(confirmed, tmp_path):
+        from backend.audit_agent.crawler_adapter import CrawlerAuthenticationError
+        events = []
+        retired = []
+        class Expired(Crawler):
+            def run_detail(self, **kw):
+                events.append(('detail', kw))
+                raise CrawlerAuthenticationError('test-only expired account')
+        runner, _, _ = runtime(confirmed, tmp_path, events=events, crawler=Expired(events))
+        runner.accounts['second'] = dict(id='second', auth_state={})
+        runner.retire = lambda account, error: retired.append(account['id'])
+&gt;       with pytest.raises(CrawlerAuthenticationError) as caught:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE CrawlerAuthenticationError
+
+tests/test_geographic_runtime_pipeline.py:136: Failed</failure></testcase></testsuite></testsuites>

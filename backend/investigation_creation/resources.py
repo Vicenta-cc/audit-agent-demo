@@ -447,9 +447,13 @@ class InvestigationResourceService:
 
         effective_configuration, settings_revision = self.task_configuration(effective_configuration, resource_connection)
         parameters = effective_task_parameters(effective_configuration)
+        from .scope_intent import scope_blockers, project_state
+        blockers.extend(InvestigationBlocker(**item) for item in scope_blockers(effective_configuration, capability=getattr(self, 'geographic_capability', None)))
         planned_content_count = planned_contents(parameters, mode, resolved_terms)
         blockers = self._dedupe_blockers(blockers)
         return ConfirmationPreview(
+            relevance_scope=effective_configuration.relevance_scope,
+            relevance_scope_state=project_state(effective_configuration.relevance_scope_state),
             max_post_limit=settings.investigation_max_posts,
             task_settings_revision=settings_revision,
             requested_parameters=effective_configuration.task_parameters,

@@ -1,0 +1,27 @@
+...............F......................                                   [100%]
+=================================== FAILURES ===================================
+_________ test_fourth_round_configuration_and_final_reply_are_separate _________
+
+    def test_fourth_round_configuration_and_final_reply_are_separate():
+        c = case()
+        scope = record(c)
+        refs = c['resource_state']['refs']
+        replies = [
+            response(1, ('record_geographic_intent', scope)),
+            response(2, ('query_investigation_options', {})),
+            response(3, *[('read_resource', {'resource_ref': value}) for value in refs.values()]),
+            response(4, ('configure_investigation_draft', configure(c, scope))),
+            response(5, text='must not be called'),
+        ]
+        original = run_arm(c, ScriptedProvider(replies), 'bridge')
+        candidate = run_candidate(c, ScriptedProvider(replies))
+>       assert original['termination'] == candidate['termination'] == 'loop_limit'
+E       AssertionError: assert 'invalid_arguments' == 'loop_limit'
+E         
+E         - loop_limit
+E         + invalid_arguments
+
+tests/test_geographic_scope_bridge_minimal.py:200: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_geographic_scope_bridge_minimal.py::test_fourth_round_configuration_and_final_reply_are_separate
+1 failed, 37 passed in 0.34s

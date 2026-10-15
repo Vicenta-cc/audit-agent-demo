@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-15",
+  "mode": "bounded_read_only_review",
+  "files_reviewed": 9,
+  "unresolved_findings": 0,
+  "result": "APPROVE",
+  "city_policy": "single prefecture city or municipality; cross-level aliases resolved in supported city set",
+  "checked_records": 3218,
+  "standard_name_status_differences": 0,
+  "source_transaction_guard_tests_passed": 42,
+  "fixes_verified": [
+    "production catalog visible in Git status; other data remains ignored",
+    "import output cannot overwrite review, upstream inputs or generated evidence before writes"
+  ],
+  "model_requests": 0,
+  "production_database_writes": 0
+}

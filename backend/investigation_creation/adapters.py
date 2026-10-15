@@ -509,7 +509,7 @@ class AuditPipelineExecutionAdapter:
         )
         if snapshot.schema_version in {
             "investigation-run-config-v3",
-            "investigation-run-config-v4",
+            "investigation-run-config-v4", "investigation-run-config-v5",
         }:
             self.validate_m3_configuration(
                 configuration,
@@ -579,6 +579,7 @@ class AuditPipelineExecutionAdapter:
                         "rule_snapshot",
                         "lexicon_keywords",
                         "prompt_profile_snapshot",
+                        "geographic_plan",
                         "creator_url",
                         "creator_id",
                         "start_page",
@@ -604,7 +605,7 @@ class AuditPipelineExecutionAdapter:
             raise RuntimeError("failed to create M3 Job")
         try:
             self._validate_existing_job(existing, configuration)
-            if snapshot.schema_version in {"investigation-run-config-v3", "investigation-run-config-v4"}:
+            if snapshot.schema_version in {"investigation-run-config-v3", "investigation-run-config-v4", "investigation-run-config-v5"}:
                 self._validate_job_payload(existing, configuration)
         except RuntimeError as exc:
             # A persisted Job with a different frozen identity is never executable.
@@ -617,7 +618,7 @@ class AuditPipelineExecutionAdapter:
                 created_by="m3-worker",
                 **revision_payload,
             )
-            if snapshot.schema_version in {"investigation-run-config-v3", "investigation-run-config-v4"}:
+            if snapshot.schema_version in {"investigation-run-config-v3", "investigation-run-config-v4", "investigation-run-config-v5"}:
                 from .frozen import verified_job_configuration
                 verified_job_configuration(configuration, existing, revision)
                 # Never overwrite a revision another writer attached meanwhile.
@@ -629,7 +630,7 @@ class AuditPipelineExecutionAdapter:
                     )
             else:
                 self.job_store.update(job_id, current_audit_config_revision_id=revision["id"])
-        if snapshot.schema_version in {"investigation-run-config-v3", "investigation-run-config-v4"}:
+        if snapshot.schema_version in {"investigation-run-config-v3", "investigation-run-config-v4", "investigation-run-config-v5"}:
             self.verify_run_job(run)
         return job_id
 
@@ -647,7 +648,7 @@ class AuditPipelineExecutionAdapter:
         from .frozen import verified_job_configuration
         snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
         configuration = snapshot.execution.model_dump(mode="json")
-        if snapshot.schema_version not in {"investigation-run-config-v3", "investigation-run-config-v4"}:
+        if snapshot.schema_version not in {"investigation-run-config-v3", "investigation-run-config-v4", "investigation-run-config-v5"}:
             return configuration
         job_id = self.job_id_for_run(run.id)
         if run.job_id and run.job_id != job_id:
@@ -656,7 +657,17 @@ class AuditPipelineExecutionAdapter:
         if job is None:
             raise ValueError("M3 frozen Job is missing")
         revision = self.revision_store.get(str(job.get("current_audit_config_revision_id") or ""))
-        return verified_job_configuration(configuration, job, revision)
+        verified = verified_job_configuration(configuration, job, revision)
+        if snapshot.schema_version == "investigation-run-config-v5":
+            plan = configuration["geographic_plan"]
+            identity = plan["identity"]
+            if identity["owner"] != run.owner_principal or identity["draft_id"] != run.draft_id or identity["revision"] != run.draft_revision:
+                raise ValueError("geographic plan differs from authoritative Run")
+            verified["_verified_geographic_binding"] = {
+                **identity, "run_id": run.id, "job_id": job_id,
+                "config_hash": snapshot.config_hash, "p2_digest": plan["plan_digest"],
+            }
+        return verified
 
     def validate_execution_configuration(
         self, configuration: dict[str, Any], *, schema_version: str, job_id: str = ""
@@ -664,7 +675,7 @@ class AuditPipelineExecutionAdapter:
         """Re-check the authoritative account immediately before execution."""
         if schema_version in {
             "investigation-run-config-v3",
-            "investigation-run-config-v4",
+            "investigation-run-config-v4", "investigation-run-config-v5",
         }:
             self.validate_m3_configuration(
                 configuration,
@@ -691,6 +702,17 @@ class AuditPipelineExecutionAdapter:
             # The pipeline invokes this at consumption, and receives a detached copy
             # of the exact Job/revision records validated against the frozen Run.
             pipeline._m3_snapshot_validator = lambda: self.verify_run_job(run)
+            if run.confirmed_configuration.get("schema_version") == "investigation-run-config-v5":
+                from .errors import LeaseLostError
+                pipeline._m3_snapshot_validator = lambda: self.verify_run_job(store.get_run_for_job(job_id))
+                claim_token = run.claim_token
+                def geographic_lease_fence():
+                    if not claim_token or not store.owns_claim(run.id, claim_token):
+                        raise LeaseLostError("geographic execution has no current Run claim")
+                geographic_lease_fence()
+                pipeline._geographic_lease_fence = geographic_lease_fence
+                from .geographic_runtime import hold_geographic_claim
+                pipeline._geographic_lease_guard = lambda: hold_geographic_claim(store, run.id, claim_token)
         pipeline.run(request)
 
     def get_job_state(self, job_id: str) -> dict[str, Any] | None:

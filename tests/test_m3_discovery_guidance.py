@@ -41,3 +41,30 @@ def test_collection_default_keeps_explicit_existing_limits():
     assert CollectionConfiguration(keywords=["测试"]).max_comments == 300
     assert CollectionConfiguration(keywords=["测试"], max_comments=1000).max_comments == 1000
     assert CollectionConfiguration(keywords=["测试"], max_comments=0).max_comments == 0
+
+
+@pytest.mark.parametrize("name,visible_contract", [
+    ("read_resource", ("只读", "kind", "必填", "ruleset", "lexicon", "resource_id", "不用版本ID")),
+    ("get_resource_edit", ("只读", "仅传 edit_id", "不传 expected_version")),
+])
+def test_read_contract_survives_deferred_catalog_truncation(name, visible_contract):
+    from backend.investigation_creation.tools import _ALL_CREATION_TOOL_SCHEMAS
+
+    definition = next(item for item in _ALL_CREATION_TOOL_SCHEMAS if item["name"] == name)
+    # Keep the contract on a short first line so Hermes' 60-char, word-boundary
+    # catalog clipping preserves it when whitespace is collapsed.
+    first_line = definition["description"].split("\n", 1)[0]
+    assert len(first_line) <= 60
+    visible = first_line[:60]
+    for requirement in visible_contract:
+        assert requirement in visible, (name, requirement, visible)
+
+
+def test_edit_read_description_preserves_edit_and_history_boundaries():
+    from backend.investigation_creation.tools import _ALL_CREATION_TOOL_SCHEMAS
+
+    definition = next(item for item in _ALL_CREATION_TOOL_SCHEMAS if item["name"] == "get_resource_edit")
+    assert "read_arguments" in definition["description"]
+    assert "update_resource_edit" in definition["description"]
+    assert "read_session_resource" in definition["description"]
+    assert set(definition["parameters"]["properties"]) == {"edit_id"}

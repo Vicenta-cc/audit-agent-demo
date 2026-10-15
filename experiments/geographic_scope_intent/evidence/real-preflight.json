@@ -1,0 +1,237 @@
+{
+  "kind": "real_semantic_preflight",
+  "status": "blocked_missing_coordinator_credential",
+  "authorization": "用户授权P0隔离真实模型评测：先开发集后留出集，不采集、不修改正式业务",
+  "data_version": "geo-intent-synthetic-v1",
+  "counts": {
+    "dev": 18,
+    "holdout": 16
+  },
+  "resolved_model": "deepseek-v4-pro-ga-260813",
+  "resolved_provider_host": "api.qhose.net",
+  "model_configuration_origin": "literal defaults",
+  "credential_available": false,
+  "configuration_root": "/Users/ext.wanghongtao6/.codex/worktrees/unified-report-query-phase1/xhs-audit-agent-demo",
+  "dotenv_exists": false,
+  "configuration_precedence": "environment overrides .env, then literal defaults from P0 config.py",
+  "limits": {
+    "responses_per_case": 4,
+    "tool_requests_per_case": 12,
+    "timeout_seconds": 45,
+    "automatic_retries": 0
+  },
+  "hash_mismatches": [],
+  "input_checks": "34 requests invariant when evaluation-only metadata replaced; sentinel absent; configure schema matches",
+  "worktrees": {
+    "experiment": {
+      "path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo",
+      "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+      "branch": "codex/geographic-relevance-p0",
+      "status": "?? experiments/geographic_scope_intent/\n?? tests/test_geographic_scope_contract.py\n?? tests/test_geographic_scope_data.py\n?? tests/test_geographic_scope_runner.py\n?? tests/test_geographic_scope_scoring.py\n"
+    },
+    "configuration_source": {
+      "path": "/Users/ext.wanghongtao6/.codex/worktrees/unified-report-query-phase1/xhs-audit-agent-demo",
+      "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+      "branch": "codex/investigation-rounds-phase2",
+      "status": " M backend/report_collection/analysis.py\n M backend/report_collection/expression.py\n M backend/report_collection/tools.py\n M tests/test_report_collection_expression.py\n?? tests/test_report_query_complete_distributions.py\n?? tests/test_report_query_read_contract.py\n"
+    }
+  },
+  "experiment_hashes": {
+    "runner.py": "3742a4abb3b3af78bc1cec6cc88803e1541c17fec2c636c860bbd30919bd3047",
+    "scoring.py": "0c3802e4773437205ee5329bbf05fdfeed5db86b306557e7c8f9a946f45bcf7b",
+    "cases.jsonl": "f79a162ea5e54b27471cbe045d698573ada51e52950d1239e920b3731d0fda38",
+    "__init__.py": "88483891e5c7baf064a27cacf262dd163b2c0049ebedfc40e26cc3698307a5f9",
+    "sandbox.py": "409b0c106fffcda7df13413873f0eeace4e07de39e187114e0c1d1eebc38fc88",
+    "scripted_smoke.json": "338940d59a483737ce86c5369140db464ace3b3ac8031182e8ce740e135cc8ba",
+    "candidate_guidance.txt": "969363e55b6b30ca1bf0107487f402d67e8d23fa1fe8d71427728194e52fdf2c",
+    "candidate_schema.json": "3342205e7451d5d582f4bf2194088a48c7ee2b6226bff8b42b12d46ed7e76028",
+    "continuity_guidance.txt": "955b301831ca86bdf013da200e09412084128dc881a4b05918eadefedb65d155",
+    "manifest.json": "4f94ba66546d544517c3db8af74dea1b25796f851f68d7ecad295b76c3965b6c",
+    "rounds_guidance.txt": "7b00b3132903ceb56cd1a961c758bc25f1d76bfea47b45264ea1529182449f92",
+    "baseline_tools.json": "ab0138e3e60d2f46d872286363b44c4f3c7222f6e40ad507bb7416b7367f87a8",
+    "contract.py": "3a40cd3227922e3cee988c0f711e3db6624c22cf70109f9ab1484231f6b7a9d6",
+    "data.py": "d93a964af32748d4c36002bf6aec645ef2141b039f63a218a9be349bfeb2dca2",
+    "snapshot.py": "f60cfc39ddbcbf3c5ab8fcbc8b726883a249079c2b26978b38b20c9962793922",
+    "baseline_prompt.txt": "dd91b3c92ff4bf197b2423f9cf5e9cf497ac6b653c176dc70a423e696919b8a0"
+  },
+  "environment_presence": {
+    "CONVERSATION_MODEL": false,
+    "CONVERSATION_BASE_URL": false,
+    "CONVERSATION_API_KEY": false
+  },
+  "real_model_calls": 0,
+  "completed_responses": 0,
+  "actual_cases_evaluated": 0,
+  "pending_cases": [
+    {
+      "case_id": "city-kelamayi",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "city-hangzhou",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "province-xinjiang",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "province-sichuan",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "only-kelamayi",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "only-suzhou",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "change-daqing",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "change-province",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "clear-unlimited",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "clear-national",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "keep-title",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "keep-lexicon",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "keep-rules",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "creator-kelamayi",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "creator-province",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "named-resource",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "quoted-example",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "pasted-post",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "pasted-comment",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "ambiguous-chaoyang",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "ambiguous-there",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "defer-missing-all",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "defer-missing-rules",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "denied-city",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "quoted-instruction",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "keep-denial-clear",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "adoption-temp-first",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "adoption-formal-first",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "adoption-formal-later",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "new-round-national",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "new-round-city",
+      "split": "holdout",
+      "status": "not_started"
+    },
+    {
+      "case_id": "assistant-city",
+      "split": "dev",
+      "status": "not_started"
+    },
+    {
+      "case_id": "defer-unadopted",
+      "split": "holdout",
+      "status": "not_started"
+    }
+  ]
+}

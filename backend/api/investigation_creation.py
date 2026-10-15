@@ -10,7 +10,7 @@ from backend.api.contracts import (
     PublicInvestigationDraft,
     PublicInvestigationRunProjection,
 )
-from backend.investigation_creation.public_projection import public_draft, public_run
+from backend.investigation_creation.public_projection import public_draft, public_run, PublicDraftConfiguration
 
 from backend.investigation_creation.contracts import (
     ConfirmAndQueueCommand,
@@ -39,6 +39,7 @@ from backend.investigation_creation.principal import (
     Principal,
     PrincipalProvider,
 )
+from backend.investigation_creation.scope_selection import RegionSelection
 
 
 class RequestModel(BaseModel):
@@ -48,7 +49,7 @@ class RequestModel(BaseModel):
 class CreateDraftRequest(RequestModel):
     title: str = Field(min_length=1, max_length=300)
     objective: str = Field(min_length=1, max_length=4_000)
-    configuration: InvestigationDraftConfiguration
+    configuration: PublicDraftConfiguration
 
     @field_validator("title", "objective", mode="before")
     @classmethod
@@ -60,7 +61,7 @@ class UpdateDraftRequest(RequestModel):
     expected_revision: int = Field(ge=1)
     title: str | None = Field(default=None, min_length=1, max_length=300)
     objective: str | None = Field(default=None, min_length=1, max_length=4_000)
-    configuration: InvestigationDraftConfiguration | None = None
+    configuration: PublicDraftConfiguration | None = None
 
     @field_validator("title", "objective", mode="before")
     @classmethod
@@ -135,9 +136,11 @@ def create_investigation_creation_router(
         principal: Principal = Depends(provide_principal),
     ) -> PublicInvestigationDraft:
         try:
+            body = request.model_dump()
+            body['configuration'] = service.public_configuration_input(request.configuration, principal=principal)
             return public_draft(
                 service.create_draft(
-                    CreateDraftCommand(**request.model_dump()), principal=principal
+                    CreateDraftCommand(**body), principal=principal
                 )
             )
         except Exception as exc:
@@ -153,9 +156,13 @@ def create_investigation_creation_router(
         principal: Principal = Depends(provide_principal),
     ) -> PublicInvestigationDraft:
         try:
+            body = request.model_dump()
+            if request.configuration is not None:
+                body['configuration'] = service.public_configuration_input(request.configuration,
+                    principal=principal, draft_id=draft_id)
             return public_draft(
                 service.update_draft(
-                    UpdateDraftCommand(draft_id=draft_id, **request.model_dump()),
+                    UpdateDraftCommand(draft_id=draft_id, **body),
                     principal=principal,
                 )
             )
@@ -172,6 +179,18 @@ def create_investigation_creation_router(
     ) -> PublicInvestigationDraft:
         try:
             return public_draft(service.get_draft(draft_id, principal=principal))
+        except Exception as exc:
+            _raise_public_error(exc)
+
+    @router.post('/api/investigation-workspaces/{session_id}/drafts/{draft_id}/relevance-scope',
+                 response_model=PublicInvestigationDraft)
+    def select_relevance_scope(
+        session_id: str, draft_id: str, request: RegionSelection,
+        principal: Principal = Depends(provide_principal),
+    ) -> PublicInvestigationDraft:
+        try:
+            return public_draft(service.select_relevance_scope(draft_id,
+                session_id=session_id, principal=principal, **request.model_dump()))
         except Exception as exc:
             _raise_public_error(exc)
 
@@ -256,6 +275,20 @@ def create_investigation_creation_router(
         except Exception as exc:
             _raise_public_error(exc)
 
+    @router.get("/api/investigation-runs/{run_id}/geographic-selection")
+    def geographic_selection(
+        run_id: str,
+        offset: int = Query(default=0, ge=0),
+        limit: int = Query(default=50, ge=1, le=100),
+        tier: Literal["local", "province_unknown", "ip_only", "other_region", "unresolved", "conflict"] | None = None,
+        principal: Principal = Depends(provide_principal),
+    ):
+        from backend.audit_agent.geographic_status import selection_page
+        try:
+            return selection_page(service, run_id, principal, offset=offset, limit=limit, tier=tier)
+        except Exception as exc:
+            _raise_public_error(exc)
+
     return router
 
 
@@ -295,6 +328,10 @@ def _raise_public_error(exc: Exception) -> None:
         raise HTTPException(status_code=409, detail=detail) from exc
     if isinstance(exc, PrincipalAccessDeniedError):
         raise HTTPException(status_code=404, detail="resource was not found") from exc
+    if isinstance(exc, ConfigurationValidationError) and exc.code == 'REGION_SELECTION_BUSY':
+        raise HTTPException(status_code=409, detail=detail) from exc
+    if isinstance(exc, ConfigurationValidationError) and exc.code == 'REGION_SELECTION_UNRESOLVED':
+        raise HTTPException(status_code=422, detail=detail) from exc
     if isinstance(exc, ValidationError):
         # Validator contexts can contain ValueError objects, which JSONResponse
         # cannot serialize. The location/type/message remain sufficient to report it.

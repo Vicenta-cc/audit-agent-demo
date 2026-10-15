@@ -1,0 +1,23 @@
+{
+  "python_compile_passed": 4,
+  "protocol_copy_ast_equivalent": true,
+  "old36_files_matched": 36,
+  "other_worktree": "/Users/ext.wanghongtao6/.codex/worktrees/unified-report-query-phase1/xhs-audit-agent-demo",
+  "other_files_sha256": {
+    "Audit_assistant/playwright.logic.config.ts": "e7e288c427fb2759331ea5aa07f7a44715c00f02e5859481c6f8c9c6c5269b08",
+    "Audit_assistant/src/features/investigation/AnalysisRecordsPage.tsx": "4534ee5827b88c5b3881d085ddcb6b422ad1ece8d63d9785eb6695fa25fa4211",
+    "Audit_assistant/src/features/investigation/InvestigationCenterArea.tsx": "145771ce05b8ffc9cf3017320e3f116a9746439eda4f080f432e1311008f1170",
+    "Audit_assistant/src/features/investigation/m3AnalysisRecords.ts": "dcb450e18027846db2e1d4e8a257414ebf263302cf517bbe1aea22538df24eff",
+    "backend/report_collection/analysis.py": "a681522b75d8ac1274b0695b9fc282ac3388ad480383956f4483fad8372a983e",
+    "backend/report_collection/expression.py": "7e1d065f0817b98ea73532198805ef1b09b099666e069c774fd92c0ecefe14e4",
+    "backend/report_collection/tools.py": "ab949de304faf398a040a18c8416add8aa64b1edfcb797087512f297ccfca163",
+    "tests/test_report_collection_expression.py": "b0aacfebad781c1c20aa707cab5e9ee270f1d4214dffa31752de2d3065fa6ffe",
+    "Audit_assistant/tests/analysisRecordTarget.spec.ts": "9aa842525fdd511f7247e50a4032d129ee00b3a631a50c7ad381b84826270f26",
+    "tests/test_report_query_complete_distributions.py": "8e5153484c5639def6514a2183a98b7d31aa2edbfb5c8a38cff4c483af843d20",
+    "tests/test_report_query_read_contract.py": "a3b1abaf43c623a466ab66a687b3a6395fe82f789e868f9dfcc9ac8586e50b32"
+  },
+  "targeted_passed": 492,
+  "baseline_regression_passed": 25,
+  "new_tests": 54,
+  "real_calls_before_freeze": 0
+}

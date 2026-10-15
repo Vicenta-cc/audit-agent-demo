@@ -1,0 +1,39 @@
+{
+  "command": [
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+    "-c",
+    "from experiments.geographic_joint_integration.run_offline import main; raise SystemExit(main())",
+    "--output-dir",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/runtime-formal-final-01",
+    "--worker",
+    "tests/test_geographic_runtime_freeze.py",
+    "tests/test_geographic_runtime_bridge.py",
+    "tests/test_geographic_runtime_pipeline.py",
+    "tests/test_geographic_runtime_store.py",
+    "tests/test_geographic_runtime_delivery.py",
+    "tests/test_geographic_runtime_status.py",
+    "tests/test_geographic_runtime_worker.py",
+    "tests/test_geographic_reporting.py",
+    "tests/test_frozen_workspace_configuration.py",
+    "tests/test_pass_report.py",
+    "tests/test_report_presentation_projection.py"
+  ],
+  "parent_command": [
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_joint_integration/run_offline.py",
+    "--output-dir",
+    "experiments/geographic_joint_integration/artifacts/runtime-formal-final-01",
+    "tests/test_geographic_runtime_freeze.py",
+    "tests/test_geographic_runtime_bridge.py",
+    "tests/test_geographic_runtime_pipeline.py",
+    "tests/test_geographic_runtime_store.py",
+    "tests/test_geographic_runtime_delivery.py",
+    "tests/test_geographic_runtime_status.py",
+    "tests/test_geographic_runtime_worker.py",
+    "tests/test_geographic_reporting.py",
+    "tests/test_frozen_workspace_configuration.py",
+    "tests/test_pass_report.py",
+    "tests/test_report_presentation_projection.py"
+  ],
+  "temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-dgylsift",
+  "sitecustomize": "from experiments.geographic_joint_integration.run_offline import bootstrap\nbootstrap()\n"
+}

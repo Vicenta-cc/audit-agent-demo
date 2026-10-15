@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 from pathlib import Path
 from typing import Any, Callable
 
@@ -284,6 +286,8 @@ class AccountEntryReportGraph(RiskFindingReportGraph):
                     "author_display_name": str(post.payload.get("author") or "未知作者"),
                     "caption": str(post.payload.get("caption") or ""),
                     "audit_finding_ref": finding_refs[finding.ref],
+                    **({"selection_basis": deepcopy(post.payload["selection_basis"])}
+                       if "selection_basis" in post.payload else {}),
                 }
             )
 

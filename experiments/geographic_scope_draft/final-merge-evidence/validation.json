@@ -1,0 +1,40 @@
+{
+  "baseline_commit": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "p1_checkpoint": "94e05dd",
+  "resource_accepted_commit": "31c2280f2137bcff18e89bb539026e79c2330402",
+  "merge_commit": "ea5aa58",
+  "backend": {
+    "files": 51,
+    "passed": 1324,
+    "subtests_passed": 42,
+    "failures": 0
+  },
+  "p0_baseline": {
+    "passed": 435,
+    "failures": 0,
+    "new_sandbox": true
+  },
+  "frontend": {
+    "passed": 99,
+    "failures": 0
+  },
+  "build_and_typecheck": "passed",
+  "runtime_smoke": "passed",
+  "new_model_calls": 0,
+  "new_collection_runs": 0,
+  "initial_diagnostic": {
+    "failed": 45,
+    "passed": 1714,
+    "explanation": "38 incompatible frozen P0 tests now run unchanged on their original baseline; 6 assertions already stale on baseline; 1 strict catalog assertion updated for accepted import_resource."
+  },
+  "static_checks": {
+    "changed_python_ast": "passed",
+    "code_diff_whitespace": "passed",
+    "full_repo_lint": "not configured; not claimed"
+  },
+  "limitations": [
+    "P1 geographic execution gate remains enabled",
+    "No new live model test in this merge; use original accepted resource report for model evidence",
+    "Existing Vite large chunk and Python deprecation warnings remain"
+  ]
+}

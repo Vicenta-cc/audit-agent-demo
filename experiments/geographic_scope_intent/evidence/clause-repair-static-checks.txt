@@ -1,0 +1,8 @@
+AST/source compilation: 11 files passed
+Frozen manifest matches: 8 sources and 4 snapshots
+Whitespace: 24 source/document/fixture/test files passed; raw failure logs excluded
+No tracked business diff; no real provider calls; no P1 work
+ruff/mypy/flake8 unavailable as previously recorded; not run
+scoring.py: SHA256 0c3802e4773437205ee5329bbf05fdfeed5db86b306557e7c8f9a946f45bcf7b
+REPORT.md: SHA256 97c38e68a823ff1837a9848f4313ab5e39e95945b8734e9a87ad09685d48e364
+test_geographic_scope_runner.py: SHA256 ac5673de0215c6a6fc5680ed150179bf1b2ff6e156c1f9eb3cb70fb1b53228a5

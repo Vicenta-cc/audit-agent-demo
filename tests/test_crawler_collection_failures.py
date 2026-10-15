@@ -64,6 +64,32 @@ def test_incomplete_marker_is_typed_even_on_clean_exit(tmp_path,monkeypatch,exit
     assert not isinstance(error.value,(CrawlerAuthenticationError,CrawlerVerificationError))
 
 
+def test_media_download_stack_timeout_is_typed_without_crawler_marker(handoff):
+    marker = """Traceback (most recent call last):
+  File "core.py", line 1044, in get_aweme_video
+    content = await self._download_media_with_retry(url, budget)
+  File "core.py", line 1008, in _download_media_with_retry
+    return await self.dy_client.get_aweme_media(url, raise_on_error=True)
+  File "client.py", line 624, in get_aweme_media
+    response = await self._send("GET", url, operation='media')
+  File "tools/persistent_request_gate.py", line 230, in slot
+    async with asyncio.timeout(timeout):
+TimeoutError
+"""
+    write_handoff_failure(handoff, marker, 1)
+    with pytest.raises(CrawlerMediaDownloadError, match='媒体下载超时'):
+        handoff.run()
+    assert handoff.events.index('final') < handoff.events.index('cleanup')
+
+
+def test_unscoped_timeout_remains_infrastructure_failure(handoff):
+    write_handoff_failure(handoff, 'Traceback: search_api\nTimeoutError\n', 1)
+    with pytest.raises(RuntimeError, match='MediaCrawler failed') as error:
+        handoff.run()
+    assert not isinstance(error.value, CrawlerCollectionIncompleteError)
+    assert handoff.events.index('final') < handoff.events.index('cleanup')
+
+
 @pytest.mark.parametrize('caught',[False,True])
 def test_actual_crawler_preserves_good_post_and_rejects_incomplete_post(tmp_path,monkeypatch,caught):
     root=Path(os.environ.get('MEDIACRAWLER_RELIABILITY_ROOT',str(settings.media_crawler_dir))).resolve()

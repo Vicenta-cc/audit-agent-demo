@@ -1,0 +1,21 @@
+{
+  "total": 2,
+  "completed": 2,
+  "passed": 0,
+  "records": [
+    {
+      "id": "E21a",
+      "pass": false,
+      "errors": [
+        "no persisted draft; clarification-only is recorded as incomplete"
+      ]
+    },
+    {
+      "id": "E21b",
+      "pass": false,
+      "errors": [
+        "no persisted draft; clarification-only is recorded as incomplete"
+      ]
+    }
+  ]
+}

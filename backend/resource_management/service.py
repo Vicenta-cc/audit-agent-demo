@@ -342,6 +342,7 @@ class ResourceManagementService:
             }
         result['saves'] = saved
         result['saved'] = any(r['edit_version'] == result['version'] and r['edit_content_hash'] == result['content_hash'] for r in saved)
+        result['read_arguments'] = {'edit_id': edit_id}
         result['update_arguments'] = {'edit_id': edit_id, 'expected_version': result['version']}
         from .edit_projection import item_index
         result['item_index']=item_index(result['kind'],result['content'])

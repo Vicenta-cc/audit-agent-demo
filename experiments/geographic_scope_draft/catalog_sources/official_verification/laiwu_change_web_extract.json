@@ -1,0 +1,5 @@
+{
+  "capture_kind": "web_tool_extract_not_raw_http",
+  "retrieved_date": "2026-10-15",
+  "result": "Internal Error ()\nciteturn55view0 [wordlim: 200] Source: open({\"ref_id\":\"https://www.saac.gov.cn/daj/c100330/201906/6aa654e7a22649c599643d9138f7dad9.shtml\",\"lineno\":null}); Total lines: 1\nL0: Failed to fetch https://www.saac.gov.cn/daj/c100330/201906/6aa654e7a22649c599643d9138f7dad9.shtml: (502) Bad Gateway\n"
+}

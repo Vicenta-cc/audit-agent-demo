@@ -6,11 +6,14 @@ from .contracts import (
     InvestigationRun,
     InvestigationTaskParameters,
     RecallPlanPreview,
+    parse_confirmed_configuration_snapshot,
 )
 
 
 def confirmed_run_preview(run: InvestigationRun) -> ConfirmationPreview:
-    snapshot = ConfirmedConfigurationSnapshotV4.model_validate(run.confirmed_configuration)
+    snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
+    if not isinstance(snapshot, ConfirmedConfigurationSnapshotV4):
+        raise ValueError("Frozen preview requires a v4-compatible configuration")
     if (snapshot.draft_id, snapshot.draft_revision) != (run.draft_id, run.draft_revision):
         raise ValueError("Frozen configuration does not match the confirmed run")
     execution = snapshot.execution

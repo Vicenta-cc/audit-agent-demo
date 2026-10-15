@@ -1,0 +1,12 @@
+{
+  "command": [
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_geographic_national_catalog.py",
+    "--tb=short"
+  ],
+  "isolated_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-national-check.sxfbbolv",
+  "dotenv_disabled": true
+}

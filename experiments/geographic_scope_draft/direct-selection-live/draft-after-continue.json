@@ -1,0 +1,88 @@
+{
+  "id": "investigation-draft:f0ce9dcc74664fdea2f5ad45c9aa58b4",
+  "current_revision": 2,
+  "title": "克拉玛依欠薪舆情调查",
+  "objective": "在抖音调查克拉玛依欠薪相关舆情",
+  "status": "DRAFT",
+  "configuration": {
+    "investigation": {
+      "mode": "search",
+      "recall_plan": {
+        "enabled_main_terms": [
+          "舆情事件"
+        ],
+        "expected_runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+        "lexicon_id": "custom_f43c26f2445a4a0e",
+        "strategy": "existing_lexicon"
+      }
+    },
+    "judgement": {
+      "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+      "expected_ruleset_version": 1,
+      "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+      "strategy": "existing_ruleset"
+    },
+    "platform": "dy",
+    "relevance_scope": {
+      "content_unit": "parent_post_event",
+      "province": {
+        "aliases": [
+          "吉林"
+        ],
+        "name": "吉林省"
+      },
+      "schema_version": "geo-scope-v1",
+      "selection_policy": "local_first_with_supplement",
+      "target": {
+        "aliases": [
+          "吉林"
+        ],
+        "name": "吉林省"
+      },
+      "topic": null
+    },
+    "relevance_scope_state": {
+      "application_turn_id": "",
+      "candidates": [
+        {
+          "kind": "省",
+          "level": "province",
+          "name": "吉林省",
+          "province_name": "吉林省"
+        }
+      ],
+      "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+      "copied_from_draft_id": "",
+      "draft_id": "investigation-draft:f0ce9dcc74664fdea2f5ad45c9aa58b4",
+      "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+      "province": {
+        "aliases": [
+          "吉林"
+        ],
+        "name": "吉林省"
+      },
+      "province_code": "220000",
+      "reason": "",
+      "selection_policy": "local_first_with_supplement",
+      "session_id": "investigation-session:df20bb8a6a7346a9b4429b5c32d28cfe",
+      "source_kind": "ui_selection",
+      "source_operation_id": "9c5bc35d-4fdf-40ac-b0ad-bd331a5b9bf8",
+      "source_quote": "",
+      "source_sequence": 19,
+      "source_turn_id": "",
+      "source_user_message_id": "",
+      "status": "resolved",
+      "target": {
+        "aliases": [
+          "吉林"
+        ],
+        "name": "吉林省"
+      },
+      "target_code": "220000",
+      "target_level": "province",
+      "target_text": "吉林省",
+      "task_anchor_turn_id": ""
+    },
+    "schema_version": "investigation-draft-config-v4"
+  }
+}

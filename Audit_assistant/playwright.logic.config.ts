@@ -5,7 +5,8 @@ export default defineConfig({
     'resourceConversationPresentation.spec.ts',
     'resourceMarkdownRendering.spec.tsx',
     'historicalReportPresentation.spec.tsx',
-    'investigationStreamingLogic.spec.ts'
+    'investigationStreamingLogic.spec.ts',
+    'geographicRuntimePresentation.spec.tsx'
   ],
   workers: 1,
   reporter: 'line',

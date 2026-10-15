@@ -1,0 +1,31 @@
+{
+  "kind": "documentation_selection_verification_no_provider_io",
+  "verified_at": "2026-10-15T11:22:53.010039+08:00",
+  "selected_variant": "confirmation",
+  "new_real_requests": 0,
+  "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "branch": "codex/geographic-relevance-p0",
+  "protected_existing_artifacts_verified": 181,
+  "all_sources_hash_verified": true,
+  "raw_traces_verified": 18,
+  "raw_requests": 50,
+  "raw_responses": 50,
+  "raw_tool_calls": 41,
+  "ready_set_arguments_and_receipts_verified": 5,
+  "clear_arguments_and_receipt_verified": 1,
+  "automatic_and_manual_scores_unchanged": true,
+  "new_note_local_links_verified": 10,
+  "candidate_default_unchanged": "combined; explicit confirmation required",
+  "code_changed": false,
+  "new_test_runs": 0,
+  "reason_no_test_rerun": "Documentation and selection manifest only; frozen code and previous435+25 evidence verified unchanged",
+  "documents_sha256": {
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/CONFIRMATION_HANDOFF.md": "e6e55ad045aace06769525e208f5df49ec1cdf142f9d3ffcd9558ba52f286d82",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/REPORT.md": "5803d45497fca0b6a96c481431c644275d253d97a8cbd479a5945e7159109962",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/README.md": "69a5aa8a69f791a9c314e01e15d77fcaf615cad2c06f3d16c4d159bf1d064b51",
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.omx/plans/geographic-relevance-p0-handoff.md": "374913e995d75dcb27dbf9f8d39808d80d9049f2bb16223f3354d7d959e7b524",
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.omx/plans/geographic-relevance-implementation.md": "ea0eb11090777d3c8484641eb79d8a089b7aca3a9af681ec4a792f6c02f16b02"
+  },
+  "selection_manifest_sha256": "9ee797219c113398b868ad1cc630533c03ada056fdfabfd987122656507ad3bb",
+  "status": "地域识别与草案落地结果已整理、待原会话验收；P0未整体通过"
+}

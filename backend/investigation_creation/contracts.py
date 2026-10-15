@@ -22,6 +22,7 @@ from backend.audit_agent.creator_url import validate_creator_url
 from backend.audit_agent.limits import MAX_SUPPORTED_INVESTIGATION_POSTS
 from backend.resource_management.contracts import LexiconContent
 from backend.rulesets.contracts import ApplicationStage, RiskLevel, RuleSetContent
+from .scope_intent import RelevanceScope, RelevanceScopeState, PublicRelevanceScopeState
 
 
 class StrictModel(BaseModel):
@@ -105,6 +106,9 @@ InvestigationBlockerCode = Literal[
     "CONFIRMATION_REQUIRED",
     "IDEMPOTENCY_CONFLICT",
     "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE",
+    "RELEVANCE_SCOPE_PENDING",
+    "RELEVANCE_SCOPE_EXECUTION_UNAVAILABLE",
+    "RELEVANCE_SCOPE_MODE_UNSUPPORTED",
 ]
 
 
@@ -325,13 +329,26 @@ class InvestigationDraftConfiguration(StrictModel):
     investigation: InvestigationMode
     judgement: RuleSetJudgement
     task_parameters: InvestigationTaskParameters | None = None
+    relevance_scope: RelevanceScope | None = None
+    relevance_scope_state: RelevanceScopeState | None = None
 
     @model_serializer(mode="wrap")
     def serialize_configuration(self, handler):
         payload = handler(self)
         if self.task_parameters is None:
             payload.pop("task_parameters", None)
+        for key in ('relevance_scope', 'relevance_scope_state'):
+            if getattr(self, key) is None:
+                payload.pop(key, None)
         return payload
+
+    @model_validator(mode='before')
+    @classmethod
+    def reject_null_geography(cls, value):
+        if isinstance(value, dict) and any(key in value and value[key] is None
+                for key in ('relevance_scope', 'relevance_scope_state')):
+            raise ValueError('omit absent geography; changes require the conversation configure tool')
+        return value
 
     @field_validator("judgement", mode="before")
     @classmethod
@@ -683,6 +700,17 @@ class CrawlerAccountConfirmedState(StrictModel):
 
 
 class ConfirmationPreview(StrictModel):
+    relevance_scope: RelevanceScope | None = None
+    relevance_scope_state: PublicRelevanceScopeState | None = None
+
+    @model_serializer(mode='wrap')
+    def serialize_preview(self, handler):
+        payload = handler(self)
+        for key in ('relevance_scope', 'relevance_scope_state'):
+            if getattr(self, key) is None:
+                payload.pop(key, None)
+        return payload
+
     max_post_limit: StrictInt = Field(
         default=MAX_SUPPORTED_INVESTIGATION_POSTS,
         ge=1,
@@ -733,6 +761,7 @@ class AuditConfigRevisionSnapshot(StrictModel):
 
 
 class ResolvedExecutionConfiguration(StrictModel):
+    geographic_plan: dict[str, Any] | None = None
     # Absent on historical snapshots; omit absent fields from canonical hashes.
     auto_analyze: StrictBool | None = None
     collect_comments: StrictBool | None = None
@@ -746,6 +775,7 @@ class ResolvedExecutionConfiguration(StrictModel):
     def serialize_execution(self, handler):
         payload = handler(self)
         for key in (
+            "geographic_plan",
             "auto_analyze",
             "collect_comments",
             "collect_media",
@@ -952,6 +982,8 @@ class ConfirmedConfigurationSnapshot(StrictModel):
 
     @model_validator(mode="after")
     def validate_snapshot_text(self) -> "ConfirmedConfigurationSnapshot":
+        if self.execution.geographic_plan is not None:
+            raise ValueError("geographic plan requires v5 snapshot")
         if not self.draft_id:
             raise ValueError("draft_id must not be blank")
         if not self.title:
@@ -982,6 +1014,8 @@ class ConfirmedConfigurationSnapshotV3(StrictModel):
 
     @model_validator(mode="after")
     def validate_snapshot(self) -> "ConfirmedConfigurationSnapshotV3":
+        if self.execution.geographic_plan is not None:
+            raise ValueError("geographic plan requires v5 snapshot")
         ConfirmationResolutionV3.model_validate(
             {
                 key: value
@@ -1046,6 +1080,8 @@ class ConfirmedConfigurationSnapshotV4(FrozenRuleSetSource):
 
     @model_validator(mode="after")
     def validate_snapshot(self) -> "ConfirmedConfigurationSnapshotV4":
+        if self.schema_version != "investigation-run-config-v5" and self.execution.geographic_plan is not None:
+            raise ValueError("geographic plan requires v5 snapshot")
         ConfirmationResolution.model_validate(
             {
                 key: value
@@ -1080,6 +1116,24 @@ class ConfirmedConfigurationSnapshotV4(FrozenRuleSetSource):
         return self
 
 
+class ConfirmedConfigurationSnapshotV5(ConfirmedConfigurationSnapshotV4):
+    schema_version: Literal["investigation-run-config-v5"]
+
+    @model_validator(mode="after")
+    def validate_geographic_snapshot(self):
+        from .scope_search_plan import parse_confirmed_scope_search_plan
+        raw = self.execution.geographic_plan
+        if not raw:
+            raise ValueError("v5 requires a confirmed geographic plan")
+        identity = dict(raw.get("identity", {}))
+        if (identity.get("owner"), identity.get("draft_id"), identity.get("revision")) != (self.confirmed_by, self.draft_id, self.draft_revision):
+            raise ValueError("geographic plan differs from confirmed Run identity")
+        parse_confirmed_scope_search_plan(raw, expected_identity=identity, expected_digest=raw.get("plan_digest"))
+        from .frozen import validate_execution_payload
+        validate_execution_payload(self.execution.model_dump(mode="json"))
+        return self
+
+
 def confirmed_configuration_hash(value: dict[str, Any]) -> str:
     return hashlib.sha256(
         json.dumps(
@@ -1097,7 +1151,10 @@ def parse_confirmed_configuration_snapshot(
     ConfirmedConfigurationSnapshot
     | ConfirmedConfigurationSnapshotV3
     | ConfirmedConfigurationSnapshotV4
+    | ConfirmedConfigurationSnapshotV5
 ):
+    if value.get("schema_version") == "investigation-run-config-v5":
+        return ConfirmedConfigurationSnapshotV5.model_validate(value)
     if value.get("schema_version") == "investigation-run-config-v4":
         return ConfirmedConfigurationSnapshotV4.model_validate(value)
     if value.get("schema_version") == "investigation-run-config-v3":

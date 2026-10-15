@@ -1,0 +1,18 @@
+{
+  "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+  "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo",
+  "pytest_argv": [
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-ivm8onhh/pytest",
+    "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/runtime-pipeline-green-02/junit.xml",
+    "tests/test_geographic_runtime_pipeline.py",
+    "tests/test_triaged_search.py"
+  ],
+  "guard_installed_before_collection": true,
+  "allowed_database_roots": [
+    "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-ivm8onhh",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/runtime-pipeline-green-02"
+  ]
+}

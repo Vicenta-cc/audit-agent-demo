@@ -32,6 +32,7 @@ import {
   saveInvestigationDraftLexicon,
   sendInvestigationCreationTurn,
   updateInvestigationDraft,
+  updateInvestigationRelevanceScope,
   sendInvestigationWorkspaceReportTurn,
   resumeInvestigationWorkspaceReportTurn,
   waitForInvestigationWorkspaceReportTurn,
@@ -580,6 +581,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   const currentWorkspaceLocationRef = useRef(location);
   currentWorkspaceLocationRef.current = location;
   const [sendingMessageSessionId, setSendingMessageSessionId] = useState("");
+  const [savingRelevanceSessionId, setSavingRelevanceSessionId] = useState("");
+  const relevanceSaveRef = useRef(false);
   const [deletingSessionId, setDeletingSessionId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{id: string; title: string} | null>(null);
   const [deletionNotice, setDeletionNotice] = useState("");
@@ -1288,6 +1291,36 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         keywords
       }
     }));
+  };
+
+  const handleSaveRelevanceScope = async (targetText: string, operationId: string, clarificationTargetText?: string) => {
+    const session = activeSession;
+    const binding = session.creationBinding;
+    const draft = binding?.draft;
+    if (!binding || !draft || draft.status !== "DRAFT" || session.draft.confirmed || binding.run
+      || sendingMessageSessionId || binding.pendingTurnId || confirmingCreationSessionId || relevanceSaveRef.current) {
+      throw new Error("当前草案正在处理或不可修改，请稍后重试。");
+    }
+    relevanceSaveRef.current = true;
+    setSavingRelevanceSessionId(session.id);
+    const refresh = async () => {
+      const state = await getInvestigationWorkspaceState(binding.workspaceSessionId);
+      const restored = restoreInvestigationWorkspace(state);
+      if (deletedSessionIdsRef.current.has(session.id)) return;
+      setSessions(current => current.map(item => item.id === session.id ? restored : item));
+    };
+    try {
+      await updateInvestigationRelevanceScope(binding.workspaceSessionId, draft.id, {
+        expectedRevision: draft.current_revision, operationId, targetText, clarificationTargetText
+      });
+      await refresh();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) await refresh();
+      throw error;
+    } finally {
+      relevanceSaveRef.current = false;
+      setSavingRelevanceSessionId("");
+    }
   };
 
   const persistCreationLexicon = async (
@@ -2252,7 +2285,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     }
 
     if (activeSession.creationBinding) {
-      if (sendingMessageSessionId || activeSession.creationBinding.pendingTurnId) return;
+      if (sendingMessageSessionId || activeSession.creationBinding.pendingTurnId || relevanceSaveRef.current) return;
       const session = activeSession;
       const creationBinding = activeSession.creationBinding;
       const clientMessageId = createClientMessageId(session.id);
@@ -2622,6 +2655,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         <InvestigationCenterArea
           session={activeSession}
           isSendingMessage={sendingMessageSessionId === activeSession.id}
+          isSavingRelevanceScope={savingRelevanceSessionId === activeSession.id}
+          onSaveRelevanceScope={handleSaveRelevanceScope}
           sendingMessageStage={
             activeSession.reportBinding?.pendingTurn?.stage
             || activeSession.creationBinding?.pendingTurnStage
@@ -2674,6 +2709,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       {/* Column 3: Right Context Drawer (Overlay/Sliding) */}
       <InvestigationContextDrawer
         isOpen={activeDrawer !== null}
+        geographicRunId={drawerSnapshot ? undefined : activeSession.creationBinding?.run?.run_id}
         type={activeDrawer}
         onClose={() => { setActiveDrawer(null); setDrawerSnapshot(null); }}
         draft={drawerSnapshot?.draftData || activeSession.draft}
@@ -2682,7 +2718,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         activeRuleSet={drawerSnapshot ? undefined : activeRuleSet}
         draftSuggestion={drawerSnapshot ? drawerSnapshot.draftArtifact?.suggestion || undefined : activeSession.creationBinding?.suggestion}
         creationDraft={drawerSnapshot ? undefined : activeSession.creationBinding?.draft}
-        confirmationPreview={drawerSnapshot?.confirmationPreview || activeSession.creationBinding?.confirmationPreview}
+        confirmationPreview={drawerSnapshot ? drawerSnapshot.confirmationPreview : activeSession.creationBinding?.confirmationPreview}
         onApplyLexicon={handleApplyCreationLexicon}
         onSaveLexicon={handleSaveCreationLexicon}
         canPublishLexicon={true}

@@ -3,8 +3,9 @@ from pydantic import Field, field_validator
 
 from backend.rulesets.contracts import StrictModel
 from .contracts import LexiconContent
+from .generation_diagnostics import AuthoringConflict
 
-LEXICON_AUTHORING_VERSION = '3'
+LEXICON_AUTHORING_VERSION = '4'
 
 
 class GeneratedTerm(StrictModel):
@@ -56,6 +57,21 @@ class GeneratedLexicon(StrictModel):
         description='仅需要分类标签时提供；标签不参与搜索，默认空')
 
     def to_content(self) -> LexiconContent:
+        # Storage uniqueness applies to every term, including inactive alternatives
+        # and non-searching labels. Keep exact authoring paths for correction.
+        seen = {}
+        located = []
+        for index, theme in enumerate(self.themes):
+            located.append((['themes', index], theme))
+            for group in ('variants', 'alternatives'):
+                located.extend((['themes', index, group, number], term)
+                               for number, term in enumerate(getattr(theme, group)))
+        located.extend((['tags', number], term) for number, term in enumerate(self.tags))
+        for path, term in located:
+            key = (term.term, term.platform, term.match_type)
+            if key in seen:
+                raise AuthoringConflict(path, seen[key])
+            seen[key] = path
         entries = []
         for index, theme in enumerate(self.themes, 1):
             parent_id = f'generated-main-{index}'

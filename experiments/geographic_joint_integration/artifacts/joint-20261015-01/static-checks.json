@@ -1,0 +1,18 @@
+{
+  "compiled_files": [
+    "experiments/geographic_joint_integration/adapter.py",
+    "experiments/geographic_joint_integration/audit.py",
+    "experiments/geographic_joint_integration/replay.py",
+    "experiments/geographic_joint_integration/run_offline.py",
+    "experiments/geographic_joint_integration/scenarios.py",
+    "tests/test_geographic_joint_adapter.py",
+    "tests/test_geographic_joint_execution.py",
+    "tests/test_geographic_joint_risk.py"
+  ],
+  "compile_status": "passed",
+  "source_hashes_still_equal_to_pretest": true,
+  "git_diff_check_exit": 0,
+  "new_source_docs_whitespace": "passed",
+  "lint_typecheck": "not configured; no new dependencies",
+  "frontend": "not modified; not tested"
+}

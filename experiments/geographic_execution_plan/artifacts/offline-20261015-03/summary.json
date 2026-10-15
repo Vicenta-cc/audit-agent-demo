@@ -1,0 +1,26 @@
+{
+  "schema_version": "p2-offline-verification-v1",
+  "fixture_only": true,
+  "pytest_exit_code": 1,
+  "pytest": {
+    "tests": 677,
+    "failures": 6,
+    "errors": 0,
+    "skipped": 0
+  },
+  "compiled_files": 17,
+  "compile_status": "passed",
+  "p3_dependencies_verified": 11,
+  "guards_installed_before_collection": true,
+  "guard_attempts_blocked": 2,
+  "blocked_by_kind": {
+    "sqlite": 2
+  },
+  "actual_network_model_collection_dispatch_succeeded": 0,
+  "sqlite_scope": "memory, system temporary directories, explicit experiment output only",
+  "limits": [
+    "Accidental-side-effect guards, not a hostile-code sandbox.",
+    "Artificial responses do not establish model semantic quality.",
+    "Python children inherit guards; no production service or task is launched."
+  ]
+}

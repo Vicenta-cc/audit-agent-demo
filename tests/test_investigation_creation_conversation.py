@@ -24,6 +24,7 @@ from backend.api.reporting import create_reporting_router
 from backend.audit_agent.audit_policy_store import AuditPolicyStore
 from backend.audit_agent.config import settings
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+from crawler_auth_fixtures import mark_camoufox_login_verified
 from backend.audit_agent.job_store import JobStore
 from backend.audit_agent.lexicon_store import LexiconStore
 from backend.hermes_runtime.adapter import HermesRuntimeBinding
@@ -229,6 +230,8 @@ def creation_stack(tmp_path: Path) -> dict:
             display_name=f"{platform} fixture account",
         )
         crawler_accounts.save_auth_state(account["id"], "synthetic-fixture-ciphertext")
+        if platform == "dy":
+            mark_camoufox_login_verified(crawler_accounts, account["id"])
     resolver = InvestigationConfigurationResolver(
         lexicon_store=lexicons,
         policy_store=policies,
@@ -1319,7 +1322,7 @@ def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
     manager = service.resource_management
     selected_rule = manager.read('ruleset', ruleset.ruleset_id, principal=principal)
     selected_lexicon = manager.read('lexicon', 'gambling', principal=principal)
-    create_arguments = {'operation': 'create', 'title': 'Hermes middleware identity',
+    create_arguments = {'operation': 'create', 'scope_decision': 'none', 'title': 'Hermes middleware identity',
         'objective': 'prove real registry dispatch executes each mutation once', 'platform': 'xhs',
         'ruleset_ref': selected_rule['resource_ref'], 'lexicon_ref': selected_lexicon['resource_ref']}
     configure_hermes_investigation_creation_tools(
@@ -2090,6 +2093,7 @@ def test_single_creation_turn_create_and_confirm_restores_workspace_run_and_repo
 def test_creation_mode_keeps_legacy_tools_and_adds_resource_tools() -> None:
     from backend.resource_management.tools import RESOURCE_TOOL_INPUTS
     assert set(M3_TOOL_INPUTS) == set(RESOURCE_TOOL_INPUTS) | {
+        "import_resource",
         "configure_investigation_draft",
         "copy_investigation_draft",
         "list_investigation_rounds",

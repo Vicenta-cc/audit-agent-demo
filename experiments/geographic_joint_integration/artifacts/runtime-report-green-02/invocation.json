@@ -1,0 +1,23 @@
+{
+  "command": [
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+    "-c",
+    "from experiments.geographic_joint_integration.run_offline import main; raise SystemExit(main())",
+    "--output-dir",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/runtime-report-green-02",
+    "--worker",
+    "tests/test_geographic_reporting.py",
+    "tests/test_pass_report.py",
+    "tests/test_published_report_runtime_snapshot.py"
+  ],
+  "parent_command": [
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-integration/xhs-audit-agent-demo/experiments/geographic_joint_integration/run_offline.py",
+    "--output-dir",
+    "experiments/geographic_joint_integration/artifacts/runtime-report-green-02",
+    "tests/test_geographic_reporting.py",
+    "tests/test_pass_report.py",
+    "tests/test_published_report_runtime_snapshot.py"
+  ],
+  "temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-45pw91hq",
+  "sitecustomize": "from experiments.geographic_joint_integration.run_offline import bootstrap\nbootstrap()\n"
+}

@@ -14,7 +14,7 @@ BRIDGE_GUIDANCE = {
 
 
 def unwrap_extra_call_envelope(arguments):
-    """Accept only one redundant bridge envelope; never infer business fields.
+    """Accept observed redundant generation envelopes; never infer business values.
 
     Return a copy for the adapted shape so the model's original invocation
     remains available in the transcript. Native resolution, session scope,
@@ -23,7 +23,14 @@ def unwrap_extra_call_envelope(arguments):
     if not isinstance(arguments, dict) or set(arguments) != {'arguments'}:
         return arguments
     inner = arguments['arguments']
-    if not isinstance(inner, dict) or set(inner) != {'name', 'arguments'}:
+    if not isinstance(inner, dict):
+        return arguments
+    if (set(inner) == {'name', 'generation_request'}
+            and inner['name'] in ('create_ruleset_proposal', 'create_lexicon_edit')
+            and isinstance(inner['generation_request'], dict)):
+        return {'name': inner['name'],
+                'arguments': {'generation_request': deepcopy(inner['generation_request'])}}
+    if set(inner) != {'name', 'arguments'}:
         return arguments
     if not isinstance(inner['name'], str) or not inner['name'].strip():
         return arguments

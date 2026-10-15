@@ -1,0 +1,33 @@
+..F
+=================================== FAILURES ===================================
+_________ test_real_four_resources_and_both_sources[False-True-False] __________
+tests/test_geographic_execution_plan.py:43: in test_real_four_resources_and_both_sources
+    plan = build(authority)
+           ^^^^^^^^^^^^^^^^
+tests/test_geographic_execution_plan.py:34: in build
+    return build_scope_search_plan(authority, expected_identity=expected(authority))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/investigation_creation/scope_search_plan.py:444: in build_scope_search_plan
+    queries,collection,policy=_derive(inputs)
+                              ^^^^^^^^^^^^^^^
+backend/investigation_creation/scope_search_plan.py:355: in _derive
+    _validate_resources(inputs)
+backend/investigation_creation/scope_search_plan.py:429: in _validate_resources
+    require(digest({'category_id':recall.lexicon_id,'enabled_main_terms':snap.lexicon_runtime_terms})
+backend/investigation_creation/scope_search_plan.py:37: in require
+    raise ValueError(message)
+E   ValueError: formal lexicon runtime hash mismatch
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_execution_plan.py::test_real_four_resources_and_both_sources[False-True-False]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 2 passed, 2 warnings in 1.71s

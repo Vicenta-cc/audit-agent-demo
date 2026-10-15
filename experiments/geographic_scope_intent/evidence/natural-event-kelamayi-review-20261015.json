@@ -1,0 +1,102 @@
+{
+  "kind": "supplementary_natural_event_manual_review",
+  "created_at": "2026-10-15T16:41:29.887720+08:00",
+  "candidate_version": "geo-intent-p0-bridge-minimal-v1",
+  "variant": "confirmation",
+  "exact_user_input": "调查克拉玛依大火的舆情",
+  "model": "deepseek-v4-pro-ga-260813",
+  "provider": "https://api.qhose.net/v1",
+  "candidate_code_and_prompt_unchanged": true,
+  "supplementary_cases": 1,
+  "not_added_to_old_fixed_dev_or_holdout": true,
+  "failed_initial_transport": {
+    "requests": 1,
+    "responses": 0,
+    "error_type": "SSLError",
+    "model_semantics": "unassessed"
+  },
+  "direct_transport": {
+    "requests": 4,
+    "responses": 4,
+    "errors": 0,
+    "interface": "en0",
+    "remote_ip": "179.255.137.170",
+    "tls_verification_enabled": true,
+    "system_network_configuration_changed": false,
+    "automatic_retries": 0
+  },
+  "same_user_input_and_initial_request_as_failed_attempt": true,
+  "records": [
+    {
+      "action": "keep"
+    }
+  ],
+  "configured_draft": false,
+  "configure_tool_calls": 0,
+  "tool_calls": 5,
+  "termination": "loop_limit",
+  "automatic_intent_pass": false,
+  "automatic_landing_pass": false,
+  "frozen_expected_action": "set",
+  "frozen_expected_target": "克拉玛依",
+  "original_scores_unchanged": true,
+  "manual_semantics": {
+    "event_theme_understanding": "not_proven",
+    "geographic_keep": "observed; insufficient evidence to call it event-understanding failure",
+    "draft_landing": "not_completed",
+    "no_claim_of_success": true,
+    "reason": "没有生成title/objective或配置参数，回复没有复述事件主题。预置事件词库是测试输入，不能证明模型自行识别主题。事件名含地名也不自动等于限制全部讨论来源地域；原set标签只是预先登记的诊断假设。"
+  },
+  "fixture_limitation": "第三轮查询明确索取词项及规则详情，query fixture只返回与第二轮相同的目录列表；第四轮才read_resource。此因素影响四轮预算，不能把全部延迟归因于模型；本轮不改fixture、不加轮次、不重测。",
+  "response_review": [
+    {
+      "round": 1,
+      "tools": [
+        "record_geographic_intent"
+      ],
+      "finding": "keep，未解释判断依据"
+    },
+    {
+      "round": 2,
+      "tools": [
+        "query_investigation_options"
+      ],
+      "finding": "查询可用资源，声明将配置但未配置"
+    },
+    {
+      "round": 3,
+      "tools": [
+        "query_investigation_options"
+      ],
+      "finding": "索取词项与规则详情，fixture仍仅返回列表"
+    },
+    {
+      "round": 4,
+      "tools": [
+        "read_resource",
+        "read_resource"
+      ],
+      "finding": "读取规则及事件词库，已达轮次上限；无configure"
+    }
+  ],
+  "no_execution_or_unauthorized_tools": true,
+  "draft_outcome": "0/1 supplementary case; separate from retained 5/5 fixed dev",
+  "elapsed_seconds": 17.68612295796629,
+  "usage": {
+    "completion_tokens": 398,
+    "prompt_tokens": 100304,
+    "total_tokens": 100702
+  },
+  "cost": "unknown",
+  "cumulative_requests": 507,
+  "cumulative_responses": 499,
+  "evidence_sha256": {
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/natural-event-kelamayi-direct-v1/freeze.json": "be433deb06d97ba859a06dc99247563a4e9f6f6ac1e17f7dcd7d9e194a1cde58",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/natural-event-kelamayi-direct-v1/results.json": "1a3c6770fe56aef6fdfbe7a4c7689e222923ba4fde9033d63a41eae979267e7d",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/natural-event-kelamayi-direct-v1/http-ledger.jsonl": "56e0149dcc705a8750cfba43013fd74f5210a6d9ad5202c74d89bd6ea804e92b",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/natural-event-kelamayi-direct-v1/status.json": "c30522bd9f3f7a967d0618f2f3784af9ec56849ed186210cb7d8e58bac0a80d8",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/natural-event-kelamayi-v1/results.json": "46fd98f94d5c4d7f5137f640de5330c01a2c3eafc11e5b36bb3525bebca16869",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/natural-event-kelamayi-v1/tls-diagnostic.json": "68374559c9b38431e17102bab09190d891660e1c12e12413ac9f2091454a11b2"
+  },
+  "status": "保留confirmation原版本；自然事件补测未落草案，原始结果待验收；P0未整体通过"
+}

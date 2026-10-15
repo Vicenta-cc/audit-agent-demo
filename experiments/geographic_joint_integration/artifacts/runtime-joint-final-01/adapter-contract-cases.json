@@ -1,0 +1,81 @@
+{
+  "schema": "p234-adapter-contract-evidence-v1",
+  "cases": {
+    "tests/test_geographic_joint_adapter.py::test_real_saved_plan_projection_preserves_frozen_fields": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_real_saved_plan_projection_preserves_frozen_fields",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_self_rehashed_projection_cannot_replace_external_binding[query]": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_self_rehashed_projection_cannot_replace_external_binding[query]",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_self_rehashed_projection_cannot_replace_external_binding[risk_rules]": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_self_rehashed_projection_cannot_replace_external_binding[risk_rules]",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_self_rehashed_projection_cannot_replace_external_binding[risk_model]": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_self_rehashed_projection_cannot_replace_external_binding[risk_model]",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_self_rehashed_projection_cannot_replace_external_binding[capture_limit]": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_self_rehashed_projection_cannot_replace_external_binding[capture_limit]",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_self_rehashed_projection_cannot_replace_external_binding[execution]": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_self_rehashed_projection_cannot_replace_external_binding[execution]",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_independent_expected_values_required[expected_p2_digest]": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_independent_expected_values_required[expected_p2_digest]",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_independent_expected_values_required[expected_binding_digest]": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_independent_expected_values_required[expected_binding_digest]",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_independent_expected_values_required[source_manifest_digest]": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_independent_expected_values_required[source_manifest_digest]",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_independent_expected_values_required[execution_id]": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_independent_expected_values_required[execution_id]",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_first_projection_requires_saved_plan_and_independent_authority": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_first_projection_requires_saved_plan_and_independent_authority",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_imported_source_bytes_are_checked_without_editing_upstream": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_imported_source_bytes_are_checked_without_editing_upstream",
+      "fixture_only": true,
+      "mutation": "imported_file_sha256",
+      "modified_entry": {
+        "phase": "p2",
+        "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+        "source_path": "backend/investigation_creation/scope_search_plan.py",
+        "target_path": "backend/investigation_creation/scope_search_plan.py",
+        "bytes": 36720,
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "kind": "upstream_source_or_dependency"
+      },
+      "supplied_manifest_digest": "ec62c04a08a01d372f97b6e5549db8207bc1ef7eb36a5e451937e2f5a1cf95f3",
+      "actual_error": "imported_source_drift:backend/investigation_creation/scope_search_plan.py"
+    },
+    "tests/test_geographic_joint_adapter.py::test_risk_and_geography_use_actual_frozen_plan": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_risk_and_geography_use_actual_frozen_plan",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_nonselect_frozen_plan_is_explicitly_rejected[off]": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_nonselect_frozen_plan_is_explicitly_rejected[off]",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_nonselect_frozen_plan_is_explicitly_rejected[compare]": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_nonselect_frozen_plan_is_explicitly_rejected[compare]",
+      "fixture_only": true
+    },
+    "tests/test_geographic_joint_adapter.py::test_no_scope_does_not_create_geographic_projection": {
+      "case_id": "tests/test_geographic_joint_adapter.py::test_no_scope_does_not_create_geographic_projection",
+      "fixture_only": true
+    }
+  }
+}

@@ -1,0 +1,39 @@
+
+Running 31 tests using 1 worker
+
+(node:32142) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/31] tests/geographicRuntimePresentation.spec.tsx:11:1 › geographic summary separates captures, collected and delivery and labels IP as unverified
+[2/31] tests/geographicRuntimePresentation.spec.tsx:23:3 › pending does not claim successful reporting or no risk
+[3/31] tests/geographicRuntimePresentation.spec.tsx:23:3 › incomplete does not claim successful reporting or no risk
+[4/31] tests/geographicRuntimePresentation.spec.tsx:23:3 › empty does not claim successful reporting or no risk
+[5/31] tests/geographicRuntimePresentation.spec.tsx:30:1 › unscoped result leaves existing task display unchanged
+[6/31] tests/geographicRuntimePresentation.spec.tsx:39:1 › published geographic evidence partitions sources and does not add to formal risk statistics
+[7/31] tests/geographicRuntimePresentation.spec.tsx:51:1 › published post shows original risk separately and legacy reports stay unchanged
+[8/31] tests/geographicRuntimePresentation.spec.tsx:61:1 › scope notice follows server blockers without changing confirmation permission
+[9/31] tests/historicalReportPresentation.spec.tsx:15:1 › GFM tables render semantic table sections instead of pipe text
+[10/31] tests/historicalReportPresentation.spec.tsx:33:1 › headings, lists, quotes and code render safely without executing HTML
+[11/31] tests/historicalReportPresentation.spec.tsx:63:1 › display terminology is localized without mutating the underlying answer
+[12/31] tests/historicalReportPresentation.spec.tsx:98:1 › pending stages have stable Chinese live-region copy
+[13/31] tests/historicalReportPresentation.spec.tsx:114:1 › completed and error states do not retain the pending region
+[14/31] tests/historicalReportPresentation.spec.tsx:121:1 › manual images have bounded preview controls and report links retain their targets
+[15/31] tests/historicalReportPresentation.spec.tsx:136:1 › bold account bare URL before Chinese explanation preserves target and emphasis
+[16/31] tests/historicalReportPresentation.spec.tsx:147:1 › bold URL keeps Chinese query data while separating following explanation
+[17/31] tests/historicalReportPresentation.spec.tsx:154:1 › bare URL query and fragment retain legal Chinese punctuation and parameters
+[18/31] tests/historicalReportPresentation.spec.tsx:166:1 › explicit links, literal stars, and normal Chinese prose retain their boundaries
+[19/31] tests/investigationStreamingLogic.spec.ts:4:1 › public stream events are accepted only for the requested Turn
+[20/31] tests/resourceConversationPresentation.spec.ts:5:1 › resource availability tables preserve the generation consent question
+[21/31] tests/resourceConversationPresentation.spec.ts:10:1 › successful resource answers keep their content when metadata rows are present
+[22/31] tests/resourceConversationPresentation.spec.ts:19:1 › provider content rejection is distinguished from a storage failure
+[23/31] tests/resourceConversationPresentation.spec.ts:25:1 › resource read and save tables remain readable while internal diagnostics stay hidden
+[24/31] tests/resourceConversationPresentation.spec.ts:34:1 › internal runtime branding is never shown as the assistant identity
+[25/31] tests/resourceMarkdownRendering.spec.tsx:7:1 › the reported save receipt keeps both resources and versions in a semantic table
+[26/31] tests/resourceMarkdownRendering.spec.tsx:26:1 › resource explanations retain conflict choices and remove implementation labels
+[27/31] tests/resourceMarkdownRendering.spec.tsx:45:1 › ordinary search term code blocks and escaped pipes survive metadata projection
+[28/31] tests/resourceMarkdownRendering.spec.tsx:54:1 › tables without outer pipes retain both rows and numeric alignment
+[29/31] tests/resourceMarkdownRendering.spec.tsx:63:1 › comment items separate author, audit label, verbatim text and source time
+[30/31] tests/resourceMarkdownRendering.spec.tsx:84:1 › published rule recommendation with a domain label remains visible
+[31/31] tests/resourceMarkdownRendering.spec.tsx:98:1 › readable answers retain source and detail links with exact destinations
+  31 passed (746ms)

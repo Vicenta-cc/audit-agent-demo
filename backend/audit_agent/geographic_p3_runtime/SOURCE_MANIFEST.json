@@ -1,0 +1,96 @@
+{
+  "schema_version": "p3-runtime-source-manifest-v1",
+  "runtime_contract": "p3-confirmed-run-v1",
+  "decision_commit": "2120c53379d1b79c45e3cb8232b9c9b96657b183",
+  "decision_tag": "p3-post-only-names-v2-local-20261015",
+  "files": [
+    {
+      "path": "relevance.py",
+      "bytes": 63371,
+      "sha256": "e6393ec99e564f77342db0d633e1190cb1bed4c1f17fb67add9aee622f1623cb",
+      "upstream_source": "backend/audit_agent/relevance.py",
+      "upstream_sha256": "6be6a45edf64f4896be3dbe28ab8b9115e3eea1148225076c10c3d617a52df1e",
+      "change": "origin-validation-output-digest-only"
+    },
+    {
+      "path": "relevance_ip.py",
+      "bytes": 9940,
+      "sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb",
+      "upstream_source": "backend/audit_agent/relevance_ip.py",
+      "upstream_sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb",
+      "change": "byte-identical"
+    },
+    {
+      "path": "relevance_scope.py",
+      "bytes": 8661,
+      "sha256": "aeed4f634c39253e157e481c39c80f8caa497d37cff2a75822505c745b44b8e8",
+      "upstream_source": "backend/audit_agent/relevance_scope.py",
+      "upstream_sha256": "6980b5ecdb00bbbbba68c0dcc1aafc007b2f88fd3b8674e405ff1e9703c82eff",
+      "change": "origin-validation-output-digest-only"
+    },
+    {
+      "path": "relevance_post_only.py",
+      "bytes": 14781,
+      "sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5",
+      "upstream_source": "backend/audit_agent/relevance_post_only.py",
+      "upstream_sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5",
+      "change": "byte-identical"
+    },
+    {
+      "path": "relevance_post_only_v2.py",
+      "bytes": 14006,
+      "sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607",
+      "upstream_source": "backend/audit_agent/relevance_post_only_v2.py",
+      "upstream_sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607",
+      "change": "byte-identical"
+    },
+    {
+      "path": "relevance_post_only_simple.py",
+      "bytes": 7558,
+      "sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9",
+      "upstream_source": "backend/audit_agent/relevance_post_only_simple.py",
+      "upstream_sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9",
+      "change": "byte-identical"
+    },
+    {
+      "path": "relevance_post_only_names.py",
+      "bytes": 6354,
+      "sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e",
+      "upstream_source": "backend/audit_agent/relevance_post_only_names.py",
+      "upstream_sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e",
+      "change": "byte-identical"
+    },
+    {
+      "path": "relevance_post_only_names_v2.py",
+      "bytes": 8739,
+      "sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907",
+      "upstream_source": "backend/audit_agent/relevance_post_only_names_v2.py",
+      "upstream_sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907",
+      "change": "byte-identical"
+    },
+    {
+      "path": "admin_catalog/geographic_catalog.json",
+      "bytes": 677345,
+      "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "upstream_source": "experiments/geographic_relevance/admin_catalog/geographic_catalog.json",
+      "upstream_sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "change": "byte-identical"
+    },
+    {
+      "path": "admin_catalog/SOURCE_MANIFEST.json",
+      "bytes": 3053,
+      "sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9",
+      "upstream_source": "experiments/geographic_relevance/admin_catalog/SOURCE_MANIFEST.json",
+      "upstream_sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9",
+      "change": "byte-identical"
+    },
+    {
+      "path": "location_catalog.json",
+      "bytes": 11323,
+      "sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d",
+      "upstream_source": "experiments/geographic_relevance/location_catalog.json",
+      "upstream_sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d",
+      "change": "byte-identical"
+    }
+  ]
+}

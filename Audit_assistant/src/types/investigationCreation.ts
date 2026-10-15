@@ -112,7 +112,34 @@ export interface DraftLexiconContent {
   entries: DraftLexiconEntry[];
 }
 
+export type RelevanceSelectionPolicy = "local_only" | "local_first_with_supplement";
+
+export interface RelevanceScope {
+  schema_version: "geo-scope-v1";
+  target: { name: string; aliases: string[] };
+  province: { name: string; aliases: string[] };
+  topic: null;
+  selection_policy: RelevanceSelectionPolicy;
+  content_unit: "parent_post_event";
+}
+
+/** Public display projection only; provenance remains on the server. */
+export interface RelevanceScopeState {
+  status: "resolved" | "pending" | "cleared";
+  target_text?: string | null;
+  reason?: string;
+  candidates: Array<{
+    name: string;
+    level: string;
+    kind: string;
+    province_name: string;
+  }>;
+  selection_policy?: RelevanceSelectionPolicy | null;
+}
+
 export interface InvestigationDraftConfiguration {
+  relevance_scope?: RelevanceScope | null;
+  relevance_scope_state?: RelevanceScopeState;
   task_parameters?: InvestigationTaskParameters;
   schema_version: "investigation-draft-config-v4";
   platform: InvestigationPlatform;
@@ -156,6 +183,8 @@ export interface PublicInvestigationDraft {
 }
 
 export interface ConfirmationPreview {
+  relevance_scope?: RelevanceScope | null;
+  relevance_scope_state?: RelevanceScopeState;
   max_post_limit?: number;
   task_settings_revision?: number;
   requested_parameters?: InvestigationTaskParameters;
@@ -325,7 +354,22 @@ export interface InvestigationRound {
   run: InvestigationRunProjection | null;
 }
 
+export interface RegionSelectionHistoryEntry {
+  event_id: string;
+  draft_id: string;
+  previous_revision: number;
+  revision: number;
+  after_sequence: number;
+  created_at: string;
+  question: string;
+  previous_target: { name: string; aliases?: string[] } | null;
+  previous_state: RelevanceScopeState | null;
+  selected_target: { name: string; aliases?: string[] };
+  selected_province: { name: string; aliases?: string[] };
+}
+
 export interface InvestigationWorkspaceState {
+  region_selection_history?: RegionSelectionHistoryEntry[];
   multi_round_enabled?: boolean;
   rounds?: InvestigationRound[];
   resource_continuity_enabled?: boolean;
@@ -339,4 +383,34 @@ export interface InvestigationWorkspaceState {
   activity_events: InvestigationActivityEvent[];
   creation_answer_draft?: import("./investigations").InvestigationAnswerDraft | null;
   report_answer_draft?: import("./investigations").InvestigationAnswerDraft | null;
+}
+
+export type GeographicTier = 'local' | 'province_unknown' | 'ip_only' | 'other_region' | 'unresolved' | 'conflict';
+export interface GeographicSelectionPage {
+  run_id: string;
+  status: 'pending' | 'not_applicable' | 'ready' | 'empty' | 'incomplete';
+  reason?: string;
+  summary?: {
+    candidate_occurrences: number;
+    reserved: number;
+    collected: number;
+    handed_off: number;
+    collected_not_delivered: number;
+    unfinished_queries: string[];
+    reasons: string[];
+  };
+  items: Array<{
+    occurrence_id: string;
+    query_id: string;
+    content_key: string;
+    rank: number;
+    source_keyword: string;
+    geo_tier: GeographicTier | null;
+    geo_status: string | null;
+    risk_band: string | null;
+    risk_score: number | null;
+  }>;
+  total: number;
+  offset: number;
+  limit: number;
 }

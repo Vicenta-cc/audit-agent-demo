@@ -1,0 +1,27 @@
+.F...........................F                                           [100%]
+=================================== FAILURES ===================================
+_ test_real_catalog_examples[\u514b\u62c9\u739b\u4f9d-\u514b\u62c9\u739b\u4f9d\u5e02-\u65b0\u7586\u7ef4\u543e\u5c14\u81ea\u6cbb\u533a] _
+tests/test_geographic_national_catalog.py:60: in test_real_catalog_examples
+    assert result['status'] == 'resolved', result
+E   AssertionError: {'catalog_version': 'cn-division-2026.0.1-reviewed-p1-v1', 'candidates': [RegionCandidate(name='克拉玛依市', level='prefect...='克拉玛依区', level='county', kind='市辖区', province_name='新疆维吾尔自治区')], 'status': 'pending', 'reason': '地域名称存在歧义，请明确完整省市名称。'}
+E   assert 'pending' == 'resolved'
+E     
+E     - resolved
+E     + pending
+______ test_real_catalog_service_persistence_projection_and_confirmation _______
+tests/test_geographic_national_catalog.py:93: in test_real_catalog_service_persistence_projection_and_confirmation
+    assert actual.configuration.relevance_scope_state.status == status
+E   AssertionError: assert 'pending' == 'resolved'
+E     
+E     - resolved
+E     + pending
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/xhs-audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_national_catalog.py::test_real_catalog_examples[\u514b\u62c9\u739b\u4f9d-\u514b\u62c9\u739b\u4f9d\u5e02-\u65b0\u7586\u7ef4\u543e\u5c14\u81ea\u6cbb\u533a]
+FAILED tests/test_geographic_national_catalog.py::test_real_catalog_service_persistence_projection_and_confirmation
+2 failed, 28 passed, 1 warning in 5.40s

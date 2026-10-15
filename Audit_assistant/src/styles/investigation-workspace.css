@@ -9998,3 +9998,76 @@
 .inv-manual-lightbox { position: fixed; inset: 0; z-index: 10000; background: #142136df; display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
 .inv-manual-lightbox > img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .inv-manual-lightbox > button { position: absolute; top: 16px; right: 24px; padding: 8px 16px; border-radius: 8px; border: 0; cursor: pointer; }
+
+/* Shared geography editor, scoped to the draft's inline form. */
+.relevance-scope-editor {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.relevance-scope-editor p { margin: 0; }
+.relevance-scope-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.relevance-scope-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.relevance-scope-icon { display: grid; place-items: center; flex: 0 0 34px; height: 34px; color: #3b67a4; background: #eff5ff; border-radius: 9px; }
+.relevance-scope-summary { min-width: 0; }
+.relevance-scope-label { color: #64748b; font-size: 12px; }
+.relevance-scope-value { color: #1e293b; font-size: 16px; font-weight: 650; line-height: 1.5; }
+.relevance-scope-policy { color: #64748b; font-size: 12px; }
+.relevance-scope-status { padding: 2px 8px; border-radius: 5px; color: #42638e; background: #edf3fb; font-size: 11px; }
+.relevance-scope-status.is-pending { color: #936215; background: #fff5df; }
+.relevance-scope-editor button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 34px; padding: 6px 11px; border: 1px solid #d5dfec; border-radius: 7px; background: #fff; color: #475569; font: inherit; font-size: 12px; font-weight: 500; line-height: 1.5; cursor: pointer; transition: background-color .15s, border-color .15s; }
+.relevance-scope-editor button:hover:not(:disabled) { color: #1d4ed8; border-color: #91b3ee; background: #f4f8ff; }
+.relevance-scope-editor button:disabled { color: #94a3b8; border-color: #e2e8f0; background: #f1f5f9; cursor: not-allowed; }
+.relevance-scope-editor .relevance-scope-edit { color: #3566b4; background: #f8faff; }
+.relevance-scope-panel { display: grid; gap: 12px; padding: 14px; border: 1px solid #e5ebf3; border-radius: 8px; background: #f8fafc; }
+.relevance-scope-panel-heading { display: grid; gap: 3px; }
+.relevance-scope-question { color: #334155; font-size: 13px; font-weight: 600; }
+.relevance-scope-description { color: #64748b; font-size: 12px; line-height: 1.6; }
+.relevance-scope-candidates { display: flex; flex-wrap: wrap; gap: 8px; }
+.relevance-scope-candidate span { color: #64748b; font-size: 11px; font-weight: 400; }
+.relevance-scope-editor .relevance-scope-other { color: #3566b4; background: transparent; border-style: dashed; }
+.relevance-scope-form { display: grid; gap: 7px; width: 100%; max-width: 720px; }
+.relevance-scope-form > label { color: #475569; font-size: 12px; font-weight: 500; }
+.relevance-scope-input-row { display: flex; align-items: stretch; gap: 8px; }
+.relevance-scope-editor input { box-sizing: border-box; flex: 1; min-width: 0; width: 100%; min-height: 36px; padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #1e293b; font: inherit; font-size: 13px; outline: none; }
+.relevance-scope-editor input::placeholder { color: #94a3b8; }
+.relevance-scope-editor input:focus { border-color: #6197ec; box-shadow: 0 0 0 3px #2563eb12; }
+.relevance-scope-editor input:disabled { background: #f1f5f9; }
+.relevance-scope-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.relevance-scope-editor .relevance-scope-save { color: #fff; border-color: #2563eb; background: #2563eb; }
+.relevance-scope-editor .relevance-scope-save:hover:not(:disabled) { color: #fff; background: #1d4ed8; border-color: #1d4ed8; }
+.relevance-scope-editor .relevance-scope-save:disabled { color: #94a3b8; background: #e9eef5; border-color: #e2e8f0; }
+.relevance-scope-notice { display: flex; align-items: flex-start; gap: 6px; color: #7c8798; font-size: 12px; }
+.relevance-scope-notice svg { flex-shrink: 0; margin-top: 2px; }
+.relevance-scope-error { padding: 8px 10px; border: 1px solid #f3d5ad; border-radius: 6px; background: #fffbf3; color: #9a5b13; font-size: 12px; }
+.relevance-scope-editor button:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+@media (max-width: 560px) {
+  .relevance-scope-editor { padding: 12px; }
+  .relevance-scope-panel { padding: 12px; }
+  .relevance-scope-input-row { flex-wrap: wrap; }
+  .relevance-scope-input-row > input { flex-basis: 100%; }
+  .relevance-scope-actions { flex-wrap: wrap; }
+  .relevance-scope-value { font-size: 15px; }
+}
+
+.region-selection-history-card {
+  padding: 16px 18px;
+  border: 1px solid #d9e2ec;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+}
+.region-selection-history-heading { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; }
+.region-selection-history-heading > span { color: #64748b; }
+.region-selection-history-heading time { margin-left: auto; color: #64748b; font-size: 12px; }
+.region-selection-history-card p { margin: 10px 0; }
+.region-selection-history-card button { padding: 7px 10px; min-height: 34px; border: 1px solid #cbd5e1; border-radius: 6px; color: #64748b; background: #fff; cursor: default; }
+.region-selection-history-card button.is-selected { border-color: #93b6ee; color: #2459a5; background: #eff6ff; }
