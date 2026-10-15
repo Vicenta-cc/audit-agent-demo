@@ -19,6 +19,9 @@ from backend.resource_management.generation_contracts import ResourceGenerationR
 from backend.audit_agent.search_terms_cap import lexicon_cap_note
 from backend.resource_management.generation import ResourceGenerator
 from backend.resource_management.keyword_profiles import keyword_profile_metadata
+from backend.resource_management.tool_facades import (
+    ImportResourceInput, IMPORT_DESCRIPTION, facade_schemas, normalize_import,
+)
 
 from backend.product_help import tools as product_read_tools
 
@@ -379,7 +382,9 @@ M3_TOOL_INPUTS[configure.NAME] = configure.ConfigureDraftInput
 M3_TOOL_DESCRIPTIONS[configure.NAME] = configure.DESCRIPTION
 M3_MUTATION_TOOL_NAMES = M3_MUTATION_TOOL_NAMES | {configure.NAME}
 M3_TOOL_INPUTS.update(RESOURCE_TOOL_INPUTS)
-M3_MUTATION_TOOL_NAMES = M3_MUTATION_TOOL_NAMES | RESOURCE_MUTATIONS
+M3_TOOL_INPUTS['import_resource'] = ImportResourceInput
+M3_TOOL_DESCRIPTIONS['import_resource'] = IMPORT_DESCRIPTION
+M3_MUTATION_TOOL_NAMES = M3_MUTATION_TOOL_NAMES | RESOURCE_MUTATIONS | {'import_resource'}
 M3_RECORDED_TOOL_NAMES = M3_MUTATION_TOOL_NAMES | {"get_resource_edit", "get_ruleset_proposal"}
 for _authoring_tool in ("update_ruleset_proposal",):
     M3_TOOL_DESCRIPTIONS[_authoring_tool] += "\n" + RULESET_AUTHORING_GUIDANCE
@@ -489,14 +494,14 @@ for _name, _guidance in RULESET_EDIT_TOOL_GUIDANCE.items():
         "Use this tool only for a new independent resource, never for changes to an existing resource.",
     )
 
-_ALL_CREATION_TOOL_SCHEMAS = tuple(
+_ALL_CREATION_TOOL_SCHEMAS = tuple(facade_schemas([
     {
         "name": name,
         "description": M3_TOOL_DESCRIPTIONS[name],
         "parameters": _creation_tool_schema(schema),
     }
     for name, schema in M3_TOOL_INPUTS.items()
-)
+]))
 HERMES_M3_TOOL_SCHEMAS = tuple(s for s in _ALL_CREATION_TOOL_SCHEMAS
     if s['name'] not in {'copy_investigation_draft', 'list_investigation_rounds'})
 
@@ -582,6 +587,7 @@ class InvestigationCreationToolService:
     ) -> dict[str, Any]:
         from . import rounds
         from backend.resource_management.edit_entry import require_edit_operation
+        tool_name, arguments = normalize_import(tool_name, arguments)
         with self._conversation_lock:
             edit_target = self._edit_targets.get(session_id)
         require_edit_operation(edit_target, tool_name, arguments, M3_MUTATION_TOOL_NAMES)
@@ -873,6 +879,10 @@ class InvestigationCreationToolService:
                         "details": details,
                     },
                 }
+        # Import is a thin explicit entry over the existing creation command.
+        # Canonicalize BEFORE receipt identity checks so switching entry points
+        # cannot bypass generation failure or successful-write protection.
+        tool_name, raw_arguments = normalize_import(tool_name, raw_arguments)
         receipt: dict[str, Any] | None = None
         try:
             with self._conversation_lock:
@@ -977,6 +987,19 @@ class InvestigationCreationToolService:
                     content_hash=committed.content_hash,
                     recovery='规则已提交；保持原调用身份和参数恢复，或读取核对当前稿，不重新生成或重复修改。')
         if receipt is not None and not receipt.get("replay"):
+            if (tool_name in {'create_ruleset_proposal', 'create_lexicon_edit'}
+                    and result['status'] == 'error'):
+                details = result['error'].setdefault('details', {})
+                remaining = receipt.get('generation_retry_remaining')
+                if (remaining is not None and details.get('generation_stage') in {'generation', 'validation'}
+                        and details.get('resource_created') is False
+                        and details.get('mutation_applied') is False):
+                    details['retry_budget_remaining'] = remaining
+                    if remaining == 0:
+                        details['retryable'] = False
+                    details['recovery'] = ('未创建资源。可在本轮纠正 generation_request 后发起一次新调用；'
+                        '同一调用身份只重放回执，不重新生成。不得改用 content 编造结果。'
+                        if details.get('retryable') else '未创建资源；本轮不继续生成，保留此前成功结果。')
             if tool_name == configure.NAME and result['status'] == 'error':
                 committed = self.application_service.store.committed_draft_write(receipt['receipt_id'], principal.id)
                 if committed:

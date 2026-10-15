@@ -40,6 +40,7 @@ def proposal_view(store, proposal, *, principal, session_id, connection=None):
         'kind': 'ruleset', 'edit_id': proposal.proposal_id,
         'proposal_id': proposal.proposal_id, 'version': proposal.version,
         'resource_ref': ref, 'proposal_snapshot': proposal.model_dump(mode='json'),
+        'read_arguments': {'edit_id': proposal.proposal_id},
         'update_arguments': {'edit_id': proposal.proposal_id, 'expected_version': proposal.version},
     }
 
