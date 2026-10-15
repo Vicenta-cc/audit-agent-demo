@@ -424,32 +424,34 @@ async def identify_logged_in_account(platform: str, context) -> str:
 async def login_context(platform: str, account_id: str = "", *, headless: bool = True):
     if platform == "dy":
         adapter = load_account_browser()
-        if settings.crawler_login_browser_version:
-            # Existing profiles retain their pinned version; new profiles use the deployment pin.
-            adapter.profile_for(account_id, settings.crawler_browser_profile_root, settings.crawler_login_browser_version)
+        root = settings.crawler_camoufox_state_root / "profiles"
+        os.environ["MEDIACRAWLER_CAMOUFOX_BROWSER_VERSION"] = settings.crawler_camoufox_browser_version
+        adapter.profile_for(account_id, root, settings.crawler_camoufox_browser_version)
         from backend.audit_agent.crawler_route import child_route_snapshot
         route_snapshot = child_route_snapshot(account_id)
         from backend.audit_agent.crawler_route import make_bound_proxy_session
-        route_options = {"route_snapshot": route_snapshot, "bound_proxy_session": make_bound_proxy_session(route_snapshot)} if route_snapshot else {}
-        context, profile = await adapter.launch_account_context(
-            account_id, settings.crawler_browser_profile_root, headless=headless, **route_options,
-        )
-        try:
-            await request_login_reset()
-            if headless:
-                await adapter.prepare_account_login(context, profile)
-            else:
+        route_options = {"route_snapshot": route_snapshot,
+                         "bound_proxy_session": await asyncio.to_thread(make_bound_proxy_session, route_snapshot)} if route_snapshot else {}
+        from contextlib import nullcontext
+        from scripts.crawler_interactive_login import virtual_display
+        display = virtual_display() if sys.platform == "linux" and not os.environ.get("DISPLAY") else nullcontext()
+        with display:
+            context, profile = await adapter.launch_account_context(
+                account_id, root, headless=sys.platform == "darwin", **route_options,
+            )
+            try:
+                await request_login_reset()
                 from scripts.crawler_login_pages import prepare_headed_login
                 await prepare_headed_login(context, profile)
-            context._bound_proxy_session = profile.get("bound_proxy_session")
-            yield context
-        finally:
-            if sys.exc_info()[0] is not None:
-                # Cleanup must not hide the original navigation/reset failure.
-                with suppress(Exception):
+                context._bound_proxy_session = profile.get("bound_proxy_session")
+                yield context
+            finally:
+                if sys.exc_info()[0] is not None:
+                    # Cleanup must not hide the original navigation/reset failure.
+                    with suppress(Exception):
+                        await asyncio.wait_for(context.close(), 15)
+                else:
                     await asyncio.wait_for(context.close(), 15)
-            else:
-                await asyncio.wait_for(context.close(), 15)
         return
 
     async with async_playwright() as playwright:

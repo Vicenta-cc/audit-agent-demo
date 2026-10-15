@@ -1,6 +1,7 @@
 """No platform access: a real crawler subprocess receives synthetic responses."""
 import json
 import os
+import time
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,7 @@ def test_incomplete_marker_is_typed_even_on_clean_exit(tmp_path,monkeypatch,exit
     monkeypatch.setattr('backend.audit_agent.crawler_adapter.subprocess.Popen',Process)
     adapter=MediaCrawlerAdapter(tmp_path)
     with pytest.raises(CrawlerCollectionIncompleteError) as error:
-        adapter._run_command(command=['python','main.py'],save_root=tmp_path/'output',platform='dy',
+        adapter._run_command(command=['python','main.py'],save_root=tmp_path/'output',platform='xhs',
                              account_id='test',max_notes=2,progress_callback=None,content_callback=None)
     assert not isinstance(error.value,(CrawlerAuthenticationError,CrawlerVerificationError))
 
@@ -31,21 +32,32 @@ def test_incomplete_marker_is_typed_even_on_clean_exit(tmp_path,monkeypatch,exit
 @pytest.mark.parametrize('caught',[False,True])
 def test_actual_crawler_preserves_good_post_and_rejects_incomplete_post(tmp_path,monkeypatch,caught):
     root=Path(os.environ.get('MEDIACRAWLER_RELIABILITY_ROOT',str(settings.media_crawler_dir))).resolve()
-    python=root/'.venv'/('Scripts/python.exe' if os.name=='nt' else 'bin/python')
+    python=Path(os.environ.get('MEDIACRAWLER_RELIABILITY_PYTHON', str(root/'.venv'/('Scripts/python.exe' if os.name=='nt' else 'bin/python'))))
     if not (root/'tools/collection_status.py').exists() or not python.exists():
         pytest.skip('requires paired MediaCrawler reliability branch and runtime')
     script=tmp_path/'fixture.py'
-    script.write_text('''import sys,asyncio
+    script.write_text('''import sys,asyncio,argparse,time
 from pathlib import Path
 from unittest.mock import AsyncMock
-sys.path.insert(0,sys.argv[1])
+parser=argparse.ArgumentParser()
+parser.add_argument('--fixture-crawler',required=True)
+parser.add_argument('--fixture-result',required=True)
+parser.add_argument('--save_data_path',required=True)
+args,_=parser.parse_known_args()
+sys.path.insert(0,args.fixture_crawler)
+from tools.bound_proxy import initialize_bound_route,obtain_route_ack,BoundProxySession
+route=initialize_bound_route();ack=obtain_route_ack(route);route.require_managed_ack(ack)
+session=BoundProxySession(route,ack=ack)
+from tools.collection_route import ProbeReceipt
+session.context_id=route.context_id
+session.receipt=ProbeReceipt(route.proxy_id,route.config_revision,route.context_id,'203.0.113.9',time.time(),route.exit_generation)
 import config
 from var import crawler_type_var
 from media_platform.douyin.core import DouYinCrawler
 from media_platform.douyin.client import DouYinClient
 from media_platform.douyin.exception import MediaDownloadError
 from tools.collection_status import CollectionIncompleteError
-config.SAVE_DATA_PATH=sys.argv[2]
+config.SAVE_DATA_PATH=args.save_data_path
 config.SAVE_DATA_OPTION='jsonl'
 config.STREAM_ITEMS=True
 config.ENABLE_GET_MEIDAS=True
@@ -57,26 +69,49 @@ config.DY_SKIP_AWEME_IDS_FILE=''
 config.DY_REUSABLE_CONTENT_DB=''
 crawler_type_var.set('search')
 c=DouYinCrawler()
+c._bound_proxy_session=session
 c.wait_for_content_slot=AsyncMock()
 c.dy_client=DouYinClient.__new__(DouYinClient)
+c.dy_client._bound_proxy_session=session
 posts=[{'aweme_info':{'aweme_id':i,'desc':'fixture','images':[{'url_list':['https://fixture.invalid/image']} ]}} for i in ('123','456')]
 c.dy_client.search_info_by_keyword=AsyncMock(return_value={'data':posts})
 c.dy_client.get_aweme_media=AsyncMock(side_effect=[b'fixture-bytes',MediaDownloadError('403',403)])
 try:asyncio.run(c.search())
 except CollectionIncompleteError:
- if sys.argv[3]=='caught':print('COLLECTION_INCOMPLETE: fixture caught',file=sys.stderr)
+ if args.fixture_result=='caught':print('COLLECTION_INCOMPLETE: fixture caught',file=sys.stderr)
  else:raise
 ''')
     output=tmp_path/'output'
     emitted=[]
-    adapter=MediaCrawlerAdapter(root)
-    with pytest.raises(CrawlerCollectionIncompleteError):
-        adapter._run_command(command=[str(python),str(script),str(root),str(output),'caught' if caught else 'raise'],
-            save_root=output,platform='dy',account_id='fixture',max_notes=2,
-            progress_callback=None,content_callback=lambda contents,comments:emitted.extend(contents))
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+    from backend.audit_agent import crawler_route
+    from crawler_auth_fixtures import mark_camoufox_login_verified
+    for name,value in dict(media_crawler_dir=root,crawler_camoufox_state_root=tmp_path/'state',
+                           crawler_browser_profile_root=tmp_path/'profiles',task_resource_lock_dir=tmp_path/'locks',
+                           request_scheduler_db=tmp_path/'scheduler.sqlite3',crawler_browser_maintenance=False,
+                           crawler_safety_enabled=True,crawler_proxy_enabled=False,app_auth_mode='disabled').items():
+        monkeypatch.setattr(settings,name,value)
+    accounts=CrawlerAccountStore(tmp_path/'accounts.sqlite3')
+    account=accounts.create(platform='dy',display_name='incomplete fixture')
+    accounts.save_auth_state(account['id'],'fixture-encrypted-auth')
+    mark_camoufox_login_verified(accounts,account['id'])
+    monkeypatch.setattr(crawler_route,'_run_maintenance_probe',lambda bundle,**kwargs:
+        crawler_route.route_contract().ProbeReceipt(bundle.snapshot.proxy_id,bundle.snapshot.config_revision,
+            'offline-incomplete-fixture','203.0.113.9',time.time()))
+    bundle=crawler_route.acquire_route_execution(account['id'],'incomplete-fixture','fixture-owner',account_store=accounts)
+    adapter=MediaCrawlerAdapter(root,account_store=accounts)
+    try:
+        with pytest.raises(CrawlerCollectionIncompleteError):
+            adapter._run_command(command=[str(python),str(script),'--fixture-crawler',str(root),
+                '--fixture-result','caught' if caught else 'raise','--save_data_path',str(output)],
+                save_root=output,platform='dy',account_id=account['id'],max_notes=2,route_context=bundle,
+                progress_callback=None,content_callback=lambda contents,comments:emitted.extend(contents))
+    finally:
+        bundle.close()
     assert [item['aweme_id'] for item in adapter.load_latest_output(output,'dy').contents]==['123']
     assert [item['aweme_id'] for item in emitted]==['123']
-    statuses=[json.loads(p.read_text()) for p in (output/'douyin/collection_status').glob('media-*.json')]
+    statuses=[json.loads(p.read_text()) for p in (output/'douyin/collection_status').glob('*.json')]
+    statuses=[item for item in statuses if item['stage']=='media']
     assert {p['content_id']:p['status'] for p in statuses}=={'123':'complete','456':'failed'}
     assert (output/'douyin/images/123/000.jpeg').exists()
     assert not (output/'douyin/images/456/000.jpeg').exists()

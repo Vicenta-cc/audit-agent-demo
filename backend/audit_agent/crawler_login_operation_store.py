@@ -27,8 +27,9 @@ def _record(row):
 
 
 class CrawlerLoginOperationStore:
-    def __init__(self, account_store: CrawlerAccountStore, cipher: AuthStateCipher | None = None):
+    def __init__(self, account_store: CrawlerAccountStore, cipher: AuthStateCipher | None = None, *, migration_service=None):
         self.accounts = account_store
+        self.migration_service = migration_service
         self.db_path = account_store.db_path
         self.cipher = cipher or auth_state_cipher
         from .crawler_proxy_store import CrawlerProxyStore
@@ -59,7 +60,7 @@ class CrawlerLoginOperationStore:
                 CREATE INDEX IF NOT EXISTS idx_login_command_pending ON crawler_login_commands(operation_id, execution_status, updated_at);
             """)
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(crawler_login_operations)")}
-            for name, kind in (("proxy_id", "TEXT"), ("expected_binding_revision", "INTEGER"), ("expected_config_revision", "INTEGER")):
+            for name, kind in (("proxy_id", "TEXT"), ("expected_binding_revision", "INTEGER"), ("expected_config_revision", "INTEGER"), ("migration_id", "TEXT NOT NULL DEFAULT ''"), ("profile_generation", "TEXT NOT NULL DEFAULT ''"), ("browser_engine", "TEXT NOT NULL DEFAULT ''")):
                 if name not in columns:
                     conn.execute(f"ALTER TABLE crawler_login_operations ADD COLUMN {name} {kind}")
             if "credentials_changed" not in columns:
@@ -78,6 +79,21 @@ class CrawlerLoginOperationStore:
     def _get(self, conn, operation_id):
         return _record(conn.execute("SELECT * FROM crawler_login_operations WHERE id=?", (operation_id,)).fetchone())
 
+    def rebind_active_owner(self, operation_id, *, owner_user_id, previous_session_id,
+                            previous_owner_hash, application_session_id, owner_token_hash):
+        """One active operation changes controller credentials, never its identity."""
+        with self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            op = self._get(conn, operation_id)
+            if (not op or op['owner_user_id'] != owner_user_id
+                    or op['application_session_id'] != previous_session_id
+                    or op['owner_token_hash'] != previous_owner_hash):
+                raise ValueError('SESSION_OWNER_MISMATCH')
+            if op['stage'] in TERMINAL_STAGES or op['stage'] == 'recovery_required':
+                raise ValueError('OPERATION_NOT_ACTIVE')
+            conn.execute('UPDATE crawler_login_operations SET application_session_id=?,owner_token_hash=?,updated_at=? WHERE id=?',
+                (application_session_id,owner_token_hash,_now(),operation_id))
+
     def list(self, *, account_id=None, owner_user_id=None, stages=None):
         clauses, params = [], []
         for key, value in (("account_id", account_id), ("owner_user_id", owner_user_id)):
@@ -92,7 +108,7 @@ class CrawlerLoginOperationStore:
             return [_record(row) for row in conn.execute("SELECT * FROM crawler_login_operations" + where + " ORDER BY created_at DESC", params)]
 
     def begin(self, *, account_id, owner_user_id, application_session_id, owner_token_hash,
-              request_key_hash, request_fingerprint, intent="check_or_login", engine="v2", source_operation_id=None):
+              request_key_hash, request_fingerprint, intent="check_or_login", engine="v2", source_operation_id=None, migration_id=None):
         if intent not in {"check", "reauth", "recover", "check_or_login"}:
             raise ValueError("INVALID_LOGIN_INTENT")
         if (intent == "recover") != bool(source_operation_id):
@@ -102,14 +118,37 @@ class CrawlerLoginOperationStore:
             conn.execute("BEGIN IMMEDIATE")
             old = _record(conn.execute("SELECT * FROM crawler_login_operations WHERE owner_user_id=? AND request_key_hash=?", (owner_user_id, request_key_hash)).fetchone())
             if old:
-                if old["request_fingerprint"] != request_fingerprint or old["account_id"] != account_id or old["intent"] != intent:
+                if old["request_fingerprint"] != request_fingerprint or old["account_id"] != account_id or old["intent"] != intent or (migration_id is not None and old["migration_id"] != migration_id):
                     raise ValueError("OPERATION_REQUEST_CONFLICT")
+                if (old['application_session_id'] != application_session_id
+                        or old['owner_token_hash'] != owner_token_hash):
+                    raise ValueError('SESSION_OWNER_MISMATCH')
                 return old
             account = self.accounts.get(account_id, connection=conn)
             if not account or account["platform"] != "dy":
                 raise ValueError("DY_ACCOUNT_REQUIRED")
             if account["status"] == "disabled":
                 raise ValueError("ACCOUNT_DISABLED")
+            if account.get("profile_engine") != "camoufox" or not account.get("profile_generation"):
+                raise ValueError("BROWSER_PROFILE_MIGRATION_REQUIRED")
+            migration = self._migrations()
+            existing_migration = migration.status(account_id=account_id, connection=conn)
+            if migration_id is None and existing_migration and existing_migration["phase"] in {
+                "LOGIN_REQUIRED", "IDENTITY_VERIFIED", "ROUTE_VERIFIED"
+            }:
+                # The existing account page remains the entry point. Resolve
+                # only this account's durable migration after owner/admin
+                # authorization; begin_login below binds its exact operation.
+                migration._owner(account_id, owner_user_id)
+                migration_id = existing_migration["migration_id"]
+            if migration_id:
+                if not existing_migration or existing_migration["migration_id"] != migration_id:
+                    raise ValueError("MIGRATION_NOT_FOUND")
+            else:
+                migration.guard(account_id, owner_id=owner_user_id, connection=conn)
+                from .config import settings
+                if settings.crawler_browser_maintenance:
+                    raise ValueError("CRAWLER_BROWSER_MAINTENANCE")
             proxy_id, binding_revision, config_revision = self._route_revision(conn, account)
             source = self._get(conn, source_operation_id) if source_operation_id else None
             if source_operation_id:
@@ -119,6 +158,8 @@ class CrawlerLoginOperationStore:
                     return self._get(conn, source["recovered_by_operation_id"]) if source["stage"] == "recovered" else source
                 if source["stage"] != "recovery_required":
                     raise ValueError("RECOVERY_SOURCE_NOT_RECOVERABLE")
+                if source["browser_engine"] != account["profile_engine"] or source["profile_generation"] != account["profile_generation"]:
+                    raise ValueError("RECOVERY_SOURCE_GENERATION_CONFLICT")
                 if account["auth_state_revision"] != source["expected_auth_revision"] or account["platform_account_id"] != source["expected_platform_account_id"] or (proxy_id, binding_revision, config_revision) != (source["proxy_id"], source["expected_binding_revision"], source["expected_config_revision"]):
                     conn.execute("UPDATE crawler_login_operations SET stage='superseded', error_code='RECOVERY_SOURCE_SUPERSEDED', updated_at=? WHERE id=?", (_now(), source_operation_id))
                     superseded = True
@@ -134,6 +175,10 @@ class CrawlerLoginOperationStore:
                      source_operation_id,account["platform_account_id"],account["auth_state_revision"],request_fingerprint,
                      source["credentials_reset"] if source else 0,source["profile_authority_established"] if source else 0,source["credentials_changed"] if source else None,now,now))
                 conn.execute("UPDATE crawler_login_operations SET proxy_id=?,expected_binding_revision=?,expected_config_revision=? WHERE id=?", (proxy_id,binding_revision,config_revision,operation_id))
+                conn.execute("UPDATE crawler_login_operations SET migration_id=?,profile_generation=?,browser_engine=? WHERE id=?",
+                    (migration_id or "", account["profile_generation"], account["profile_engine"], operation_id))
+                if migration_id:
+                    migration.begin_login(migration_id, actor_id=owner_user_id, operation_id=operation_id, connection=conn)
                 result = self._get(conn, operation_id)
         if superseded:
             raise ValueError("RECOVERY_SOURCE_SUPERSEDED")
@@ -170,7 +215,12 @@ class CrawlerLoginOperationStore:
             if reset and op["credentials_reset"]:
                 return op
             self._check_revision(conn, op)
-            account = self.accounts.mark_douyin_auth_invalid(op["account_id"], status="login_required", reset=reset, connection=conn)
+            if op["migration_id"]:
+                if reset:
+                    raise ValueError("MIGRATION_PROFILE_RESET_FORBIDDEN")
+                account = self.accounts.get(op["account_id"], connection=conn)
+            else:
+                account = self.accounts.mark_douyin_auth_invalid(op["account_id"], status="login_required", reset=reset, connection=conn)
             conn.execute("UPDATE crawler_login_operations SET stage=?, credentials_reset=?, expected_auth_revision=?, updated_at=? WHERE id=?", ("reset_authorized" if reset else "checking", int(reset or op["credentials_reset"]),account["auth_state_revision"],_now(),operation_id))
             return self._get(conn, operation_id)
 
@@ -185,10 +235,25 @@ class CrawlerLoginOperationStore:
             raise ValueError("PROXY_REVISION_MISMATCH")
         return proxy_id, account["binding_revision"], row[0]
 
+    def _migrations(self):
+        if self.migration_service is not None:
+            return self.migration_service
+        from .crawler_browser_migration import get_browser_migration_service
+        return get_browser_migration_service(self.accounts)
+
     def _check_revision(self, conn, op):
+        self._migrations().guard(op["account_id"], owner_id=op["owner_user_id"],
+            migration_id=op["migration_id"] or None, operation_id=op["id"], connection=conn)
+        from .config import settings
+        if settings.crawler_browser_maintenance and not self._migrations().authorized_login(
+                op["account_id"], owner_id=op["owner_user_id"], migration_id=op["migration_id"], operation_id=op["id"], connection=conn):
+            raise ValueError("CRAWLER_BROWSER_MAINTENANCE")
         account = self.accounts.get(op["account_id"], connection=conn)
         if not account or account["status"] == "disabled" or account["auth_state_revision"] != op["expected_auth_revision"] or account["platform_account_id"] != op["expected_platform_account_id"]:
             raise ValueError("AUTH_REVISION_CONFLICT")
+        if (op["browser_engine"] != "camoufox" or not op["profile_generation"] or
+                account.get("profile_engine") != op["browser_engine"] or account.get("profile_generation") != op["profile_generation"]):
+            raise ValueError("BROWSER_PROFILE_GENERATION_CONFLICT")
         if self._route_revision(conn, account) != (op["proxy_id"], op["expected_binding_revision"], op["expected_config_revision"]):
             raise ValueError("PROXY_REVISION_MISMATCH")
         return account
@@ -220,8 +285,19 @@ class CrawlerLoginOperationStore:
             credentials_changed = credentials_changed or bool(op["credentials_reset"])
             backup = conn.execute("SELECT auth_state_ciphertext FROM crawler_accounts WHERE id=?", (op["account_id"],)).fetchone()[0]
             credentials_changed = credentials_changed or not bool(backup)
-            account = self.accounts.save_douyin_auth_state(op["account_id"], ciphertext, platform_account_id,
-                connection=conn, expected_revision=op["expected_auth_revision"], credentials_changed=credentials_changed)
+            if op["migration_id"]:
+                if manual_recovery_claim:
+                    raise ValueError("MIGRATION_RECOVERY_CONFLICT")
+                self._migrations().verify_login(op["migration_id"], actor_id=op["owner_user_id"],
+                    operation_id=operation_id, platform_account_id=platform_account_id, ciphertext=ciphertext,
+                    expected_auth_revision=op["expected_auth_revision"], generation=op["profile_generation"], connection=conn)
+                account = self.accounts.get(op["account_id"], connection=conn)
+            else:
+                account = self.accounts.save_douyin_auth_state(op["account_id"], ciphertext, platform_account_id,
+                    connection=conn, expected_revision=op["expected_auth_revision"], credentials_changed=credentials_changed)
+                conn.execute("UPDATE crawler_accounts SET auth_source_generation=? WHERE id=? AND profile_generation=?",
+                    (op["profile_generation"], op["account_id"], op["profile_generation"]))
+                account = self.accounts.get(op["account_id"], connection=conn)
             if account.get("route_mode") == "direct_degraded" and route_snapshot is not None:
                 self.accounts.mark_direct_validated(op["account_id"],route_snapshot.exit_generation,connection=conn)
             elif op["proxy_id"]:

@@ -58,6 +58,8 @@ interface ApiSharedCrawlerPoolSummary {
 
 interface ApiCrawlerAccountLoginSession {
   protocol_version?: number;
+  operation_id?: string;
+  cleanup_state?: string;
   id: string;
   account_id: string;
   platform: CrawlerAccountPlatform;
@@ -68,7 +70,7 @@ interface ApiCrawlerAccountLoginSession {
   finalizing_started_at: string;
   finalizing_duration_seconds: number;
   platform_account_id: string;
-  error: string;
+  error: string | { message?: string; code?: string } | null;
   created_at: string;
   updated_at: string;
   expires_at: string;
@@ -124,14 +126,35 @@ export async function deleteCrawlerAccount(accountId: string): Promise<void> {
   });
 }
 
-export function loginControlHeaders(): Record<string, string> {
-  const key = "crawler-login-control-token";
+export function loginControlHeaders(accountId?: string): Record<string, string> {
+  const key = accountId ? `crawler-login-control-token:${accountId}` : "crawler-login-control-token";
   let token = window.sessionStorage.getItem(key);
+  if (!token && accountId) {
+    token = window.sessionStorage.getItem("crawler-login-control-token");
+    if (token) window.sessionStorage.setItem(key, token);
+  }
   if (!token) {
     token = crypto.randomUUID() + crypto.randomUUID();
     window.sessionStorage.setItem(key, token);
   }
   return { "X-Login-Token": token };
+}
+
+export function renewLoginControlToken(accountId: string): void {
+  window.sessionStorage.setItem(`crawler-login-control-token:${accountId}`, crypto.randomUUID() + crypto.randomUUID());
+  const prefix = `crawler-account-login-intent:${accountId}:`;
+  for (let index = window.sessionStorage.length - 1; index >= 0; index--) {
+    const key = window.sessionStorage.key(index);
+    if (key?.startsWith(prefix)) window.sessionStorage.removeItem(key);
+  }
+}
+
+export async function claimCrawlerAccountLogin(accountId: string): Promise<CrawlerAccountLoginSession> {
+  const payload = await apiRequest<{ item: ApiCrawlerAccountLoginSession }>(
+    `/api/crawler-accounts/${encodeURIComponent(accountId)}/login-session-claims`,
+    { method: "POST", headers: loginControlHeaders(accountId), body: "{}" },
+  );
+  return mapLoginSession(payload.item);
 }
 
 export async function startCrawlerAccountLogin(accountId: string, intent: "check_or_login" | "reauth" | "recover" = "check_or_login", sourceOperationId?: string, browserMode?: "compatibility"): Promise<CrawlerAccountLoginSession> {
@@ -140,23 +163,26 @@ export async function startCrawlerAccountLogin(accountId: string, intent: "check
   window.sessionStorage.setItem(intentKey, key);
   const payload = await apiRequest<{ item: ApiCrawlerAccountLoginSession }>(
     `/api/crawler-accounts/${encodeURIComponent(accountId)}/login-sessions`,
-    { method: "POST", headers: { ...loginControlHeaders(), "Idempotency-Key": key }, body: JSON.stringify({ supported_protocols: browserMode === "compatibility" ? [2] : [2, 1], intent, ...(browserMode ? { browser_mode: browserMode } : {}), ...(sourceOperationId ? { source_operation_id: sourceOperationId } : {}) }) }
+    { method: "POST", headers: { ...loginControlHeaders(accountId), "Idempotency-Key": key }, body: JSON.stringify({ supported_protocols: browserMode === "compatibility" ? [2] : [2, 1], intent, ...(browserMode ? { browser_mode: browserMode } : {}), ...(sourceOperationId ? { source_operation_id: sourceOperationId } : {}) }) }
   );
+  const session = mapLoginSession(payload.item);
   window.sessionStorage.removeItem?.(intentKey);
-  return mapLoginSession(payload.item);
+  return session;
 }
 
-export async function fetchCrawlerAccountLoginSession(sessionId: string): Promise<CrawlerAccountLoginSession> {
+export async function fetchCrawlerAccountLoginSession(sessionId: string, accountId?: string): Promise<CrawlerAccountLoginSession> {
+  if (!sessionId.trim()) throw new Error("登录会话标识无效，请重新打开登录窗口");
   const payload = await apiRequest<{ item: ApiCrawlerAccountLoginSession }>(
     `/api/crawler-account-login-sessions/${encodeURIComponent(sessionId)}`,
-    { headers: loginControlHeaders() }
+    { headers: loginControlHeaders(accountId) }
   );
   return mapLoginSession(payload.item);
 }
 
-export async function cancelCrawlerAccountLoginSession(sessionId: string): Promise<{ cleanupComplete: boolean }> {
+export async function cancelCrawlerAccountLoginSession(sessionId: string, accountId?: string): Promise<{ cleanupComplete: boolean }> {
+  if (!sessionId.trim()) throw new Error("登录会话标识无效，请重新打开登录窗口");
   const result = await apiRequest<{ item?: { cleanup_state?: string } }>(`/api/crawler-account-login-sessions/${encodeURIComponent(sessionId)}`, {
-    headers: loginControlHeaders(),
+    headers: loginControlHeaders(accountId),
     method: "DELETE"
   });
   return { cleanupComplete: result.item?.cleanup_state === "complete" };
@@ -225,6 +251,10 @@ function mapSharedPool(item?: ApiSharedCrawlerPoolSummary): SharedCrawlerPoolSum
 }
 
 function mapLoginSession(item: ApiCrawlerAccountLoginSession): CrawlerAccountLoginSession {
+  const terminalOperation = item.protocol_version === 2 && Boolean(item.operation_id)
+    && ["success", "failed", "expired", "cancelled"].includes(item.status)
+    && item.cleanup_state === "complete";
+  if (!item.id && !terminalOperation) throw new Error("登录服务未返回有效会话，请重新打开登录窗口");
   return {
     v2: item.protocol_version === 2 ? item as unknown as import("./crawlerLoginV2").LoginSnapshot : undefined,
     id: item.id,
@@ -237,7 +267,7 @@ function mapLoginSession(item: ApiCrawlerAccountLoginSession): CrawlerAccountLog
     finalizingStartedAt: item.finalizing_started_at,
     finalizingDurationSeconds: item.finalizing_duration_seconds,
     platformAccountId: item.platform_account_id,
-    error: item.error,
+    error: typeof item.error === "string" ? item.error : item.error?.message || "",
     createdAt: item.created_at,
     updatedAt: item.updated_at,
     expiresAt: item.expires_at

@@ -1,10 +1,13 @@
 """Offline readonly safety and ACL-preserving backend pool binding."""
 import time
 
+import pytest
+
 from backend import main
 from backend.audit_agent.config import settings
 from backend.investigation_creation.principal import Principal
 from test_crawler_proxy_api import api, create_proxy
+from crawler_auth_fixtures import mark_camoufox_login_verified
 
 
 def ready_account(client, accounts, proxies, *, public=False):
@@ -15,6 +18,7 @@ def ready_account(client, accounts, proxies, *, public=False):
     assert response.status_code == 200, response.text
     account = response.json()['item']
     accounts.save_auth_state(account['id'], 'encrypted-fixture')
+    mark_camoufox_login_verified(accounts, account['id'])
     with accounts._connect() as conn:
         conn.execute('UPDATE crawler_accounts SET validated_proxy_binding_revision=binding_revision, validated_proxy_config_revision=1 WHERE id=?', (account['id'],))
     return accounts.get(account['id']), resource
@@ -119,3 +123,26 @@ def test_default_pool_retries_capacity_race_and_rolls_back_ownership_failure(api
     with pytest.raises(RuntimeError, match='fixture ownership failure'):
         client.post('/api/crawler-accounts', json={'platform':'dy','display_name':'rollback'})
     assert len(accounts.list()) == 1
+
+
+@pytest.mark.parametrize('field,value', [
+    ('profile_engine','legacy'),
+    ('profile_generation',''),
+    ('auth_source_generation',''),
+    ('auth_source_generation','different-generation'),
+])
+def test_public_projection_rejects_backup_without_current_verified_profile_metadata(api,monkeypatch,field,value):
+    client,_,accounts,proxies,_,principal=api
+    monkeypatch.setattr(settings,'crawler_safety_enabled',True)
+    account,resource=ready_account(client,accounts,proxies)
+    observed=accounts.observe_shared_exit('203.0.113.21')
+    with accounts._connect() as conn:
+        conn.execute('UPDATE proxy_resources SET shared_exit_key=?,shared_exit_generation=?,observed_exit_at=? WHERE id=?',
+            (observed['shared_exit_key'],observed['shared_exit_generation'],time.time(),resource['id']))
+    assert main._crawler_account_public_view(accounts.get(account['id']),principal[0])['collection_ready']
+    with accounts._connect() as conn:
+        # Column names come exclusively from the fixed fixture parametrization.
+        conn.execute(f'UPDATE crawler_accounts SET {field}=? WHERE id=?',(value,account['id']))
+    item=main._crawler_account_public_view(accounts.get(account['id']),principal[0])
+    assert not item['collection_ready']
+    assert item['collection_block_reason']=='ACCOUNT_LOGIN_REQUIRED'

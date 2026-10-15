@@ -14,6 +14,7 @@ from backend.audit_agent.crawler_proxy_store import CrawlerProxyStore
 from backend.task_admission.resources import proxy_lock_path, proxy_mutation_guard
 from scripts import crawler_proxy_config as cli
 from tests.test_crawler_proxy_api import api, create_proxy
+from crawler_auth_fixtures import mark_camoufox_login_verified
 
 SECRET = 'backend-credential-canary@!'
 
@@ -99,14 +100,20 @@ def test_default_selection_acl_capacity_and_expired_no_partial(api, monkeypatch)
     resource = create_proxy(client, expires_at=time.time()+3600)
     monkeypatch.setattr(settings, 'crawler_proxy_default_id', resource['id'])
     principal[0] = Principal(users['alice']['id'], role='user')
-    assert client.post('/api/crawler-accounts', json=payload).status_code == 404
+    # HEAD 77f73f3 filters unauthorized defaults out of the pool rather than
+    # exposing the hidden proxy's existence through a 404 lookup response.
+    denied = client.post('/api/crawler-accounts', json=payload)
+    assert denied.status_code == 400 and denied.json()['detail'] == 'PROXY_CONFIGURATION_REQUIRED'
     assert accounts.list() == []
     auth.grant_resource(user_id=users['alice']['id'], resource_type='crawler-proxy', resource_id=resource['id'], permission='use', actor_user_id=users['admin']['id'])
     response = client.post('/api/crawler-accounts', json=payload)
     assert response.status_code == 200
     item = response.json()['item']
     assert item['proxy_id'] == resource['id'] and not item['collection_ready']
-    assert item['collection_block_reason'] == 'PROXY_LOGIN_VALIDATION_REQUIRED'
+    assert item['collection_block_reason'] == 'ACCOUNT_LOGIN_REQUIRED'
+    accounts.save_auth_state(item['id'], 'trusted-fixture-login')
+    mark_camoufox_login_verified(accounts, item['id'])
+    assert main._crawler_account_public_view(accounts.get(item['id']),principal[0])['collection_block_reason'] == 'PROXY_LOGIN_VALIDATION_REQUIRED'
     assert client.post('/api/crawler-accounts', json=payload).status_code == 409
     assert len(accounts.list()) == 1
     proxies.update(resource['id'], expected_revision=1, expires_at=time.time()-1)
@@ -122,6 +129,7 @@ def test_readiness_requires_validated_route_current_revision_and_use_acl(api, mo
     resource = create_proxy(client, expires_at=time.time()+3600)
     item = client.post('/api/crawler-accounts', json={'platform':'dy','display_name':'test','proxy_id':resource['id']}).json()['item']
     accounts.save_auth_state(item['id'], 'encrypted-fixture')
+    mark_camoufox_login_verified(accounts, item['id'])
     with accounts._connect() as conn:
         conn.execute('UPDATE crawler_accounts SET validated_proxy_binding_revision=1,validated_proxy_config_revision=1 WHERE id=?', (item['id'],))
     project = lambda: main._crawler_account_public_view(accounts.get(item['id']), principal[0])
@@ -144,7 +152,9 @@ def test_default_binding_busy_and_owner_failure_roll_back(api, monkeypatch):
     with path.open('a+b') as handle:
         fcntl.flock(handle.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
         response = client.post('/api/crawler-accounts', json=payload)
-        assert response.status_code == 409 and response.json()['detail'] == 'PROXY_BUSY'
+        # The existing default-pool retry exhausts all busy choices and reports
+        # its capacity contract, while explicit edit operations retain BUSY.
+        assert response.status_code == 409 and response.json()['detail'] == 'PROXY_CAPACITY_CONFLICT'
         assert accounts.list() == []
     def failure(*args):
         raise RuntimeError('ownership registration failed')

@@ -1,12 +1,12 @@
 """Headed login with page-only frames and a bounded input channel."""
+
 from __future__ import annotations
 
 import asyncio
 import base64
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager, nullcontext, suppress
 import json
 import os
-from pathlib import Path
 import select
 import shutil
 import subprocess
@@ -14,7 +14,11 @@ import sys
 import tempfile
 from urllib.parse import urlsplit
 
-from backend.audit_agent.crawler_login_interaction import VIEW_WIDTH, VIEW_HEIGHT, validate_login_input
+from backend.audit_agent.crawler_login_interaction import (
+    VIEW_WIDTH,
+    VIEW_HEIGHT,
+    validate_login_input,
+)
 from scripts import crawler_account_login as login
 from scripts.crawler_login_pages import close_rendered_pages
 
@@ -23,15 +27,26 @@ from scripts.crawler_login_pages import close_rendered_pages
 def virtual_display():
     if sys.platform != "linux" or not shutil.which("Xvfb"):
         raise RuntimeError("交互登录需要 Linux 虚拟显示组件 Xvfb")
-    # Chromium's Unix-domain socket path must remain shorter than 108 bytes.
+    # Browser Unix-domain socket paths must remain shorter than 108 bytes.
     with tempfile.TemporaryDirectory(prefix="xhs-login-", dir="/tmp") as temp:
         old_display, old_tmp = os.environ.get("DISPLAY"), os.environ.get("TMPDIR")
         read_fd, write_fd = os.pipe()
         process = None
         try:
             process = subprocess.Popen(
-                ["Xvfb", "-displayfd", str(write_fd), "-screen", "0", f"{VIEW_WIDTH}x{VIEW_HEIGHT+100}x24", "-nolisten", "tcp"],
-                pass_fds=(write_fd,), stdout=sys.stderr, stderr=sys.stderr,
+                [
+                    "Xvfb",
+                    "-displayfd",
+                    str(write_fd),
+                    "-screen",
+                    "0",
+                    f"{VIEW_WIDTH}x{VIEW_HEIGHT + 100}x24",
+                    "-nolisten",
+                    "tcp",
+                ],
+                pass_fds=(write_fd,),
+                stdout=sys.stderr,
+                stderr=sys.stderr,
             )
             os.close(write_fd)
             write_fd = -1
@@ -64,7 +79,9 @@ def virtual_display():
 def platform_page(page) -> bool:
     parsed = urlsplit(page.url)
     host = parsed.hostname or ""
-    return parsed.scheme == "https" and (host == "douyin.com" or host.endswith(".douyin.com"))
+    return parsed.scheme == "https" and (
+        host == "douyin.com" or host.endswith(".douyin.com")
+    )
 
 
 async def current_page(context):
@@ -83,13 +100,14 @@ async def frames(context):
                 login.emit("frame", jpeg=base64.b64encode(jpeg).decode("ascii"))
             except Exception:
                 pass  # Navigation must not terminate the login session.
-        await asyncio.sleep(.55)
+        await asyncio.sleep(0.55)
 
 
 async def inputs(context):
     reader = asyncio.StreamReader(limit=8192)
     transport, _ = await asyncio.get_running_loop().connect_read_pipe(
-        lambda: asyncio.StreamReaderProtocol(reader), sys.stdin,
+        lambda: asyncio.StreamReaderProtocol(reader),
+        sys.stdin,
     )
     try:
         while line := await reader.readline():
@@ -98,6 +116,7 @@ async def inputs(context):
                 page = await current_page(context)
                 if command["type"] == "dismiss_browser_prompt":
                     from scripts.crawler_login_native import dismiss_browser_prompt
+
                     await asyncio.to_thread(dismiss_browser_prompt)
                 elif page:
                     await asyncio.wait_for(page.bring_to_front(), 3)
@@ -129,40 +148,26 @@ async def apply_input(page, command):
 
 
 async def has_auth(context):
-    cookies = {c["name"]: c["value"] for c in await asyncio.wait_for(context.cookies("https://www.douyin.com"), 5)}
+    cookies = {
+        c["name"]: c["value"]
+        for c in await asyncio.wait_for(context.cookies("https://www.douyin.com"), 5)
+    }
     # Look for actual session credentials first; a renderer read can stall on redirects.
-    return bool(cookies.get("sessionid") or cookies.get("sessionid_ss") or cookies.get("LOGIN_STATUS") == "1")
+    return bool(
+        cookies.get("sessionid")
+        or cookies.get("sessionid_ss")
+        or cookies.get("LOGIN_STATUS") == "1"
+    )
 
 
-async def headless_state(account_id):
-    adapter = login.load_account_browser()
-    from backend.audit_agent.crawler_route import child_route_snapshot, make_bound_proxy_session
-    snapshot = child_route_snapshot(account_id)
-    context, profile = await adapter.launch_account_context(account_id, login.settings.crawler_browser_profile_root, headless=True,
-        **({"route_snapshot": snapshot, "bound_proxy_session": make_bound_proxy_session(snapshot)} if snapshot else {}))
-    try:
-        for old in list(context.pages):
-            await old.close()
-        page = await context.new_page()
-        gate = profile.get("bound_proxy_session") or login.load_request_scheduler().configured_gate()
-        async with gate.slot("login_navigation", timeout=60):
-            await page.goto("https://www.douyin.com", wait_until="domcontentloaded", timeout=45000)
-        await asyncio.sleep(2)
-        if not await has_auth(context):
-            raise RuntimeError("登录凭据尚未完整保留，请重新登录")
-        # Close rendered pages before exporting: redirecting pages must not stall storage_state.
-        for tab in list(context.pages):
-            await tab.close()
-        return await asyncio.wait_for(context.storage_state(), 15)
-    finally:
-        await asyncio.wait_for(context.close(), 15)
-
-
-async def run_interactive_login(account_id: str, timeout: int, expected_account_id: str = ""):
-    with virtual_display():
+async def run_interactive_login(
+    account_id: str, timeout: int, expected_account_id: str = ""
+):
+    with virtual_display() if sys.platform == "linux" else nullcontext():
         try:
             state, account_identity = await asyncio.wait_for(
-                interactive_flow(account_id, expected_account_id), timeout=timeout,
+                interactive_flow(account_id, expected_account_id),
+                timeout=timeout,
             )
         except asyncio.TimeoutError:
             login.emit("expired", message="登录会话已超时，请重新打开登录窗口")
@@ -174,38 +179,41 @@ async def interactive_flow(account_id, expected_account_id):
     tasks = []
     identity = ""
     async with login.login_context("dy", account_id, headless=False) as context:
-        # Only platform pages can be displayed or controlled; the desktop/address bar is never exposed.
-        async def guard(route):
-            request = route.request
-            host = urlsplit(request.url).hostname or ""
-            trusted_frame = host == "lf-rc1.yhgfb-cn-static.com" and request.frame.parent_frame is not None
-            if request.is_navigation_request() and not (host == "douyin.com" or host.endswith(".douyin.com") or trusted_frame):
-                await route.abort()
-            else:
-                await route.fallback()
-        await context.route("**/*", guard)
+        from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
         page = await context.new_page()
+        adapter = await DouyinLoginAdapter(context, page).install()
         await page.set_viewport_size({"width": VIEW_WIDTH, "height": VIEW_HEIGHT})
         page.set_default_timeout(3000)
         context.on("dialog", lambda dialog: dialog.dismiss())
-        tasks = [asyncio.create_task(frames(context)), asyncio.create_task(inputs(context))]
+        tasks = [
+            asyncio.create_task(frames(context)),
+            asyncio.create_task(inputs(context)),
+        ]
         try:
             login.emit("interactive")
-            gate = getattr(context, "_bound_proxy_session", None) or login.load_request_scheduler().configured_gate()
-            async with gate.slot('login_navigation', timeout=60):
+            gate = (
+                getattr(context, "_bound_proxy_session", None)
+                or login.load_request_scheduler().configured_gate()
+            )
+            async with gate.slot("login_navigation", timeout=60):
                 try:
-                    await page.goto("https://www.douyin.com", wait_until="domcontentloaded", timeout=45000)
+                    await page.goto(
+                        "https://www.douyin.com",
+                        wait_until="domcontentloaded",
+                        timeout=45000,
+                    )
                 except login.PlaywrightTimeoutError:
                     pass
             # Open the form once; QR detection is not a prerequisite for further verification.
-            for selector in login.PLATFORMS['dy']['login_triggers']:
+            for selector in login.PLATFORMS["dy"]["login_triggers"]:
                 try:
                     await page.locator(selector).first.click(timeout=3000)
                     break
                 except Exception:
                     pass
             while True:
-                await login.report_douyin_challenge(page,context)
+                await login.report_douyin_challenge(page, context)
                 try:
                     authenticated = await has_auth(context)
                 except Exception:
@@ -217,20 +225,40 @@ async def interactive_flow(account_id, expected_account_id):
                         login.emit("interactive")
                         continue
                     try:
-                        identity = await asyncio.wait_for(login.identify_logged_in_account('dy', context), 4)
+                        identity = await asyncio.wait_for(
+                            login.identify_logged_in_account("dy", context), 4
+                        )
                     except asyncio.TimeoutError:
                         identity = ""
-                    if expected_account_id and identity and identity != expected_account_id:
-                        await context.clear_cookies()
-                        raise RuntimeError("登录的抖音账号与所选账号不一致，请使用原账号重新登录")
+                    if (
+                        expected_account_id
+                        and identity
+                        and identity != expected_account_id
+                    ):
+                        from scripts.crawler_login_pages import (
+                            reset_douyin_credentials_v2,
+                        )
+                        from backend.audit_agent.crawler_browser import (
+                            account_profile_directory,
+                        )
+
+                        await adapter.close()
+                        await reset_douyin_credentials_v2(
+                            context,
+                            {"directory": account_profile_directory(account_id)},
+                        )
+                        raise RuntimeError(
+                            "登录的抖音账号与所选账号不一致，请使用原账号重新登录"
+                        )
                     break
-                await asyncio.sleep(.8)
+                await asyncio.sleep(0.8)
         finally:
             for task in tasks:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
+            await adapter.close()
+            state = await asyncio.wait_for(context.storage_state(), 15)
             # Close the active renderer before the persistent context flushes its Profile.
             with suppress(Exception):
                 await close_rendered_pages(context)
-    state = await headless_state(account_id)
     return state, identity

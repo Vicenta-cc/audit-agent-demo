@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import math
+import os
 import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -27,7 +29,7 @@ CHALLENGE_SELECTORS = (
     "iframe[src*='captcha']",
 )
 SAFE_IFRAME_HOSTS = {"lf-rc1.yhgfb-cn-static.com"}
-LOGIN_ENTRY_READY_SECONDS = 12
+LOGIN_ENTRY_READY_SECONDS = 120
 LOGIN_DOCUMENT_READY_SECONDS = 60
 
 
@@ -58,11 +60,12 @@ class Region:
 
 
 class DouyinLoginAdapter:
-    def __init__(self, context, page, *, block_media: bool = False, bound_proxy_session=None):
+    def __init__(
+        self, context, page, *, block_media: bool = False, bound_proxy_session=None
+    ):
         self.bound_proxy_session = bound_proxy_session
         self.context, self.page = context, page
         self.block_media = block_media
-        self.cdp = None
         self.identity = ""
         self.identity_source = ""
         self.identity_conflict = False
@@ -78,7 +81,7 @@ class DouyinLoginAdapter:
         self.request_count = 0
         self.blocked_documents = 0
         self.tasks: set[asyncio.Task] = set()
-        self.guards = []
+        self._guard_installed = False
         self.platform_signal = ""
         self.sms_result = "unknown"
         self.last_qr_digest = ""
@@ -105,101 +108,115 @@ class DouyinLoginAdapter:
         return task
 
     async def install(self):
-        # Fetch only intercepts documents; Playwright route() would disable cache.
+        # Native Firefox addon guards redirected documents before transmission.
+        # Context routing adds page policy and resource filtering.
         await self.install_guard(self.page)
         self.context.on("page", self._new_page)
         self.context.on("response", self._response)
+        self.context.on("request", self._request)
+        self.context.on("requestfinished", self._request_finished)
         self.context.on("requestfailed", self._request_failed)
         self.context.on("dialog", self._dialog)
         return self
 
     def _dialog(self, dialog):
-        # Unknown native prompts are not automatically confirmed.
         self.task(dialog.dismiss())
 
     def _new_page(self, page):
         if getattr(self.context, "_collection_proxy_probe_pending", False):
             page._collection_proxy_probe = True
-        if getattr(page, "_collection_proxy_probe", False):
-            return
-        if page is not self.page and not self._closed:
-            self.task(self.install_guard(page))
 
     async def install_guard(self, page):
-        if getattr(page, "_collection_proxy_probe", False):
+        if self._guard_installed:
             return
-        if page.is_closed():
-            return
-        cdp = await self.context.new_cdp_session(page)
-        tree = await cdp.send("Page.getFrameTree")
-        main_frame_id = tree["frameTree"]["frame"]["id"]
+        await self.context.route("**/*", self._guard_request)
+        self._guard_installed = True
+        for existing in list(self.context.pages):
+            if existing.url not in {"about:blank", ""} and not document_allowed(
+                existing.url, top_level=True
+            ):
+                await existing.close()
 
-        async def paused(event):
-            request_id = event["requestId"]
-            method = "Fetch.continueRequest"
-            params = {"requestId": request_id}
-            if not document_allowed(
-                event["request"]["url"], top_level=event.get("frameId") == main_frame_id
+    async def _guard_request(self, route):
+        request = route.request
+        try:
+            # Firefox popup initial navigations can precede frame creation.
+            try:
+                frame = request.frame
+            except Exception:
+                frame = None
+            probe = frame is not None and bool(
+                getattr(frame.page, "_collection_proxy_probe", False)
+            )
+            session = self.bound_proxy_session or getattr(
+                self.context, "_bound_proxy_session", None
+            )
+            if probe:
+                # The transport guard owns exact URL, method, redirect and header checks.
+                if (
+                    session is None
+                    or request.url != session.echo_url
+                    or request.method != "GET"
+                    or request.redirected_from is not None
+                ):
+                    await route.abort()
+                    return
+                await route.fallback()
+                return
+            if request.is_navigation_request() and not document_allowed(
+                request.url, top_level=frame is None or frame.parent_frame is None
             ):
                 self.blocked_documents += 1
-                method, params = (
-                    "Fetch.failRequest",
-                    {"requestId": request_id, "errorReason": "BlockedByClient"},
+                await route.abort()
+                return
+            host = urlsplit(request.url).hostname or ""
+            if (
+                self.block_media
+                and request.resource_type == "media"
+                and any(
+                    host == suffix or host.endswith("." + suffix)
+                    for suffix in ("douyinvod.com", "douyinvod.com.cn")
+                )
+            ):
+                await route.abort()
+                return
+            await asyncio.wait_for(route.fallback(), 3)
+        except Exception as exc:
+            session = self.bound_proxy_session or getattr(
+                self.context, "_bound_proxy_session", None
+            )
+            if session is not None:
+                session.record_browser_guard_stop(
+                    "DOCUMENT_GUARD_TIMEOUT"
+                    if isinstance(exc, asyncio.TimeoutError)
+                    else "DOCUMENT_GUARD_FAILED"
                 )
             try:
-                await asyncio.wait_for(cdp.send(method, params), 3)
-            except Exception as exc:
-                # A failed guard must not leave a browser navigation parked forever.
-                if not page.is_closed():
-                    session=self.bound_proxy_session or getattr(self.context,'_bound_proxy_session',None)
-                    if session is not None:
-                        session.record_browser_guard_stop('CDP_GUARD_TIMEOUT' if isinstance(exc,asyncio.TimeoutError) else 'CDP_GUARD_FAILED')
-                    await page.close()
+                await route.abort()
+            finally:
+                await self.context.close()
 
-        cdp.on("Fetch.requestPaused", lambda event: self.task(paused(event)))
-        await cdp.send(
-            "Fetch.enable",
-            {
-                "patterns": [
-                    {
-                        "urlPattern": "*",
-                        "resourceType": "Document",
-                        "requestStage": "Request",
-                    }
-                ]
-            },
-        )
-        await cdp.send("Network.enable")
-        cdp.on(
-            "Network.requestWillBeSent",
-            lambda _: setattr(self, "request_count", self.request_count + 1),
-        )
-        cdp.on(
-            "Network.loadingFinished",
-            lambda e: setattr(
-                self,
-                "network_bytes",
-                self.network_bytes + int(e.get("encodedDataLength", 0)),
-            ),
-        )
-        if self.block_media:
-            # Opt-in; do not block images, XHR or verification media indiscriminately.
-            await cdp.send(
-                "Network.setBlockedURLs",
-                {"urls": ["*://*.douyinvod.com/*", "*://*.douyinvod.com.cn/*"]},
+    def _request(self, request):
+        self.request_count += 1
+
+    def _request_finished(self, request):
+        if not self._closed:
+            self.task(self._measure_request(request))
+
+    async def _measure_request(self, request):
+        try:
+            sizes = await asyncio.wait_for(request.sizes(), 3)
+            self.network_bytes += int(sizes.get("responseBodySize", 0)) + int(
+                sizes.get("responseHeadersSize", 0)
             )
-        self.guards.append(cdp)
-        if page is self.page:
-            self.cdp = cdp
-        elif page.url not in {"about:blank", ""} and not document_allowed(
-            page.url, top_level=True
-        ):
-            await page.close()
+        except Exception:
+            pass  # Accounting is diagnostic; safety belongs to the route authority.
 
     def _response(self, response):
         if response.status >= 400:
             self._record_network_failure(
-                "http_" + str(response.status), response.url,
+                "http_" + str(response.status),
+                response.url,
                 getattr(response.request, "resource_type", "unknown"),
             )
         if not self._closed:
@@ -232,7 +249,9 @@ class DouyinLoginAdapter:
     def network_failure_summary(self):
         return [
             {"code": code, "host": host, "resource_type": resource_type, "count": count}
-            for (code, host, resource_type), count in self.network_failures.most_common(20)
+            for (code, host, resource_type), count in self.network_failures.most_common(
+                20
+            )
         ]
 
     async def observe_response(self, response):
@@ -642,6 +661,7 @@ class DouyinLoginAdapter:
         if region:
             if self.bound_proxy_session is not None:
                 from tools.bound_proxy import emit_account_risk
+
                 emit_account_risk(self.bound_proxy_session.snapshot)
             return {
                 "phase": "challenge_required",
@@ -789,19 +809,20 @@ class DouyinLoginAdapter:
         from scripts.crawler_account_login import PLATFORMS
         from playwright.async_api import TimeoutError
 
-        wait_for_load_state = getattr(self.page, "wait_for_load_state", None)
-        if callable(wait_for_load_state):
-            try:
-                await wait_for_load_state(
-                    "domcontentloaded", timeout=LOGIN_DOCUMENT_READY_SECONDS * 1000
+        try:
+            configured = float(
+                os.getenv(
+                    "CRAWLER_LOGIN_V2_PREPARATION_TIMEOUT_SECONDS",
+                    str(LOGIN_ENTRY_READY_SECONDS),
                 )
-            except TimeoutError:
-                # The bounded entry loop below still records whether Douyin
-                # exposed a usable login control on a partially loaded page.
-                pass
-
+            )
+        except ValueError:
+            raise ValueError("LOGIN_PREPARATION_TIMEOUT_INVALID") from None
+        if not math.isfinite(configured):
+            raise ValueError("LOGIN_PREPARATION_TIMEOUT_INVALID")
+        budget = min(180, max(15, configured))
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + LOGIN_ENTRY_READY_SECONDS
+        deadline = loop.time() + budget
         max_candidates = 0
         click_attempts = 0
         click_successes = 0
@@ -813,6 +834,19 @@ class DouyinLoginAdapter:
                 or await self.visible(PANEL_SELECTOR)
                 or await self.visible(QR_SELECTOR)
             )
+
+        if await opened():
+            return
+        wait_for_load_state = getattr(self.page, "wait_for_load_state", None)
+        if callable(wait_for_load_state):
+            try:
+                await wait_for_load_state(
+                    "domcontentloaded",
+                    timeout=min(LOGIN_DOCUMENT_READY_SECONDS, budget) * 1000,
+                )
+            except TimeoutError:
+                # DOM readiness and hydration share this one finite budget.
+                pass
 
         async def candidates():
             values = []
@@ -847,9 +881,13 @@ class DouyinLoginAdapter:
             visible_candidates = await candidates()
             max_candidates = max(max_candidates, len(visible_candidates))
             for trigger in visible_candidates:
+                if loop.time() >= deadline:
+                    break
                 click_attempts += 1
                 try:
-                    await trigger.click(timeout=2000)
+                    await trigger.click(
+                        timeout=min(2000, max(1, (deadline - loop.time()) * 1000))
+                    )
                     click_successes += 1
                 except TimeoutError:
                     click_timeouts += 1
@@ -891,17 +929,26 @@ class DouyinLoginAdapter:
                     "ready_state": ready_state,
                 }
                 raise ValueError("LOGIN_PREPARATION_FAILED")
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(min(0.1, max(0, deadline - loop.time())))
 
     async def close(self):
         self._closed = True
-        for event, callback in (("page", self._new_page), ("response", self._response),
-                                ("requestfailed", self._request_failed), ("dialog", self._dialog)):
+        for event, callback in (
+            ("page", self._new_page),
+            ("response", self._response),
+            ("requestfailed", self._request_failed),
+            ("request", self._request),
+            ("requestfinished", self._request_finished),
+            ("dialog", self._dialog),
+        ):
             try:
                 self.context.remove_listener(event, callback)
             except Exception:
                 # Closing an already disconnected context must preserve the route failure.
                 pass
+        if self._guard_installed:
+            await self.context.unroute("**/*", self._guard_request)
+            self._guard_installed = False
         for task in list(self.tasks):
             task.cancel()
         if self.tasks:

@@ -2,7 +2,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 from urllib.parse import urlparse
 
 from fastapi import Header, BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, StrictBool, StrictInt
+from pydantic import BaseModel, Field
 
 from .api.investigation import create_investigation_router
 from .api.historical_reports import create_historical_report_router
@@ -256,6 +256,17 @@ def _crawler_account_collection_block_reason(account: dict, principal: Principal
         return "ACCOUNT_LOGIN_REQUIRED"
     if account_is_cooling_down(account):
         return "ACCOUNT_COOLDOWN"
+    if account["platform"] == "dy":
+        if settings.crawler_browser_maintenance:
+            return "ACCOUNT_ROUTE_BLOCKED"
+        if (account.get("profile_engine") != "camoufox" or not account.get("profile_generation")
+                or account.get("auth_source_generation") != account.get("profile_generation")):
+            return "ACCOUNT_LOGIN_REQUIRED"
+        with crawler_account_store._connect() as conn:
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE name='crawler_browser_migrations'").fetchone():
+                pending = conn.execute("SELECT phase FROM crawler_browser_migrations WHERE account_id=?", (account["id"],)).fetchone()
+                if pending and pending[0] != "COMMITTED":
+                    return "ACCOUNT_LOGIN_REQUIRED"
     safety = settings.crawler_safety_enabled and account["platform"] == "dy"
     if safety:
         if account.get("route_state", "active") != "active":
@@ -271,8 +282,7 @@ def _crawler_account_collection_block_reason(account: dict, principal: Principal
                 return "LOGIN_REVALIDATION_REQUIRED"
             return "" if crawler_account_store.get_direct_route(account["id"]) else "SHARED_EXIT_UNAVAILABLE"
     proxy_id = account.get("proxy_id")
-    required = bool(account.get("proxy_required") or proxy_id
-                    or settings.crawler_proxy_enabled and account["platform"] == "dy")
+    required = bool(account.get("proxy_required") or proxy_id)
     if not required:
         return ""
     if not proxy_id:
@@ -1955,8 +1965,14 @@ async def start_crawler_account_login(
             "intent",
             "source_operation_id",
             "browser_mode",
+            "migration_id",
         }:
             raise LoginV2Error("INVALID_LOGIN_OPTIONS", status=400)
+        migration_id = body.get("migration_id")
+        if migration_id is not None and (not isinstance(migration_id, str) or not migration_id.strip() or len(migration_id) > 128):
+            raise LoginV2Error("INVALID_MIGRATION_ID", status=400)
+        if migration_id and account["platform"] != "dy":
+            raise LoginV2Error("MIGRATION_REQUIRES_DY_V2", status=400)
         protocols = body.get("supported_protocols", [1])
         if not isinstance(protocols, list) or any(
             type(p) is not int or p not in (1, 2) for p in protocols
@@ -2001,9 +2017,12 @@ async def start_crawler_account_login(
                 source_operation_id=body.get("source_operation_id"),
                 browser_mode=body.get("browser_mode", "default"),
                 authorize=authorize,
+                **({"migration_id": migration_id} if migration_id else {}),
             )
             response.status_code = 201 if created else 200
         else:
+            if migration_id:
+                raise LoginV2Error("MIGRATION_REQUIRES_DY_V2", status=400)
             if body.get("intent") == "recover":
                 raise LoginV2Error("RECOVERY_REQUIRES_V2", status=400)
             if 1 not in protocols:

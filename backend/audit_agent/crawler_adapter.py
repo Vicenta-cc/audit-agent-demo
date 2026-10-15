@@ -8,6 +8,7 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import re
 import tempfile
 from dataclasses import dataclass, field
@@ -557,6 +558,9 @@ class MediaCrawlerAdapter:
         account_id: str = "",
         route_context=None,
     ) -> CrawlOutput:
+        from .crawler_child_runtime import authority_for, child_environment, child_process_options, require_browser_available
+        if platform == "dy":
+            require_browser_available(account_id, store=getattr(route_context, "account_store", None))
         env = self._subprocess_env(auth_state, platform=platform, account_id=account_id)
         if platform == "dy":
             command = [*command,
@@ -566,196 +570,281 @@ class MediaCrawlerAdapter:
                 "--request_concurrency", str(settings.request_concurrency),
                 "--media_request_interval", str(settings.media_request_interval),
                 "--request_cooldown_seconds", str(settings.request_cooldown_seconds),
-                "--headless", "true"]
+                "--headless", "true" if sys.platform == "darwin" else "false"]
+        requested_save_root = save_root.expanduser().absolute()
+        save_root = requested_save_root.resolve()
         save_root.mkdir(parents=True, exist_ok=True)
-
-        stdout_path = save_root / "mediacrawler_stdout.log"
-        stderr_path = save_root / "mediacrawler_stderr.log"
-        with stdout_path.open("w", encoding="utf-8", errors="replace") as stdout_file, stderr_path.open(
-            "w", encoding="utf-8", errors="replace"
-        ) as stderr_file:
-            from backend.task_admission.execution import crawler_fds, launch_crawler
-            from .crawler_route import RouteConfigPipe, RouteReceiptPipe, prepare_collection_child
-            if route_context:
-                from backend.task_admission.resources import BorrowedRouteContext
-                prepare_collection_child(route_context,allowed_borrowers=2 if isinstance(route_context,BorrowedRouteContext) else 1)
-            route_pipe = RouteConfigPipe(route_context.snapshot if route_context else None)
-            receipt_pipe = RouteReceiptPipe(route_context) if route_context and route_context.snapshot else None
-            if receipt_pipe:
-                env.update(receipt_pipe.env)
-            env.update(route_pipe.env)
-            if route_context:
-                from .crawler_route import probe_env
-                env.update(probe_env(route_context))
-                from backend.task_admission.resources import digest
-                env["MEDIACRAWLER_SOURCE_TASK_ID"] = route_context.execution_id if __import__("re").fullmatch(r"[A-Za-z0-9_.-]{1,128}", route_context.execution_id) else digest(route_context.execution_id)
-                env["MEDIACRAWLER_SOURCE_BATCH_ID"] = __import__("uuid").uuid4().hex
-            try:
-                completed = launch_crawler(
-                    command,
-                    pass_fds=tuple(set((*crawler_fds(), *(route_context.pass_fds if route_context else ()), *route_pipe.pass_fds, *(receipt_pipe.pass_fds if receipt_pipe else ())))),
-                    cwd=self.media_crawler_dir,
-                    env=env,
-                    stdout=stdout_file,
-                    stderr=stderr_file,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    start_new_session=os.name != "nt",
+        spool = None
+        completed = None
+        route_pipe = receipt_pipe = authority = None
+        try:
+            if platform == "dy":
+                from .crawler_child_outputs import ChildOutputSpool
+                # Normalize only the parent-created destination argument. macOS gives
+                # tempfile paths under /var while their canonical root is /private/var.
+                command = list(command)
+                for index, value in enumerate(command[:-1]):
+                    if value == "--save_data_path":
+                        destination = Path(command[index + 1]).expanduser()
+                        if ".." not in destination.parts and destination.absolute() == requested_save_root:
+                            command[index + 1] = str(save_root)
+                process_options = child_process_options()
+                spool = ChildOutputSpool.create(
+                    state_root=settings.crawler_camoufox_state_root,
+                    uid=process_options.get("user", os.getuid()),
+                    gid=process_options.get("group", os.getgid()), destination=save_root,
+                    max_bytes=settings.crawler_child_output_max_bytes,
+                    max_files=settings.crawler_child_output_max_files,
                 )
-            except BaseException:
-                route_pipe.close()
-                if receipt_pipe:
-                    receipt_pipe.close()
-                raise
-            if route_context:
-                route_context.child_active = True
-            if receipt_pipe:
-                receipt_pipe.start(completed)
-            route_pipe.start(completed)
-            if route_pipe.thread is not None:
-                route_pipe.thread.join(timeout=5)
-            if route_pipe.error or route_pipe.thread is not None and route_pipe.thread.is_alive():
-                route_pipe.close()
-                if receipt_pipe:
-                    receipt_pipe.close()
-                if completed.poll() is None:
-                    completed.terminate()
-                try:
-                    completed.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    completed.kill()
-                    completed.wait(timeout=5)
+                command = spool.rewrite_command(command)
+                command = spool.stage_inputs(command)
+
+            stdout_path = save_root / "mediacrawler_stdout.log"
+            stderr_path = save_root / "mediacrawler_stderr.log"
+            with stdout_path.open("w", encoding="utf-8", errors="replace") as stdout_file, stderr_path.open(
+                "w", encoding="utf-8", errors="replace"
+            ) as stderr_file:
+                from backend.task_admission.execution import crawler_fds, launch_crawler
+                from .crawler_route import RouteConfigPipe, RouteReceiptPipe, prepare_collection_child
                 if route_context:
-                    route_context.child_active = False
-                from .crawler_route import CollectionRouteError
-                raise route_pipe.error or CollectionRouteError("PROXY_CONFIG_INVALID")
-            last_count = -1
-            seen_content_ids: set[str] = set()
-            stop_reason = ""
-            terminate_sent = False
-            kill_sent = False
-            stop_error = ""
-            cleanup_failed = False
-            operation_error: BaseException | None = None
-
-            def append_stop_error(message: str) -> None:
-                nonlocal stop_error
-                stop_error = f"{stop_error}; {message}" if stop_error else message
-
-            def stop_process(reason: str) -> None:
-                nonlocal terminate_sent
-                nonlocal kill_sent
-                nonlocal stop_reason
-                nonlocal cleanup_failed
-                if not stop_reason:
-                    stop_reason = reason
-                if completed.returncode is not None:
-                    return
-
-                terminate_just_sent = False
-                if not terminate_sent:
-                    terminate_sent = True
+                    from backend.task_admission.resources import BorrowedRouteContext
+                    prepare_collection_child(route_context,allowed_borrowers=2 if isinstance(route_context,BorrowedRouteContext) else 1)
+                route_pipe = RouteConfigPipe(route_context.snapshot if route_context else None)
+                receipt_pipe = RouteReceiptPipe(route_context) if route_context and route_context.snapshot else None
+                if receipt_pipe:
+                    env.update(receipt_pipe.env)
+                env.update(route_pipe.env)
+                if route_context:
+                    from .crawler_route import probe_env
+                    env.update(probe_env(route_context))
+                    from backend.task_admission.resources import digest
+                    env["MEDIACRAWLER_SOURCE_TASK_ID"] = route_context.execution_id if __import__("re").fullmatch(r"[A-Za-z0-9_.-]{1,128}", route_context.execution_id) else digest(route_context.execution_id)
+                    env["MEDIACRAWLER_SOURCE_BATCH_ID"] = __import__("uuid").uuid4().hex
+                cache_options = {}
+                if platform == "dy" and "--reusable_content_db" in command:
+                    cache_index = command.index("--reusable_content_db")
+                    cache_path = Path(command[cache_index + 1]).expanduser().resolve()
+                    allowed_cache = {(settings.data_dir / "audit_index.sqlite3").resolve()}
+                    if getattr(route_context, "account_store", None):
+                        allowed_cache.add(Path(route_context.account_store.db_path).resolve())
+                    if cache_path not in allowed_cache:
+                        raise RuntimeError("CRAWLER_CACHE_DATABASE_NOT_AUTHORIZED")
+                    def command_value(flag):
+                        return command[command.index(flag) + 1] if flag in command else ""
+                    cache_options = dict(reusable_db=str(cache_path),
+                        current_task_id=command_value("--current_task_id"),
+                        keywords=tuple(part.strip() for part in command_value("--keywords").split(",") if part.strip()),
+                        reusable_outputs_root=str(settings.outputs_dir.resolve()))
+                authority = authority_for(route_context, **cache_options) if platform == "dy" else None
+                if authority:
+                    env = child_environment(env)
+                    env.update(authority.env)
+                try:
+                    completed = launch_crawler(
+                        command,
+                        pass_fds=tuple(set((*crawler_fds(), *(route_context.pass_fds if route_context else ()), *route_pipe.pass_fds, *(receipt_pipe.pass_fds if receipt_pipe else ()), *(authority.pass_fds if authority else ())))),
+                        cwd=self.media_crawler_dir,
+                        env=env,
+                        stdout=stdout_file,
+                        stderr=stderr_file,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        start_new_session=os.name != "nt",
+                        **(child_process_options() if platform == "dy" else {}),
+                    )
+                    if spool:
+                        spool.bind_process_group(completed.pid)
+                    if authority:
+                        authority.bind_child(completed.pid)
+                except BaseException:
+                    if completed is not None:
+                        from .crawler_route import _stop_probe_process_group
+                        _stop_probe_process_group(completed)
+                    if authority:
+                        authority.close()
+                    route_pipe.close()
+                    if receipt_pipe:
+                        receipt_pipe.close()
+                    raise
+                if route_context:
+                    route_context.child_active = True
+                if receipt_pipe:
+                    receipt_pipe.start(completed)
+                route_pipe.start(completed)
+                if route_pipe.thread is not None:
+                    route_pipe.thread.join(timeout=5)
+                if route_pipe.error or route_pipe.thread is not None and route_pipe.thread.is_alive():
+                    route_pipe.close()
+                    if receipt_pipe:
+                        receipt_pipe.close()
+                    if completed.poll() is None:
+                        completed.terminate()
                     try:
-                        if os.name != 'nt' and isinstance(getattr(completed, 'pid', None), int):
-                            os.killpg(completed.pid, signal.SIGTERM)
-                        else:
-                            completed.terminate()
-                        terminate_just_sent = True
-                    except Exception as exc:
-                        append_stop_error(f"terminate failed: {exc}")
-                        completed.poll()
-
-                if completed.returncode is None or terminate_just_sent:
-                    try:
-                        completed.wait(timeout=10)
+                        completed.wait(timeout=5)
                     except subprocess.TimeoutExpired:
-                        append_stop_error("terminate timed out after 10 seconds")
-                    except Exception as exc:
-                        append_stop_error(f"wait after terminate failed: {exc}")
+                        completed.kill()
+                        completed.wait(timeout=5)
+                    if route_context:
+                        route_context.child_active = False
+                    from .crawler_route import CollectionRouteError
+                    if authority:
+                        authority.close()
+                    raise route_pipe.error or CollectionRouteError("PROXY_CONFIG_INVALID")
+                last_count = -1
+                seen_content_ids: set[str] = set()
+                stop_reason = ""
+                terminate_sent = False
+                kill_sent = False
+                stop_error = ""
+                cleanup_failed = False
+                operation_error: BaseException | None = None
 
-                if completed.returncode is None and not kill_sent:
-                    kill_sent = True
-                    try:
-                        if os.name != 'nt' and isinstance(getattr(completed, 'pid', None), int):
-                            os.killpg(completed.pid, signal.SIGKILL)
-                        else:
-                            completed.kill()
-                    except Exception as exc:
-                        append_stop_error(f"kill failed: {exc}")
-                        cleanup_failed = True
-                    if completed.returncode is None:
+                def append_stop_error(message: str) -> None:
+                    nonlocal stop_error
+                    stop_error = f"{stop_error}; {message}" if stop_error else message
+
+                def stop_process(reason: str) -> None:
+                    nonlocal terminate_sent
+                    nonlocal kill_sent
+                    nonlocal stop_reason
+                    nonlocal cleanup_failed
+                    if not stop_reason:
+                        stop_reason = reason
+                    if completed.returncode is not None:
+                        return
+
+                    terminate_just_sent = False
+                    if not terminate_sent:
+                        terminate_sent = True
                         try:
-                            completed.wait(timeout=5)
+                            if os.name != 'nt' and isinstance(getattr(completed, 'pid', None), int):
+                                os.killpg(completed.pid, signal.SIGTERM)
+                            else:
+                                completed.terminate()
+                            terminate_just_sent = True
                         except Exception as exc:
-                            append_stop_error(f"wait after kill failed: {exc}")
-                            cleanup_failed = True
-                elif completed.returncode is None:
-                    cleanup_failed = True
+                            append_stop_error(f"terminate failed: {exc}")
+                            completed.poll()
 
-                # Launcher exit alone does not prove its worker exited. This is
-                # the private group created by Popen, never another task's group.
-                if os.name != 'nt' and isinstance(getattr(completed, 'pid', None), int):
-                    try:
-                        os.killpg(completed.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    except OSError as exc:
-                        append_stop_error(f"process group cleanup failed: {exc}")
+                    if completed.returncode is None or terminate_just_sent:
+                        try:
+                            completed.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            append_stop_error("terminate timed out after 10 seconds")
+                        except Exception as exc:
+                            append_stop_error(f"wait after terminate failed: {exc}")
+
+                    if completed.returncode is None and not kill_sent:
+                        kill_sent = True
+                        try:
+                            if os.name != 'nt' and isinstance(getattr(completed, 'pid', None), int):
+                                os.killpg(completed.pid, signal.SIGKILL)
+                            else:
+                                completed.kill()
+                        except Exception as exc:
+                            append_stop_error(f"kill failed: {exc}")
+                            cleanup_failed = True
+                        if completed.returncode is None:
+                            try:
+                                completed.wait(timeout=5)
+                            except Exception as exc:
+                                append_stop_error(f"wait after kill failed: {exc}")
+                                cleanup_failed = True
+                    elif completed.returncode is None:
                         cleanup_failed = True
 
-            def raise_exit_failure(returncode: int | None) -> None:
-                stdout_file.flush()
-                stderr_file.flush()
-                stdout = (
-                    stdout_path.read_text(encoding="utf-8", errors="replace")
-                    if stdout_path.exists()
-                    else ""
-                )
-                stderr = (
-                    stderr_path.read_text(encoding="utf-8", errors="replace")
-                    if stderr_path.exists()
-                    else ""
-                )
-                from .crawler_route import raise_route_log_error
-                if "PLATFORM_RATE_LIMITED" in stdout or "PLATFORM_RATE_LIMITED" in stderr:
-                    raise CrawlerRateLimitError("平台请求被限流，共享冷却已记录；保留已采集内容，冷却结束后再继续")
-                if "REQUEST_SCHEDULER_WAIT_EXCEEDED" in stdout or "REQUEST_SCHEDULER_WAIT_EXCEEDED" in stderr:
-                    raise CrawlerRateLimitError("等待共享请求额度或冷却超时；未启动后续请求，请稍后继续")
-                if ACCOUNT_AUTH_INVALID_MARKER in stdout or ACCOUNT_AUTH_INVALID_MARKER in stderr:
-                    raise CrawlerAuthenticationError("所选采集账号登录态已失效，请重新登录")
-                if "ACCOUNT_VERIFY" in stdout or "ACCOUNT_VERIFY" in stderr:
-                    error = CrawlerVerificationError("采集账号触发平台验证")
-                    error.account_risk_recorded = bool(route_context and getattr(route_context, 'account_risk_recorded', False))
-                    raise error
-                raise_route_log_error(stdout + '\n' + stderr)
-                if "COLLECTION_INCOMPLETE" in stdout or "COLLECTION_INCOMPLETE" in stderr:
-                    raise CrawlerCollectionIncompleteError(
-                        "采集未完成：详情、媒体或分页处理失败；已成功内容保留，失败记录在采集目录 douyin/collection_status 中，可修复后继续采集")
-                raise RuntimeError(
-                    f"MediaCrawler failed with exit code {returncode}\n"
-                    f"STDOUT:\n{stdout[-4000:]}\n"
-                    f"STDERR:\n{stderr[-4000:]}"
-                )
+                    # Launcher exit alone does not prove its worker exited. This is
+                    # the private group created by Popen, never another task's group.
+                    if os.name != 'nt' and isinstance(getattr(completed, 'pid', None), int):
+                        try:
+                            os.killpg(completed.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        except OSError as exc:
+                            append_stop_error(f"process group cleanup failed: {exc}")
+                            cleanup_failed = True
 
-            try:
-                if started_callback:
-                    started_callback()
-                while completed.poll() is None:
-                    if route_context and getattr(route_context,'account_risk_recorded',False):
-                        error=CrawlerVerificationError('采集账号触发平台验证')
-                        error.account_risk_recorded=True
+                def raise_exit_failure(returncode: int | None) -> None:
+                    stdout_file.flush()
+                    stderr_file.flush()
+                    stdout = (
+                        stdout_path.read_text(encoding="utf-8", errors="replace")
+                        if stdout_path.exists()
+                        else ""
+                    )
+                    stderr = (
+                        stderr_path.read_text(encoding="utf-8", errors="replace")
+                        if stderr_path.exists()
+                        else ""
+                    )
+                    from .crawler_route import raise_route_log_error
+                    if "PLATFORM_RATE_LIMITED" in stdout or "PLATFORM_RATE_LIMITED" in stderr:
+                        raise CrawlerRateLimitError("平台请求被限流，共享冷却已记录；保留已采集内容，冷却结束后再继续")
+                    if "REQUEST_SCHEDULER_WAIT_EXCEEDED" in stdout or "REQUEST_SCHEDULER_WAIT_EXCEEDED" in stderr:
+                        raise CrawlerRateLimitError("等待共享请求额度或冷却超时；未启动后续请求，请稍后继续")
+                    if ACCOUNT_AUTH_INVALID_MARKER in stdout or ACCOUNT_AUTH_INVALID_MARKER in stderr:
+                        raise CrawlerAuthenticationError("所选采集账号登录态已失效，请重新登录")
+                    if "ACCOUNT_VERIFY" in stdout or "ACCOUNT_VERIFY" in stderr:
+                        error = CrawlerVerificationError("采集账号触发平台验证")
+                        error.account_risk_recorded = bool(route_context and getattr(route_context, 'account_risk_recorded', False))
                         raise error
-                    if route_context and getattr(route_context,'route_error',None):
-                        raise CollectionRouteError(route_context.route_error)
-                    if stop_checker and stop_checker():
-                        stop_process("external_stop_requested")
-                        break
-                    current_count = self._latest_content_count(save_root, platform)
-                    if current_count != last_count:
-                        last_count = current_count
-                        if progress_callback:
-                            progress_callback(min(current_count, max_notes), max_notes)
+                    raise_route_log_error(stdout + '\n' + stderr)
+                    if "COLLECTION_INCOMPLETE" in stdout or "COLLECTION_INCOMPLETE" in stderr:
+                        raise CrawlerCollectionIncompleteError(
+                            "采集未完成：详情、媒体或分页处理失败；已成功内容保留，失败记录在采集目录 douyin/collection_status 中，可修复后继续采集")
+                    raise RuntimeError(
+                        f"MediaCrawler failed with exit code {returncode}\n"
+                        f"STDOUT:\n{stdout[-4000:]}\n"
+                        f"STDERR:\n{stderr[-4000:]}"
+                    )
+
+                try:
+                    if started_callback:
+                        started_callback()
+                    while completed.poll() is None:
+                        if spool:
+                            spool.sync()
+                        if route_context and getattr(route_context,'account_risk_recorded',False):
+                            error=CrawlerVerificationError('采集账号触发平台验证')
+                            error.account_risk_recorded=True
+                            raise error
+                        if route_context and getattr(route_context,'route_error',None):
+                            raise CollectionRouteError(route_context.route_error)
+                        if stop_checker and stop_checker():
+                            stop_process("external_stop_requested")
+                            break
+                        current_count = self._latest_content_count(save_root, platform)
+                        if current_count != last_count:
+                            last_count = current_count
+                            if progress_callback:
+                                progress_callback(min(current_count, max_notes), max_notes)
+                        if content_callback:
+                            self._emit_new_content(
+                                save_root,
+                                platform,
+                                seen_content_ids,
+                                content_callback,
+                            )
+                        if checkpoint_callback and stderr_path.exists():
+                            try:
+                                log_text = stderr_path.read_text(encoding="utf-8", errors="replace")
+                                checkpoint = latest_search_checkpoint(log_text, platform)
+                                if checkpoint:
+                                    checkpoint_callback(*checkpoint)
+                            except OSError:
+                                pass
+                        sleep(1)
+
+                    if spool:
+                        from .crawler_route import _stop_probe_process_group, assert_profile_browser_stopped
+                        _stop_probe_process_group(completed)
+                        assert_profile_browser_stopped(account_id)
+                        spool.sync_final()
+                        spool.cleanup()
+                    final_count = self._latest_content_count(save_root, platform)
+                    if final_count != last_count and progress_callback:
+                        progress_callback(min(final_count, max_notes), max_notes)
                     if content_callback:
                         self._emit_new_content(
                             save_root,
@@ -763,77 +852,86 @@ class MediaCrawlerAdapter:
                             seen_content_ids,
                             content_callback,
                         )
-                    if checkpoint_callback and stderr_path.exists():
+
+                    returncode = completed.returncode
+                    if returncode is None:
+                        append_stop_error("process did not expose an exit code after stop")
+                    elif not kill_sent and stop_reason != "external_stop_requested" and returncode != 0:
+                        raise_exit_failure(returncode)
+
+                    # A caught platform limit must never look like successful completion.
+                    terminal_log = stderr_path.read_text(encoding='utf-8', errors='replace') + stdout_path.read_text(encoding='utf-8', errors='replace')
+                    from .crawler_route import raise_route_log_error
+                    if 'PLATFORM_RATE_LIMITED' in terminal_log or 'REQUEST_SCHEDULER_WAIT_EXCEEDED' in terminal_log:
+                        raise CrawlerRateLimitError("平台请求额度或冷却限制已生效；保留已采集内容，请稍后继续")
+
+                    # MediaCrawler may catch a platform response and exit cleanly;
+                    # inspect its log marker even when the process return code is 0.
+                    if stderr_path.exists() and "ACCOUNT_VERIFY" in stderr_path.read_text(
+                        encoding="utf-8", errors="replace"
+                    ):
+                        error = CrawlerVerificationError("采集账号触发平台验证")
+                        error.account_risk_recorded = bool(route_context and getattr(route_context, 'account_risk_recorded', False))
+                        raise error
+
+                    raise_route_log_error(terminal_log)
+                    if 'COLLECTION_INCOMPLETE' in terminal_log:
+                        raise CrawlerCollectionIncompleteError(
+                            "采集未完成：详情、媒体或分页处理失败；已成功内容保留，请查看采集目录 douyin/collection_status 中的失败记录")
+
+                    output = self.load_latest_output(save_root, platform)
+                    output.command = command
+                    return output
+                except BaseException as exc:
+                    operation_error = exc
+                    raise
+                finally:
+                    if completed.returncode is None:
                         try:
-                            log_text = stderr_path.read_text(encoding="utf-8", errors="replace")
-                            checkpoint = latest_search_checkpoint(log_text, platform)
-                            if checkpoint:
-                                checkpoint_callback(*checkpoint)
-                        except OSError:
-                            pass
-                    sleep(1)
-
-                final_count = self._latest_content_count(save_root, platform)
-                if final_count != last_count and progress_callback:
-                    progress_callback(min(final_count, max_notes), max_notes)
-                if content_callback:
-                    self._emit_new_content(
-                        save_root,
-                        platform,
-                        seen_content_ids,
-                        content_callback,
-                    )
-
-                returncode = completed.returncode
-                if returncode is None:
-                    append_stop_error("process did not expose an exit code after stop")
-                elif not kill_sent and stop_reason != "external_stop_requested" and returncode != 0:
-                    raise_exit_failure(returncode)
-
-                # A caught platform limit must never look like successful completion.
-                terminal_log = stderr_path.read_text(encoding='utf-8', errors='replace') + stdout_path.read_text(encoding='utf-8', errors='replace')
-                from .crawler_route import raise_route_log_error
-                if 'PLATFORM_RATE_LIMITED' in terminal_log or 'REQUEST_SCHEDULER_WAIT_EXCEEDED' in terminal_log:
-                    raise CrawlerRateLimitError("平台请求额度或冷却限制已生效；保留已采集内容，请稍后继续")
-
-                # MediaCrawler may catch a platform response and exit cleanly;
-                # inspect its log marker even when the process return code is 0.
-                if stderr_path.exists() and "ACCOUNT_VERIFY" in stderr_path.read_text(
-                    encoding="utf-8", errors="replace"
-                ):
-                    error = CrawlerVerificationError("采集账号触发平台验证")
-                    error.account_risk_recorded = bool(route_context and getattr(route_context, 'account_risk_recorded', False))
-                    raise error
-
-                raise_route_log_error(terminal_log)
-                if 'COLLECTION_INCOMPLETE' in terminal_log:
-                    raise CrawlerCollectionIncompleteError(
-                        "采集未完成：详情、媒体或分页处理失败；已成功内容保留，请查看采集目录 douyin/collection_status 中的失败记录")
-
-                output = self.load_latest_output(save_root, platform)
-                output.command = command
-                return output
-            except BaseException as exc:
-                operation_error = exc
-                raise
+                            stop_process("exception_cleanup")
+                        except BaseException as cleanup_exc:
+                            append_stop_error(f"cleanup failed: {cleanup_exc}")
+                    if completed.returncode is None:
+                        append_stop_error("process still running after cleanup")
+                        cleanup_failed = True
+                    if spool and completed.returncode is not None:
+                        try:
+                            from .crawler_route import _stop_probe_process_group
+                            _stop_probe_process_group(completed)
+                            spool.cleanup(failed=True)
+                        except (OSError, RuntimeError) as cleanup_exc:
+                            append_stop_error(f"output cleanup failed: {type(cleanup_exc).__name__}")
+                            cleanup_failed = True
+                    route_pipe.close()
+                    if receipt_pipe:
+                        receipt_pipe.close()
+                    if route_context:
+                        route_context.child_active = completed.returncode is None
+                    if authority:
+                        authority.close()
+                    if cleanup_failed and operation_error is None:
+                        raise RuntimeError(
+                            f"MediaCrawler process cleanup failed: {stop_error}"
+                        )
+        finally:
+            # Setup failures happen before the inner process-consumption cleanup.
+            # Keep every private run and FD under this outer lifetime as well.
+            try:
+                if completed is not None and spool:
+                    from .crawler_route import _stop_probe_process_group
+                    _stop_probe_process_group(completed)
             finally:
-                if completed.returncode is None:
-                    try:
-                        stop_process("exception_cleanup")
-                    except BaseException as cleanup_exc:
-                        append_stop_error(f"cleanup failed: {cleanup_exc}")
-                if completed.returncode is None:
-                    append_stop_error("process still running after cleanup")
-                    cleanup_failed = True
-                route_pipe.close()
+                if authority:
+                    authority.close()
+                if route_pipe:
+                    route_pipe.close()
                 if receipt_pipe:
                     receipt_pipe.close()
-                if route_context:
-                    route_context.child_active = completed.returncode is None
-                if cleanup_failed and operation_error is None:
-                    raise RuntimeError(
-                        f"MediaCrawler process cleanup failed: {stop_error}"
-                    )
+            if spool:
+                if completed is None:
+                    spool.cleanup_unstarted()
+                else:
+                    spool.cleanup(failed=True)
 
     def run_xhs_search(self, **kwargs) -> CrawlOutput:
         return self.run_search(platform="xhs", **kwargs)
@@ -842,7 +940,8 @@ class MediaCrawlerAdapter:
         return self._build_runner()
 
     def _subprocess_env(self, auth_state: dict | None = None, *, platform: str = "", account_id: str = "") -> dict[str, str]:
-        env = os.environ.copy()
+        from .crawler_child_runtime import child_environment
+        env = child_environment() if platform == "dy" else os.environ.copy()
         for name in ("MEDIACRAWLER_PROXY_CONFIG_FD", "MEDIACRAWLER_PROXY_RECEIPT_FD", "MEDIACRAWLER_ROUTE_ACK_FD", "MEDIACRAWLER_MANAGED_ROUTE", "MEDIACRAWLER_PROXY_REQUIRED", "MEDIACRAWLER_PROXY_PROBE_BUDGET_ID", "MEDIACRAWLER_SOURCE_TASK_ID", "MEDIACRAWLER_SOURCE_BATCH_ID"):
             env.pop(name, None)
         for name in ("MEDIACRAWLER_ACCOUNT_ID", "MEDIACRAWLER_CLOAK_PROFILE_ROOT", "MEDIACRAWLER_DY_BROWSER_ENGINE", *scheduler_env()):
@@ -856,17 +955,14 @@ class MediaCrawlerAdapter:
         ]
         env["PATH"] = os.pathsep.join(part for part in path_parts if part)
         env.setdefault("EXECJS_RUNTIME", "Node")
-        # A Douyin CloakBrowser profile marked ``auth-imported`` owns the live
-        # credentials. MediaCrawler intentionally refuses to replay the older
-        # database snapshot into that profile, so passing the snapshot is both
-        # redundant and unsafe: a storage_state larger than Linux MAX_ARG_STRLEN
-        # makes execve fail with E2BIG before Python starts.
+        # A Firefox Profile owns its live session. Chromium-era database auth
+        # snapshots must never be imported into this new browser identity.
         profile_owns_auth = (
             platform == "dy"
             and bool(account_id)
             and account_profile_owns_auth(account_id)
         )
-        if auth_state is not None and not profile_owns_auth:
+        if auth_state is not None and platform != "dy" and not profile_owns_auth:
             payload = json.dumps(
                 auth_state,
                 ensure_ascii=False,
@@ -875,6 +971,9 @@ class MediaCrawlerAdapter:
             env[ACCOUNT_AUTH_STATE_ENV] = base64.b64encode(payload).decode("ascii")
         else:
             env.pop(ACCOUNT_AUTH_STATE_ENV, None)
+        if platform == "dy":
+            from .crawler_child_runtime import child_environment
+            return child_environment(env)
         return env
 
     def _build_runner(self) -> list[str]:

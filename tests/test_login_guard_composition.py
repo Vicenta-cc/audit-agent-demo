@@ -1,4 +1,4 @@
-"""Offline real TLS/proxy experiment for Playwright and CDP interception."""
+"""Offline real TLS/proxy experiment for Camoufox native navigation and context resource policies."""
 
 import json
 import os
@@ -15,7 +15,9 @@ from backend.audit_agent import crawler_route as app
 from test_managed_route_integration import managed, store_operation
 
 
-@pytest.mark.parametrize("mode", ["route_only", "cdp_only", "mixed"])
+@pytest.mark.parametrize(
+    "mode", ["native_only", "native_with_policy", "native_with_media_filter"]
+)
 def test_real_login_hydration_guard_composition(tmp_path, mode):
     import cv2
     from backend.audit_agent.crawler_account_store import CrawlerAccountStore
@@ -40,7 +42,7 @@ def test_real_login_hydration_guard_composition(tmp_path, mode):
                     "/bootstrap.js",
                     "/app.css",
                     "/qr.png",
-                }:
+                } and not self.path.startswith("/asset-"):
                     return super().do_GET()
                 with fixture.lock:
                     link = fixture.upstreams.get(self.client_address[1])
@@ -58,10 +60,13 @@ def test_real_login_hydration_guard_composition(tmp_path, mode):
                         proxy_authorization=self.headers.get("Proxy-Authorization"),
                     )
                 )
-                if self.path == "/bootstrap.js":
+                if self.path.startswith("/asset-"):
+                    content_type = "application/javascript"
+                    body = b"document.documentElement.dataset.loaded=String(Number(document.documentElement.dataset.loaded||0)+1)"
+                elif self.path == "/bootstrap.js":
                     time.sleep(0.15)
                     content_type = "application/javascript"
-                    body = b"window.hydrated=true;document.querySelector('#login').onclick=()=>{document.querySelector('#panel').style.display='block'}"
+                    body = b"document.documentElement.dataset.hydrated='true';document.querySelector('#login').onclick=()=>{document.querySelector('#panel').style.display='block'}"
                 elif self.path == "/app.css":
                     content_type = "text/css"
                     body = b"#login{width:80px;height:40px;background:red}"
@@ -74,7 +79,12 @@ def test_real_login_hydration_guard_composition(tmp_path, mode):
                         f'<html><head><link rel="stylesheet" href="{style_url}"></head><body><div id="login" role="button">登录</div>'
                         '<div id="panel" class="douyin_login_new_class" style="display:none;width:400px;height:300px">'
                         f'<div id="animate_qrcode_container"><img id="qr" src="{image_url}"></div></div>'
-                        f'<script src="{script_url}"></script></body></html>'
+                        f'<script src="{script_url}"></script>'
+                        + "".join(
+                            f'<script src="{fixture.url("/asset-" + str(i) + ".js", host="script")}"></script>'
+                            for i in range(40)
+                        )
+                        + "</body></html>"
                     ).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", content_type)
@@ -121,10 +131,7 @@ def test_real_login_hydration_guard_composition(tmp_path, mode):
 import asyncio,json,os,socket,sys
 from pathlib import Path
 from urllib.parse import urlsplit
-from cloakbrowser.config import get_binary_path
-assert Path(get_binary_path()).is_file()
-os.environ['CLOAKBROWSER_BINARY_PATH']=str(get_binary_path())
-os.environ['CLOAKBROWSER_AUTO_UPDATE']='false'
+import shutil,subprocess
 config=json.load(sys.stdin)
 original=socket.getaddrinfo
 def local_dns(host,*args,**kwargs):
@@ -132,28 +139,32 @@ def local_dns(host,*args,**kwargs):
  return original('127.0.0.1' if local else host,*args,**kwargs)
 socket.getaddrinfo=local_dns
 from tools.bound_proxy import initialize_bound_route,BoundProxySession
-from tools.cloak_browser import launch_account_context
+from tools.camoufox_browser import launch_account_context,profile_for
 from scripts import crawler_douyin_login_adapter as module
-allowed=module.document_allowed
-module.document_allowed=lambda url,top_level: urlsplit(url).hostname=='origin.proxy-test.invalid' or allowed(url,top_level=top_level)
 async def main():
  snap=initialize_bound_route()
  session=BoundProxySession(snap,echo_url=config['echo'],verify=config['ca'],budget_id='composition',policy=dict(min_interval=0,per_minute=1000,max_concurrency=1,media_interval=0,cooldown_seconds=1))
- context,profile=await launch_account_context(snap.account_id,Path(config['profiles']),headless=True,route_snapshot=snap,bound_proxy_session=session,browser_args=['--ignore-certificate-errors-spki-list='+config['spki'],'--host-resolver-rules=MAP *.proxy-test.invalid 127.0.0.1','--proxy-bypass-list=<-loopback>'])
+ profile=profile_for(snap.account_id,Path(config['profiles']),'156.0.1-beta.36')
+ certutil=shutil.which('certutil')
+ assert certutil
+ subprocess.run([certutil,'-N','-d','sql:'+str(profile['directory']),'--empty-password'],check=True,capture_output=True)
+ subprocess.run([certutil,'-A','-d','sql:'+str(profile['directory']),'-n','fixture CA','-t','C,,','-i',config['ca']],check=True,capture_output=True)
+ context,profile=await launch_account_context(snap.account_id,Path(config['profiles']),route_snapshot=snap,bound_proxy_session=session)
+
  adapter=None
  try:
-  if config['mode']=='cdp_only':
-   await context.unroute(session._echo_pattern,session._echo_context_handler)
   page=await context.new_page()
-  adapter=module.DouyinLoginAdapter(context,page,bound_proxy_session=session)
-  if config['mode']!='route_only':await adapter.install()
+  adapter=module.DouyinLoginAdapter(context,page,bound_proxy_session=session,block_media=config["mode"]=="native_with_media_filter")
+  if config['mode']!='native_only':await adapter.install()
   await page.goto(config['target'],wait_until='domcontentloaded',timeout=5000)
-  await page.wait_for_function('window.hydrated===true && document.readyState==="complete"',timeout=5000)
+  await page.wait_for_function("document.documentElement.dataset.hydrated==='true' && document.readyState==='complete'",timeout=5000)
   await adapter.open_login()
   result=await adapter.observe()
-  evidence=dict(mode=config['mode'],ready=await page.evaluate('document.readyState'),hydrated=await page.evaluate('window.hydrated'),phase=result['phase'],blocked_documents=adapter.blocked_documents)
+  evidence=dict(mode=config['mode'],ready=await page.evaluate('document.readyState'),hydrated=await page.evaluate("document.documentElement.dataset.hydrated==='true'"),phase=result['phase'],blocked_documents=adapter.blocked_documents)
   print(json.dumps(evidence),flush=True)
   assert result['phase']=='qr_ready'
+  assert await page.evaluate('Number(document.documentElement.dataset.loaded)')==40
+  assert session.receipt is not None
  finally:
   if adapter:await adapter.close()
   await context.close()
@@ -168,21 +179,52 @@ asyncio.run(main())
                 [str(Path(__file__).resolve().parents[1]), crawler]
             ),
             "MEDIACRAWLER_ACCOUNT_ID": account["id"],
+            "MEDIACRAWLER_CAMOUFOX_PROFILE_GENERATION": "fixture-generation",
+            "MEDIACRAWLER_CAMOUFOX_BROWSER_VERSION": "156.0.1-beta.36",
             "MEDIACRAWLER_PROXY_REQUIRED": "true",
             "HTTP_PROXY": "http://127.0.0.1:1",
             "HTTPS_PROXY": "http://127.0.0.1:1",
             "ALL_PROXY": "http://127.0.0.1:1",
             "NO_PROXY": "",
         }
+        from backend.audit_agent.crawler_request_authority import open_authority
+
+        authority = open_authority(
+            snap,
+            crawler_root=Path(crawler),
+            session_options=dict(
+                echo_url=fixture.url(host="echo"),
+                verify=fixture.ca,
+                budget_id="composition",
+                initial_ack=lambda: store.ticket(
+                    snap.operation_id,
+                    owner_id=snap.owner_id,
+                    snapshot_digest=snap.snapshot_digest,
+                    context_id=snap.context_id,
+                ),
+                policy=dict(
+                    min_interval=0,
+                    per_minute=1000,
+                    max_concurrency=1,
+                    media_interval=0,
+                    cooldown_seconds=1,
+                ),
+            ),
+        )
+        env.update(authority.env)
         child = subprocess.Popen(
             [
-                "/Users/hose/project/zhanyun/media-crawler/.venv/bin/python",
+                os.environ["LOGIN_BROWSER_TEST_PYTHON"],
                 "-c",
                 script,
             ],
             env=env,
             cwd=crawler,
-            pass_fds=(*route_pipe.pass_fds, *receipt_pipe.pass_fds),
+            pass_fds=(
+                *route_pipe.pass_fds,
+                *receipt_pipe.pass_fds,
+                *authority.pass_fds,
+            ),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -190,17 +232,18 @@ asyncio.run(main())
             start_new_session=True,
         )
         try:
+            authority.bind_child(child.pid)
             route_pipe.start(child)
             receipt_pipe.start(child)
             config = dict(
                 mode=mode,
                 echo=fixture.url(host="echo"),
-                target=fixture.url("/hydration"),
+                target=fixture.url("/hydration", host="www.douyin.com"),
                 ca=fixture.ca,
                 spki=fixture.spki,
                 profiles=str(tmp_path / "profiles"),
             )
-            out, err = child.communicate(json.dumps(config), timeout=25)
+            out, err = child.communicate(json.dumps(config), timeout=45)
             assert fixture.password not in out + err
             assert child.returncode == 0, err[-2500:]
             evidence = json.loads(out.strip().splitlines()[-1])
@@ -222,3 +265,4 @@ asyncio.run(main())
                 child.wait()
             route_pipe.close()
             receipt_pipe.close()
+            authority.close()

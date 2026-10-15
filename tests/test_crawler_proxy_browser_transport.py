@@ -1,13 +1,13 @@
 """Real pinned browser and explicit bound route over local forward + CONNECT."""
 import pytest
-from proxy_fixture import local_proxy, run_browser, run_runtime_browser
+from proxy_fixture import local_proxy, run_browser, run_runtime_browser, prepare_camoufox_account
 
 
 def test_browser_forward_connect_reopen_and_independent_identity(tmp_path):
     with local_proxy(tmp_path/'network') as fixture:
         result=run_browser(fixture,tmp_path)
         assert result['seed_independent'] is True
-        assert result['reopen_used']==6
+        assert result['reopen_used']==8
         assert result['ignore_https_errors'] is False
         fixture.assert_routed()
         assert {'forward','CONNECT'} <= {e['kind'] for e in fixture.events}
@@ -15,7 +15,7 @@ def test_browser_forward_connect_reopen_and_independent_identity(tmp_path):
         assert any(o['path']=='/final' for o in fixture.origins)
         assert any(o['path']=='/image' for o in fixture.origins)
         echoes=[o for o in fixture.origins if o['path']=='/echo']
-        assert len(echoes)==8
+        assert len(echoes)==10
         assert all(not o['cookie'] and not o['authorization'] for o in echoes)
 
 
@@ -111,13 +111,12 @@ def test_maintenance_api_uses_real_crawler_child_and_releases_resources(tmp_path
     from backend.audit_agent import crawler_route
     from backend.task_admission.resources import proxy_edit_lease, acquire_account_handle
 
-    assert importlib.util.find_spec('playwright') is None
-    assert importlib.util.find_spec('cloakbrowser') is None
     crawler=Path(os.environ['MEDIACRAWLER_DIR'])
     with local_proxy(tmp_path/'network') as fixture:
         for name,value in dict(media_crawler_dir=crawler,crawler_login_python=Path(os.environ['LOGIN_BROWSER_TEST_PYTHON']),
                               crawler_proxy_enabled=True,app_auth_mode='disabled',request_scheduler_db=tmp_path/'scheduler.sqlite3',
-                              crawler_browser_profile_root=tmp_path/'profiles',task_resource_lock_dir=tmp_path/'locks',
+                              crawler_browser_profile_root=tmp_path/'logical',crawler_camoufox_state_root=tmp_path/'state',
+                              crawler_camoufox_browser_version='156.0.1-beta.36',task_resource_lock_dir=tmp_path/'locks',
                               crawler_proxy_echo_url=fixture.url(host='echo'),crawler_proxy_probe_ttl=300,crawler_proxy_probe_budget=96).items():
             monkeypatch.setattr(settings,name,value)
         accounts=CrawlerAccountStore(tmp_path/'accounts.sqlite3')
@@ -132,21 +131,12 @@ def test_maintenance_api_uses_real_crawler_child_and_releases_resources(tmp_path
         # creates its real session/browser, emits results and closes normally.
         helper=Path(crawler_route.__file__).resolve().parents[2]/'scripts/crawler_proxy_probe.py'
         wrapper=tmp_path/'trusted_probe.py'
+        prepared=prepare_camoufox_account(fixture,settings.crawler_camoufox_state_root/'profiles',account['id'],account['profile_generation'])
+        monkeypatch.setattr(settings,'crawler_camoufox_executable',prepared['executable'])
         wrapper.write_text('''import os,sys,runpy,functools
-from pathlib import Path
 sys.path.insert(0,os.environ['MEDIACRAWLER_DIR'])
-from cloakbrowser.config import get_binary_path
-assert Path(get_binary_path()).is_file()
-os.environ['CLOAKBROWSER_BINARY_PATH']=str(get_binary_path())
-os.environ['CLOAKBROWSER_AUTO_UPDATE']='false'
 import tools.bound_proxy as transport
-import tools.cloak_browser as browser
 transport.BoundProxySession=functools.partial(transport.BoundProxySession,verify=os.environ['FIXTURE_CA'])
-original=browser.launch_account_context
-async def trusted(*args,**kwargs):
- kwargs['browser_args']=['--ignore-certificate-errors-spki-list='+os.environ['FIXTURE_SPKI'],'--host-resolver-rules=MAP *.proxy-test.invalid 127.0.0.1','--proxy-bypass-list=<-loopback>']
- return await original(*args,**kwargs)
-browser.launch_account_context=trusted
 runpy.run_path(os.environ['FIXTURE_PROBE_SCRIPT'],run_name='__main__')
 ''')
         original_popen=subprocess.Popen;children=[];commands=[]
@@ -157,7 +147,7 @@ runpy.run_path(os.environ['FIXTURE_PROBE_SCRIPT'],run_name='__main__')
             assert command[1]==str(helper)
             assert fixture.password not in json.dumps(command)+json.dumps(kwargs['env'])
             commands.append(command)
-            env={**kwargs['env'],'FIXTURE_CA':fixture.ca,'FIXTURE_SPKI':fixture.spki,'FIXTURE_PROBE_SCRIPT':str(helper)}
+            env={**kwargs['env'],'FIXTURE_CA':fixture.ca,'FIXTURE_PROBE_SCRIPT':str(helper)}
             process=original_popen([command[0],str(wrapper),*command[2:]],**{**kwargs,'env':env})
             children.append(process)
             return process
@@ -222,12 +212,15 @@ def test_live_child_receipt_borrowed_stream_downloads_share_original_route(tmp_p
     import tools.bound_proxy as transport
     with local_proxy(tmp_path/'network') as fixture:
         for name,value in dict(media_crawler_dir=crawler,crawler_proxy_enabled=True,app_auth_mode='disabled',
-                               request_scheduler_db=tmp_path/'scheduler.sqlite3',crawler_browser_profile_root=tmp_path/'profiles',
+                               request_scheduler_db=tmp_path/'scheduler.sqlite3',crawler_browser_profile_root=tmp_path/'logical',crawler_camoufox_state_root=tmp_path/'state',
+                               crawler_camoufox_browser_version='156.0.1-beta.36',
                                task_resource_lock_dir=tmp_path/'locks',crawler_proxy_echo_url=fixture.url(host='echo'),
                                crawler_proxy_probe_ttl=300,crawler_proxy_probe_budget=96).items():
             monkeypatch.setattr(settings,name,value)
         accounts=CrawlerAccountStore(tmp_path/'accounts.sqlite3')
         cipher=AuthStateCipher('fixture-only-key')
+        import backend.audit_agent.auth_state_cipher as cipher_module
+        monkeypatch.setattr(cipher_module,'auth_state_cipher',cipher)
         proxies=CrawlerProxyStore(accounts,cipher=cipher)
         account=accounts.create(platform='dy',display_name='local-fixture')
         resource=proxies.create(display_name='local-fixture',endpoint=fixture.server,
@@ -243,6 +236,7 @@ def test_live_child_receipt_borrowed_stream_downloads_share_original_route(tmp_p
         assert bundle.acquire(max_active_accounts=1)
         bundle.child_active=True
         bundle.proxy_store=proxies
+        bundle.account_store=accounts
         cancel=threading.Event()
         original_session=transport.BoundProxySession
         def trusted_session(*args,**kwargs):

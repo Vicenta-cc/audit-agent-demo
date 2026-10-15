@@ -1,3 +1,4 @@
+from crawler_auth_fixtures import mark_camoufox_login_verified
 """Private platform accounts: no sharing, including administrator task selection."""
 import sqlite3
 from types import SimpleNamespace
@@ -171,6 +172,8 @@ def test_public_pool_visibility_management_and_authorization(tmp_path, monkeypat
     assert not auth.owns_crawler_account(users["admin"]["id"], public_id)
     accounts.save_auth_state(private_id, "private-ciphertext")
     accounts.save_auth_state(public_id, "public-ciphertext")
+    mark_camoufox_login_verified(accounts, private_id)
+    mark_camoufox_login_verified(accounts, public_id)
 
     alice_payload = clients["alice"].get("/api/crawler-accounts").json()
     assert [item["id"] for item in alice_payload["items"]] == [private_id]

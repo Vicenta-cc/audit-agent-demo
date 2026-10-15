@@ -15,6 +15,7 @@ from test_investigation_creation_m3 import (
 )
 
 from backend import main
+from crawler_auth_fixtures import mark_camoufox_login_verified
 from backend.application_auth.store import AuthStore
 from backend.audit_agent.config import settings
 from backend.investigation_creation.contracts import (
@@ -1071,22 +1072,109 @@ def test_admin_unlimited_quota_preserves_active_slot_and_role_changes(stack):
     enqueue(store, owner, "promoted")
 
 
-def test_nonadmin_direct_scheduler_checks_account_permission_without_supplier_acl(stack,tmp_path,monkeypatch):
+@pytest.mark.parametrize('route_mode,access_scope,expected',[
+    ('direct_degraded','public',True),
+    ('legacy_direct','public',True),
+    ('legacy_direct','private',False),
+])
+def test_nonadmin_direct_scheduler_checks_account_permission_without_supplier_acl(stack,tmp_path,monkeypatch,route_mode,access_scope,expected):
     from backend.audit_agent.crawler_account_store import CrawlerAccountStore
     from backend.task_admission.scheduler import select_account
     creation,auth,users=stack
     for name,value in dict(crawler_safety_enabled=True,crawler_proxy_enabled=True,crawler_direct_degrade_enabled=True,
         task_resource_lock_dir=tmp_path/'locks',request_scheduler_db=tmp_path/'gate.db').items():monkeypatch.setattr(settings,name,value)
     accounts=CrawlerAccountStore(creation.db_path)
-    account=accounts.create(platform='dy',display_name='direct',access_scope='public')
+    account=accounts.create(platform='dy',display_name='direct',access_scope=access_scope)
     accounts.save_auth_state(account['id'],'fixture-ciphertext')
+    mark_camoufox_login_verified(accounts,account['id'])
     accounts.observe_shared_exit('198.51.100.8',service_exit=True)
-    accounts.set_route_state(account['id'],state='active',route_mode='direct_degraded',shared_exit_key='198.51.100.8',generation=1)
-    accounts.mark_direct_validated(account['id'],1)
+    accounts.set_route_state(account['id'],state='active',route_mode=route_mode,shared_exit_key='198.51.100.8',generation=1)
+    if route_mode=='direct_degraded':
+        accounts.mark_direct_validated(account['id'],1)
+    assert account['id'] in {item['id'] for item in accounts.available_accounts('dy')}
     assert not auth.principal_for_user(users[0]).is_admin
     enqueue(creation.admission,users[0],key='direct',payload={'request':{'platform':'dy','run_crawler':True}})
     row=creation.admission.for_task('task:direct')
     worker=SimpleNamespace(store=creation,execution_adapter=SimpleNamespace(crawler_account_store=accounts))
     with select_account(worker,row) as selected:
+        assert selected is expected
+    assert creation.admission.for_task('task:direct')['resource_account_id']==(account['id'] if expected else '')
+
+
+
+def test_nonadmin_scheduler_still_requires_real_supplier_proxy_acl(stack,tmp_path,monkeypatch):
+    import time
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+    from backend.audit_agent.crawler_route import get_proxy_store
+    from backend.task_admission.scheduler import select_account
+    creation,auth,users=stack
+    for name,value in dict(crawler_safety_enabled=True,crawler_proxy_enabled=True,
+        task_resource_lock_dir=tmp_path/'locks',request_scheduler_db=tmp_path/'gate.db').items():
+        monkeypatch.setattr(settings,name,value)
+    accounts=CrawlerAccountStore(creation.db_path)
+    account=accounts.create(platform='dy',display_name='supplier-bound',access_scope='public')
+    accounts.save_auth_state(account['id'],'fixture-ciphertext')
+    mark_camoufox_login_verified(accounts,account['id'])
+    proxies=get_proxy_store(accounts)
+    proxy=proxies.create(display_name='supplier',endpoint={'scheme':'http','host':'proxy.invalid','port':8080},
+        expires_at=time.time()+3600)
+    proxies.bind(account['id'],proxy['id'],expected_binding_revision=0,route_mode='proxy_required')
+    proxies.observe_exit(proxy['id'],'198.51.100.19')
+    with accounts._connect() as db:
+        db.execute('UPDATE crawler_accounts SET validated_proxy_binding_revision=binding_revision,validated_proxy_config_revision=? WHERE id=?',
+            (proxy['config_revision'],account['id']))
+    assert [item['id'] for item in accounts.available_accounts('dy')]==[account['id']]
+    assert not auth.principal_for_user(users[0]).is_admin
+    enqueue(creation.admission,users[0],key='supplier',payload={'request':{'platform':'dy','run_crawler':True}})
+    row=creation.admission.for_task('task:supplier')
+    worker=SimpleNamespace(store=creation,execution_adapter=SimpleNamespace(crawler_account_store=accounts))
+    with select_account(worker,row) as selected:
+        assert selected is False
+    auth.grant_resource(user_id=users[0],resource_type='crawler-proxy',resource_id=proxy['id'],permission='use',actor_user_id='fixture-admin')
+    with select_account(worker,row) as selected:
         assert selected is True
-    assert creation.admission.for_task('task:direct')['resource_account_id']==account['id']
+    assert creation.admission.for_task('task:supplier')['resource_account_id']==account['id']
+
+
+@pytest.mark.parametrize('outcome',['published','stopped'])
+def test_auth_disabled_local_owner_runs_full_admission_lifecycle_without_fake_user(tmp_path,monkeypatch,outcome):
+    from backend.investigation_creation.principal import LocalPrincipalProvider
+    from backend.task_admission.store import AdmissionStore
+    from backend.task_admission.execution import execution_context,assert_execution
+    monkeypatch.setattr(settings,'app_auth_mode','disabled')
+    missing_auth_db=tmp_path/'absent-auth.sqlite3'
+    store=AdmissionStore(tmp_path/'control.sqlite3',auth_db=missing_auth_db)
+    owner=LocalPrincipalProvider()().id
+    assert store.enabled is False
+    assert store.summary(owner)['unlimited'] is False
+    row=enqueue(store,owner,key='local-lifecycle',payload={'run_crawler':True})
+    duplicate=enqueue(store,owner,key='local-lifecycle',payload={'run_crawler':True})
+    assert duplicate['id']==row['id']
+    store.start(row['task_id'],'worker-token')
+    with execution_context(store,row['task_id'],'worker-token'):
+        assert_execution(row['job_id'])
+        with pytest.raises(AdmissionError) as rejected:
+            assert_execution(row['job_id'],(store,row['task_id'],'stale-token'))
+        assert rejected.value.code=='EXECUTION_FENCED'
+        assert store.collection_launch(row['task_id'],'worker-token') is True
+        assert store.collection_launch(row['task_id'],'worker-token') is False
+        if outcome=='published':
+            with store.publication(row['job_id'],'local-report','worker-token'):
+                pass
+            assert store.settle(row['task_id'],report_id='local-report')
+        else:
+            assert store.settle(row['task_id'],stopped=True)
+        with pytest.raises(AdmissionError) as ended:
+            assert_execution(row['job_id'])
+        assert ended.value.code=='EXECUTION_FENCED'
+    terminal=store.for_task(row['task_id'])
+    assert terminal['state']==('SUCCEEDED' if outcome=='published' else 'RELEASED')
+    assert terminal['charge_state']=='CHARGED'
+    replay=enqueue(store,owner,key='local-lifecycle',payload={'run_crawler':True})
+    assert replay['id']==terminal['id'] and replay['state']==terminal['state']
+    summary=store.summary(owner)
+    assert summary['used']==1 and summary['reserved']==0 and summary['active_task'] is None
+    assert summary['unlimited'] is False
+    with store.connect() as db:
+        assert not db.execute("SELECT 1 FROM sqlite_master WHERE name='app_users'").fetchone()
+    assert not missing_auth_db.exists()

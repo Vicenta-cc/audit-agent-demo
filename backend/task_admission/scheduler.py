@@ -96,7 +96,7 @@ def select_account(worker, row):
                 if platform == "dy" and requires_route:
                     snapshot = resolve_account_route(account["id"], account_store=account_store)
                     if snapshot:
-                        authorize_route_owner(account["id"], None if snapshot.route_mode=="direct_degraded" else snapshot.proxy_id, row["owner_id"], account_store=account_store)
+                        authorize_route_owner(account["id"], None if snapshot.route_mode in {"direct_degraded", "legacy_direct"} else snapshot.proxy_id, row["owner_id"], account_store=account_store)
             except CollectionRouteError as exc:
                 waiting(worker.store.admission, row, exc.code, account["id"])
                 continue

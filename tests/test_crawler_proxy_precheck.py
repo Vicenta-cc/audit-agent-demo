@@ -37,10 +37,9 @@ def test_direct_connection_trap_detects_bypass(tmp_path):
         assert not fixture.origins and not fixture.events
 
 
-def test_browser_trust_is_limited_to_explicit_test_leaf_spki(tmp_path):
-    import base64
+def test_browser_tls_requires_explicit_profile_local_test_ca(tmp_path):
     with local_proxy(tmp_path) as fixture:
-        result=run_browser(fixture,tmp_path,mode='probe',spki=base64.b64encode(bytes(32)).decode())
+        result=run_browser(fixture,tmp_path,mode='probe',trust_browser_ca=False)
         assert result['error']=='PROXY_UNAVAILABLE'
         # The failed pair may use its reserved HTTP attempt to diagnose auth;
         # that trusted client is allowed one echo, the browser must reach none.

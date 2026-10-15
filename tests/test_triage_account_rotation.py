@@ -58,7 +58,7 @@ def env(tmp_path, monkeypatch):
         account = store.create(platform="dy", display_name=name, access_scope=scope)
         store.save_auth_state(account["id"], cipher.encrypt({"account": name}))
         with store._connect() as conn:     # 不是新登录，避免慢速模式干扰断言
-            conn.execute("UPDATE crawler_accounts SET auth_state_updated_at='2026-01-01T00:00:00' WHERE id=?",
+            conn.execute("UPDATE crawler_accounts SET auth_state_updated_at='2026-01-01T00:00:00', auth_source_generation=profile_generation WHERE id=?",
                          (account["id"],))
         return store.get(account["id"])
 

@@ -1,4 +1,5 @@
 import subprocess
+from contextlib import contextmanager
 import sys
 from types import SimpleNamespace
 from pathlib import Path
@@ -6,6 +7,33 @@ from pathlib import Path
 import pytest
 
 from backend.task_admission import resources
+
+
+@contextmanager
+def preserve_crawler_contract_modules():
+    """Temporary runtime fixtures must not replace live contract class identity."""
+    import importlib
+    from backend.audit_agent import crawler_route
+    contract = crawler_route.route_contract()
+    original_path = list(sys.path)
+    sys.path.insert(0,str(Path(contract.__file__).resolve().parents[1]))
+    package = importlib.import_module('tools')
+    # Load dependent classes against the canonical contract before selecting a
+    # fake crawler root. Their module globals must retain this exact object.
+    importlib.import_module('tools.bound_proxy')
+    try:
+        yield
+    finally:
+        sys.path[:] = original_path
+        sys.modules['tools.collection_route'] = contract
+        package.collection_route = contract
+        crawler_route._load_contract.cache_clear()
+
+
+@pytest.fixture
+def temporary_crawler_contract_scope():
+    with preserve_crawler_contract_modules():
+        yield
 
 
 @pytest.fixture
@@ -325,7 +353,7 @@ def test_parent_login_commit_marks_frozen_route_atomically(tmp_path, health_chan
         assert not result['result']['account']['needs_proxy_login_validation']
 
 
-def test_enabled_proxy_rejects_unbound_legacy_login_and_collection_before_spawn(tmp_path, monkeypatch):
+def test_legacy_login_disabled_and_unbound_route_is_explicit_direct(tmp_path, monkeypatch):
     from backend.audit_agent import crawler_route
     from backend.audit_agent.config import settings
     from backend.audit_agent.crawler_account_store import CrawlerAccountStore
@@ -344,20 +372,18 @@ def test_enabled_proxy_rejects_unbound_legacy_login_and_collection_before_spawn(
         pytest.fail('unbound login spawned a network-capable child')
     monkeypatch.setattr(subprocess,'Popen',spawn)
     legacy = CrawlerAccountLoginManager(store=accounts,cipher=AuthStateCipher('fixture'))
-    with pytest.raises(crawler_route.CollectionRouteError,match='PROXY_UNAVAILABLE'):
+    with pytest.raises(ValueError,match='Login V2'):
         legacy.start(account)
-    v2 = CrawlerLoginV2Manager(store=accounts,cipher=AuthStateCipher('fixture'),process_factory=spawn)
-    with pytest.raises(crawler_route.CollectionRouteError,match='PROXY_UNAVAILABLE'):
-        v2.start(account,user_id='owner',app_session_id='session',owner_token='x'*32,request_key='request')
-    for probe in (False,True):
-        with pytest.raises(crawler_route.CollectionRouteError,match='PROXY_UNAVAILABLE'):
-            crawler_route.acquire_route_execution(account['id'],'run','owner',account_store=accounts,allow_probe=probe)
+    # An unbound account now has an explicit managed direct route. Manual V2
+    # may establish its first observed exit through the guarded probe path.
+    direct = crawler_route.resolve_account_route(account['id'],account_store=accounts)
+    assert direct.route_mode=='legacy_direct'
     assert starts==[]
     handle=resources.acquire_account_handle('dy',account['id'])
     assert handle is not None
     handle.close()
     monkeypatch.setattr(settings,'crawler_proxy_enabled',False)
-    assert crawler_route.resolve_account_route(account['id'],account_store=accounts) is None
+    assert crawler_route.resolve_account_route(account['id'],account_store=accounts).route_mode=='legacy_direct'
 
 
 def test_asset_hop_absolute_deadline_prevents_network_after_slow_helper_creation(tmp_path, monkeypatch):
@@ -470,7 +496,7 @@ def test_v2_reader_preserves_route_error_classification(tmp_path, monkeypatch, f
 
 
 @pytest.mark.parametrize("known_exit", [None, "198.51.100.9"])
-def test_maintenance_probe_uses_crawler_interpreter_without_app_browser_dependencies(tmp_path, monkeypatch, known_exit):
+def test_maintenance_probe_uses_crawler_interpreter_without_app_browser_dependencies(tmp_path, monkeypatch, known_exit, temporary_crawler_contract_scope):
     import builtins
     import shutil
     import time
@@ -485,6 +511,7 @@ def test_maintenance_probe_uses_crawler_interpreter_without_app_browser_dependen
     (crawler/'tools').mkdir(parents=True)
     (crawler/'tools/__init__.py').write_text('')
     shutil.copyfile(crawler_route.route_contract().__file__,crawler/'tools/collection_route.py')
+    shutil.copyfile(Path(crawler_route.route_contract().__file__).with_name('authority_ledger.py'),crawler/'tools/authority_ledger.py')
     (crawler/'tools/bound_proxy.py').write_text('''from tools.collection_route import ProbeReceipt
 import time
 class BoundProxySession:
@@ -493,7 +520,7 @@ class BoundProxySession:
   self.receipt=ProbeReceipt(snapshot.proxy_id,snapshot.config_revision,'fixture-context','203.0.113.1',time.time())
  async def close(self): pass
 ''')
-    (crawler/'tools/cloak_browser.py').write_text('''import sys
+    (crawler/'tools/camoufox_browser.py').write_text('''import sys
 async def launch_account_context(account_id,root,*,headless,route_snapshot,bound_proxy_session):
  assert sys.executable.endswith('python') or 'Python' in sys.executable or 'python3' in sys.executable
  class Context:
@@ -505,17 +532,17 @@ async def launch_account_context(account_id,root,*,headless,route_snapshot,bound
     monkeypatch.setattr(settings,'crawler_browser_profile_root',tmp_path/'profiles')
     original_import=builtins.__import__
     def app_without_browser(name,*args,**kwargs):
-        if name.startswith(('playwright','cloakbrowser','tools.bound_proxy','tools.cloak_browser')):
+        if name.startswith(('playwright','camoufox','tools.bound_proxy','tools.camoufox_browser')):
             raise ModuleNotFoundError(name)
         return original_import(name,*args,**kwargs)
     monkeypatch.setattr(builtins,'__import__',app_without_browser)
     receipt=crawler_route._run_maintenance_probe(SimpleNamespace(snapshot=snapshot,
-        account_id='a',execution_id='maintenance-fixture',pass_fds=()),timeout=3)
+        account_id='a',execution_id='maintenance-fixture',pass_fds=(),account_store=SimpleNamespace(get=lambda account_id: {'profile_engine':'camoufox','profile_generation':'fixture-generation'})),timeout=3)
     assert receipt.ip=='203.0.113.1'
     assert receipt.context_id=='fixture-context'
 
 
-def test_maintenance_probe_missing_configured_dependency_is_safe_and_releases_child(tmp_path,monkeypatch):
+def test_maintenance_probe_missing_configured_dependency_is_safe_and_releases_child(tmp_path,monkeypatch,temporary_crawler_contract_scope):
     import shutil
     from backend.audit_agent import crawler_route
     from backend.audit_agent.config import settings
@@ -524,15 +551,16 @@ def test_maintenance_probe_missing_configured_dependency_is_safe_and_releases_ch
     (crawler/'tools').mkdir(parents=True)
     (crawler/'tools/__init__.py').write_text('')
     shutil.copyfile(crawler_route.route_contract().__file__,crawler/'tools/collection_route.py')
+    shutil.copyfile(Path(crawler_route.route_contract().__file__).with_name('authority_ledger.py'),crawler/'tools/authority_ledger.py')
     # Deliberately absent bound_proxy/browser dependency in selected child runtime.
     monkeypatch.setattr(settings,'media_crawler_dir',crawler)
     monkeypatch.setattr(settings,'crawler_login_python',Path(sys.executable))
     with pytest.raises(crawler_route.CollectionRouteError,match='PROXY_UNAVAILABLE'):
         crawler_route._run_maintenance_probe(SimpleNamespace(snapshot=snapshot,
-            account_id='a',execution_id='maintenance-fixture',pass_fds=()),timeout=3)
+            account_id='a',execution_id='maintenance-fixture',pass_fds=(),account_store=SimpleNamespace(get=lambda account_id: {'profile_engine':'camoufox','profile_generation':'fixture-generation'})),timeout=3)
 
 
-def test_maintenance_probe_crashed_leader_cleans_live_descendant_lease(locks,tmp_path,monkeypatch):
+def test_maintenance_probe_crashed_leader_cleans_live_descendant_lease(locks,tmp_path,monkeypatch,temporary_crawler_contract_scope):
     import os
     import shutil
     import time
@@ -543,6 +571,7 @@ def test_maintenance_probe_crashed_leader_cleans_live_descendant_lease(locks,tmp
     (crawler/'tools').mkdir(parents=True)
     (crawler/'tools/__init__.py').write_text('')
     shutil.copyfile(crawler_route.route_contract().__file__,crawler/'tools/collection_route.py')
+    shutil.copyfile(Path(crawler_route.route_contract().__file__).with_name('authority_ledger.py'),crawler/'tools/authority_ledger.py')
     (crawler/'tools/bound_proxy.py').write_text('''import os,signal,time
 from pathlib import Path
 class BoundProxySession:
@@ -551,17 +580,18 @@ class BoundProxySession:
   if pid==0:
    os.close(1);os.close(2)
    signal.signal(signal.SIGTERM,signal.SIG_IGN)
-   Path(os.environ['FIXTURE_DESCENDANT_PID']).write_text(str(os.getpid()))
+   Path(FIXTURE_PIDFILE).write_text(str(os.getpid()))
    while True: time.sleep(1)
   time.sleep(.1)
   os._exit(1)
-''')
-    (crawler/'tools/cloak_browser.py').write_text('async def launch_account_context(*args,**kwargs): raise AssertionError()')
+'''.replace('FIXTURE_PIDFILE',repr(str(tmp_path/'descendant.pid'))))
+    (crawler/'tools/camoufox_browser.py').write_text('async def launch_account_context(*args,**kwargs): raise AssertionError()')
     monkeypatch.setattr(settings,'media_crawler_dir',crawler)
     monkeypatch.setattr(settings,'crawler_login_python',Path(sys.executable))
     pidfile=tmp_path/'descendant.pid'
     monkeypatch.setenv('FIXTURE_DESCENDANT_PID',str(pidfile))
     active=resources.ExecutionLeaseBundle('maintenance-fixture','owner','a',snapshot)
+    active.account_store=SimpleNamespace(get=lambda account_id: {'profile_engine':'camoufox','profile_generation':'fixture-generation'})
     assert active.acquire()
     try:
         with pytest.raises(crawler_route.CollectionRouteError,match='PROXY_UNAVAILABLE'):
@@ -645,3 +675,33 @@ def test_bound_session_factory_explicit_login_bootstrap_does_not_change_other_co
     assert captured[0][1]['login_bootstrap'] is login_bootstrap
     assert captured[0][1]['trial_id']==trial_id
     assert captured[0][1]['stop_checker']() is False
+
+
+
+def test_temporary_crawler_runtime_restores_receipt_class_identity(tmp_path):
+    import shutil
+    from dataclasses import asdict
+    from backend.audit_agent import crawler_route
+    contract=crawler_route.route_contract()
+    with preserve_crawler_contract_modules():
+        from tools.bound_proxy import BoundProxySession
+    snapshot=frozen_route(tmp_path)
+    session=BoundProxySession(snapshot,authority_owner=True,echo_url='https://echo.invalid/ip',
+        budget_id='contract-isolation',policy=dict(min_interval=0,per_minute=100,max_concurrency=1,media_interval=0,cooldown_seconds=1))
+    receipt=session.guard.confirm_pair('context','198.51.100.1','198.51.100.1')
+    session.context_id='context'
+    alternate=tmp_path/'alternate_collection_route.py'
+    shutil.copyfile(contract.__file__,alternate)
+    with preserve_crawler_contract_modules():
+        other=crawler_route._load_contract(str(alternate))
+        assert sys.modules['tools.collection_route'] is other
+        assert crawler_route.route_contract() is contract
+        session.receipt=other.ProbeReceipt(**asdict(receipt))
+        # Identical fields from a different class must still fail the original
+        # receipt guard; test isolation fixes the module state, not that guard.
+        with pytest.raises(contract.CollectionRouteError,match='PROXY_REVISION_MISMATCH'):
+            session._make_gate()
+    assert sys.modules['tools.collection_route'] is contract
+    assert crawler_route.route_contract() is contract
+    session.receipt=sys.modules['tools.collection_route'].ProbeReceipt(**asdict(receipt))
+    assert session._make_gate().scope_ids

@@ -1,3 +1,4 @@
+from crawler_auth_fixtures import mark_camoufox_login_verified
 import sqlite3
 import tempfile
 import unittest
@@ -83,6 +84,8 @@ class CrawlerAccountStoreTest(unittest.TestCase):
         )
         self.store.save_auth_state(private["id"], "private-state")
         self.store.save_auth_state(public["id"], "public-state")
+        mark_camoufox_login_verified(self.store, private["id"])
+        mark_camoufox_login_verified(self.store, public["id"])
 
         available = self.store.available_accounts("dy")
 

@@ -407,7 +407,9 @@ class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
                 with self.assertRaises(CrawlerVerificationError):
                     adapter._run_command(
                         command=["python", "main.py"], save_root=Path(temp_dir) / "output",
-                        platform="dy", account_id="fixture-a", max_notes=1, progress_callback=None,
+                        # Marker classification is transport-independent; real
+                        # Douyin route/authority coverage lives in transport tests.
+                        platform="xhs", account_id="fixture-a", max_notes=1, progress_callback=None,
                         content_callback=None, auth_state={"cookies": [], "origins": []},
                     )
 

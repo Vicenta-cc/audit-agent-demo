@@ -12,6 +12,17 @@ import pytest
 from backend.audit_agent import crawler_route as app
 
 
+@pytest.fixture(autouse=True)
+def isolated_managed_runtime(tmp_path, monkeypatch):
+    """Real children must not touch the application's shared runtime paths."""
+    crawler_root = os.environ.get('MEDIACRAWLER_DIR') or os.environ.get('MEDIA_CRAWLER_DIR')
+    monkeypatch.setattr(app.settings, 'media_crawler_dir', Path(crawler_root) if crawler_root else Path(__file__).resolve().parents[2] / 'wukong-proxy-crawler')
+    monkeypatch.setattr(app.settings, 'crawler_camoufox_state_root', tmp_path / 'child-state')
+    monkeypatch.setattr(app.settings, 'crawler_browser_profile_root', tmp_path / 'logical-profiles')
+    monkeypatch.setattr(app.settings, 'request_scheduler_db', tmp_path / 'scheduler.sqlite3')
+    monkeypatch.setattr(app.settings, 'task_resource_lock_dir', tmp_path / 'resource-locks')
+
+
 def managed(tmp_path, mode='proxy_preferred'):
     c = app.route_contract()
     scopes = c.derive_scope_ids('dy', 'a', 'p', '198.51.100.8')
@@ -103,9 +114,9 @@ def test_real_browser_managed_ack_and_explicit_transport(tmp_path,monkeypatch,mo
             server.socket=tls.wrap_socket(server.socket,server_side=True)
             threading.Thread(target=server.serve_forever,daemon=True).start()
             echo=f'https://echo.proxy-test.invalid:{server.server_port}/echo'
-            target=f'https://origin.proxy-test.invalid:{server.server_port}/business'
+            target=f'https://www.douyin.com:{server.server_port}/business'
         else:
-            echo=fixture.url(host='echo');target=fixture.url('/business')
+            echo=fixture.url(host='echo');target=fixture.url('/business',host='www.douyin.com')
         accounts=CrawlerAccountStore(tmp_path/'accounts.sqlite3');account=accounts.create(platform='dy',display_name='fixture')
         accounts.save_auth_state(account['id'],'fixture-ciphertext')
         accounts.observe_shared_exit(fixture.exit_ip,service_exit=mode=='direct_degraded')
@@ -132,55 +143,51 @@ def test_real_browser_managed_ack_and_explicit_transport(tmp_path,monkeypatch,mo
             monkeypatch.setattr(app.settings,'request_scheduler_db',tmp_path/'gate.db')
         accounts.admit_route(account['id'],fixture.exit_ip,1,snap.operation_id)
         store=app.RouteOperationStore(tmp_path/'ops.db');store_operation(store,snap)
-        bundle=SimpleNamespace(snapshot=snap,route_operation_store=store,_lock=threading.RLock(),account_store=accounts,proxy_store=proxies)
+        bundle=SimpleNamespace(snapshot=snap,account_id=account['id'],execution_id='managed-browser',owner_id='owner',pass_fds=(),route_operation_store=store,_lock=threading.RLock(),account_store=accounts,proxy_store=proxies)
         route_pipe,receipt_pipe=app.RouteConfigPipe(snap),app.RouteReceiptPipe(bundle)
-        script=r'''import asyncio,json,os,socket,sys
+        script=r'''import asyncio,json,os,socket,sys,shutil,subprocess
 from pathlib import Path
-from cloakbrowser.config import get_binary_path
-assert Path(get_binary_path()).is_file()
-os.environ['CLOAKBROWSER_BINARY_PATH']=str(get_binary_path());os.environ['CLOAKBROWSER_AUTO_UPDATE']='false'
-config=json.load(sys.stdin)
+config=json.loads(sys.stdin.readline())
 original=socket.getaddrinfo
 def local_dns(host,*args,**kwargs):
- local = (isinstance(host,str) and host.endswith('.proxy-test.invalid')) or (isinstance(host,bytes) and host.endswith(b'.proxy-test.invalid'))
+ local = (isinstance(host,str) and (host.endswith('.proxy-test.invalid') or host=='www.douyin.com')) or (isinstance(host,bytes) and (host.endswith(b'.proxy-test.invalid') or host==b'www.douyin.com'))
  return original('127.0.0.1' if local else host,*args,**kwargs)
 socket.getaddrinfo=local_dns
 from tools.bound_proxy import initialize_bound_route,BoundProxySession
-from tools.cloak_browser import launch_account_context
+from tools import camoufox_browser as browser
+original_identity=browser._generate_identity
+def local_identity(*args,**kwargs):
+ value=original_identity(*args,**kwargs)
+ value['firefox_user_prefs']['network.dns.localDomains']='echo.proxy-test.invalid,www.douyin.com'
+ return value
+browser._generate_identity=local_identity
+profile=browser.profile_for(config['account_id'],Path(config['profiles']),os.environ['MEDIACRAWLER_CAMOUFOX_BROWSER_VERSION'])
+certutil=shutil.which('certutil');assert certutil
+subprocess.run([certutil,'-N','-d','sql:'+str(profile['directory']),'--empty-password'],check=True,capture_output=True)
+subprocess.run([certutil,'-A','-d','sql:'+str(profile['directory']),'-n','fixture CA','-t','C,,','-i',config['ca']],check=True,capture_output=True)
 async def main():
  snap=initialize_bound_route()
- session=BoundProxySession(snap,echo_url=config['echo'],verify=config['ca'],budget_id='managed-browser',policy=dict(min_interval=0,per_minute=1000,max_concurrency=1,media_interval=0,cooldown_seconds=1))
+ session=await asyncio.to_thread(BoundProxySession,snap,echo_url=config['echo'],verify=config['ca'],budget_id='managed-browser')
  context=None
  try:
-  context,profile=await launch_account_context(snap.account_id,Path(config['profiles']),headless=True,route_snapshot=snap,bound_proxy_session=session,browser_args=['--ignore-certificate-errors-spki-list='+config['spki'],'--host-resolver-rules=MAP *.proxy-test.invalid 127.0.0.1','--proxy-bypass-list=<-loopback>'])
+  context,profile=await browser.launch_account_context(snap.account_id,Path(config['profiles']),headless=sys.platform=='darwin',route_snapshot=snap,bound_proxy_session=session)
   async with session.slot('navigation',timeout=15):
    page=await context.new_page();await page.goto(config['target'],wait_until='domcontentloaded');await page.close()
   assert session.receipt.ip==snap.observed_exit_ip
   assert session.context_id==snap.context_id
   print('BROWSER_ACK_OK',flush=True)
-  import sqlite3
-  if config['stop']=='rendering':
+  command=await asyncio.to_thread(sys.stdin.readline)
+  if command.strip()=='render':
    page=await context.new_page();await page.goto(config['target'],wait_until='domcontentloaded')
-   with session.budget._connect() as db:
-    db.execute('CREATE TABLE IF NOT EXISTS collection_browser_requests (token TEXT PRIMARY KEY,exit_key TEXT,pid INTEGER,started_at REAL,active INTEGER)')
-    for i in range(400):db.execute('INSERT INTO collection_browser_requests VALUES(?,?,?,?,1)',(str(i),snap.observed_exit_ip,os.getpid(),__import__('time').time()))
-    before=db.execute("SELECT request_times_json FROM request_scheduler_state WHERE platform='dy'").fetchone()[0]
    await page.evaluate('html => {document.body.innerHTML=html}', '<html><img id="qr" width="200" height="200" src="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27200%27 height=%27200%27%3E%3Crect width=%27200%27 height=%27200%27 fill=%27black%27/%3E%3C/svg%3E"><button id="login">fixture login control</button></html>')
    await page.evaluate('url => Promise.all(Array.from({length:400},(_,i) => fetch(url+"/render-resource?i="+i).then(r=>r.text())))',config['target'])
    await page.wait_for_function("document.querySelector('#qr').naturalWidth > 0",timeout=3000)
    assert await page.locator('#qr').is_visible() and await page.locator('#login').is_visible()
    assert not page.is_closed() and not getattr(session,'_browser_guard_first_reason',None)
-   with session.budget._connect() as db:
-    assert db.execute('SELECT COUNT(*) FROM collection_browser_requests').fetchone()[0]==400
-    assert db.execute("SELECT request_times_json FROM request_scheduler_state WHERE platform='dy'").fetchone()[0]==before
    await page.close();print('BROWSER_RENDER_RESOURCES_OK',flush=True)
-  if config['stop']=='429':
-   session.enter_cooldown('http_429',30)
-  else:
-   with sqlite3.connect(snap.safety_db_path) as db:
-    db.execute("UPDATE crawler_shared_exits SET pause_reason='ACCOUNT_CHALLENGE',paused_until=? WHERE exit_key=?",(__import__('time').time()+30,snap.observed_exit_ip))
-  page=await context.new_page()
+   await asyncio.to_thread(sys.stdin.readline)
   try:
+   page=await context.new_page()
    await page.evaluate('url => fetch(url)',config['target']+'/paused')
    raise AssertionError('automatic request bypassed exit pause')
   except Exception as exc:
@@ -191,14 +198,56 @@ async def main():
 asyncio.run(main())
 '''
         crawler=str(app.settings.media_crawler_dir.resolve())
+        from backend.audit_agent.crawler_child_runtime import authority_for
+        monkeypatch.setattr(app.settings,'crawler_proxy_echo_url',echo)
+        monkeypatch.setattr(app.settings,'crawler_account_min_interval',0)
+        monkeypatch.setattr(app.settings,'crawler_account_requests_per_minute',1000)
+        monkeypatch.syspath_prepend(crawler)
+        from tools.persistent_request_gate import RequestScheduler
+        RequestScheduler(snap.scheduler_db_path,platform='dy',min_interval=0,per_minute=1000,max_concurrency=1,media_interval=0)
+        authority=authority_for(bundle,verify=fixture.ca,policy=dict(min_interval=0,per_minute=1000,max_concurrency=1,media_interval=0,cooldown_seconds=1))
         env={**os.environ,**route_pipe.env,**receipt_pipe.env,'PYTHONPATH':crawler,'MEDIACRAWLER_ACCOUNT_ID':account['id'],'MEDIACRAWLER_PROXY_REQUIRED':'true',
-            'HTTP_PROXY':'http://127.0.0.1:1','HTTPS_PROXY':'http://127.0.0.1:1','ALL_PROXY':'http://127.0.0.1:1','NO_PROXY':''}
-        child=subprocess.Popen(['/Users/hose/project/zhanyun/media-crawler/.venv/bin/python','-c',script],env=env,cwd=crawler,
-            pass_fds=(*route_pipe.pass_fds,*receipt_pipe.pass_fds),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+            'HTTP_PROXY':'http://127.0.0.1:1','HTTPS_PROXY':'http://127.0.0.1:1','ALL_PROXY':'http://127.0.0.1:1','NO_PROXY':'',
+            'MEDIACRAWLER_DY_BROWSER_ENGINE':'camoufox',**authority.env}
+        child=subprocess.Popen([os.environ['LOGIN_BROWSER_TEST_PYTHON'],'-c',script],env=env,cwd=crawler,
+            pass_fds=(*route_pipe.pass_fds,*receipt_pipe.pass_fds,*authority.pass_fds),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
         try:
+            authority.bind_child(child.pid)
             route_pipe.start(child);receipt_pipe.start(child)
             import json
-            out,err=child.communicate(json.dumps(dict(echo=echo,target=target,ca=fixture.ca,spki=fixture.spki,profiles=str(tmp_path/'profiles'),stop=fault)),timeout=45)
+            child.stdin.write(json.dumps(dict(account_id=account['id'],echo=echo,target=target,ca=fixture.ca,profiles=str(tmp_path/'profiles'),stop=fault))+'\n');child.stdin.flush()
+            lines=[]
+            def until(marker):
+                import selectors
+                deadline=time.monotonic()+45
+                with selectors.DefaultSelector() as poll:
+                    poll.register(child.stdout,selectors.EVENT_READ)
+                    while time.monotonic()<deadline:
+                        if not poll.select(.2):continue
+                        line=child.stdout.readline()
+                        if not line:return False
+                        lines.append(line)
+                        if marker in line:return True
+                raise AssertionError('managed browser protocol timed out')
+            acked=until('BROWSER_ACK_OK')
+            if acked:
+                if fault=='rendering':
+                    with __import__('sqlite3').connect(snap.scheduler_db_path) as db:
+                        db.execute('CREATE TABLE IF NOT EXISTS collection_browser_requests (token TEXT PRIMARY KEY,exit_key TEXT,pid INTEGER,started_at REAL,active INTEGER)')
+                        db.executemany('INSERT INTO collection_browser_requests VALUES(?,?,?,?,1)',((str(i),snap.observed_exit_ip,child.pid,time.time()) for i in range(400)))
+                        before=db.execute("SELECT request_times_json FROM request_scheduler_state WHERE platform='dy'").fetchone()[0]
+                    child.stdin.write('render\n');child.stdin.flush()
+                    assert until('BROWSER_RENDER_RESOURCES_OK')
+                    with __import__('sqlite3').connect(snap.scheduler_db_path) as db:
+                        assert db.execute('SELECT COUNT(*) FROM collection_browser_requests').fetchone()[0]==400
+                        assert db.execute("SELECT request_times_json FROM request_scheduler_state WHERE platform='dy'").fetchone()[0]==before
+                if fault=='429':authority.session.enter_cooldown('http_429',30)
+                else:
+                    with accounts._connect() as db:
+                        db.execute("UPDATE crawler_shared_exits SET pause_reason='ACCOUNT_CHALLENGE',paused_until=? WHERE exit_key=?",(time.time()+30,snap.observed_exit_ip))
+                child.stdin.write('pause\n');child.stdin.flush()
+            tail,err=child.communicate(timeout=45)
+            out=''.join(lines)+tail
             assert fixture.password not in out+err
             if fault=='407':
                 assert child.returncode!=0 and 'PROXY_AUTH_FAILED' in err
@@ -223,7 +272,8 @@ asyncio.run(main())
                 assert all('Proxy-Authorization' not in h for h in direct_requests)
                 assert not any(h['path'].endswith('/paused') for h in direct_requests)
         finally:
-            if child.poll() is None:child.kill();child.wait()
+            app._stop_probe_process_group(child)
+            authority.close()
             route_pipe.close();receipt_pipe.close()
             if server:server.shutdown();server.server_close()
 
@@ -282,7 +332,7 @@ def test_risk_receipt_pauses_shared_exit_before_live_child_drains(tmp_path,monke
 @pytest.mark.parametrize('cold_direct,manual,outcome',[(False,False,'success'),(True,False,'success'),(False,True,'success'),(False,True,'failed'),(False,True,'challenge')])
 def test_actual_bounded_login_checker_uses_same_profile_and_local_identity(tmp_path,monkeypatch,cold_direct,manual,outcome):
     import json
-    from proxy_fixture import local_proxy
+    from proxy_fixture import local_proxy, prepare_camoufox_account
     from backend.audit_agent.crawler_account_store import CrawlerAccountStore
     with local_proxy(tmp_path/'network') as fixture:
         direct_server=None
@@ -298,11 +348,18 @@ def test_actual_bounded_login_checker_uses_same_profile_and_local_identity(tmp_p
             threading.Thread(target=direct_server.serve_forever,daemon=True).start()
             echo=f'https://echo.proxy-test.invalid:{direct_server.server_port}/echo'
         crawler=Path(app.settings.media_crawler_dir)
-        for name,value in dict(crawler_login_python=Path('/Users/hose/project/zhanyun/media-crawler/.venv/bin/python'),
+        for name,value in dict(crawler_login_python=Path(os.environ['LOGIN_BROWSER_TEST_PYTHON']),
             crawler_proxy_echo_url=echo,crawler_browser_profile_root=tmp_path/'profiles',request_scheduler_db=tmp_path/'gate.db',
             crawler_safety_enabled=True,crawler_direct_degrade_enabled=True,app_auth_mode='disabled',task_resource_lock_dir=tmp_path/'locks').items():
             monkeypatch.setattr(app.settings,name,value)
         accounts=CrawlerAccountStore(tmp_path/'accounts.db');account=accounts.create(platform='dy',display_name='bounded-login')
+        profile=prepare_camoufox_account(fixture,app.settings.crawler_camoufox_state_root/'profiles',account['id'],account['profile_generation'],
+            local_domains=('echo.proxy-test.invalid','www.douyin.com') if cold_direct else None)
+        monkeypatch.setattr(app.settings,'crawler_camoufox_browser_version',profile['version'])
+        monkeypatch.setattr(app.settings,'crawler_camoufox_executable',profile['executable'])
+        monkeypatch.syspath_prepend(str(crawler))
+        from tools.persistent_request_gate import RequestScheduler
+        RequestScheduler(tmp_path/'gate.db',platform='dy',min_interval=0,per_minute=1000,max_concurrency=1,media_interval=0)
         accounts.save_auth_state(account['id'],'fixture-ciphertext');accounts.observe_shared_exit(fixture.exit_ip)
         manual_claim=None
         if manual:
@@ -329,14 +386,11 @@ def local_dns(host,*args,**kwargs):
  return original_dns('127.0.0.1' if local else host,*args,**kwargs)
 socket.getaddrinfo=local_dns
 sys.path.insert(0,os.environ['MEDIACRAWLER_DIR'])
-from cloakbrowser.config import get_binary_path
-os.environ['CLOAKBROWSER_BINARY_PATH']=str(get_binary_path());os.environ['CLOAKBROWSER_AUTO_UPDATE']='false'
 import tools.bound_proxy as transport
-import tools.cloak_browser as browser
-transport.BoundProxySession=functools.partial(transport.BoundProxySession,echo_url=os.environ['FIXTURE_ECHO'],verify=os.environ['FIXTURE_CA'],policy=dict(min_interval=0,per_minute=1000,max_concurrency=1,media_interval=0,cooldown_seconds=1))
+import tools.camoufox_browser as browser
+transport.BoundProxySession=functools.partial(transport.BoundProxySession,echo_url=os.environ['FIXTURE_ECHO'],verify=os.environ['FIXTURE_CA'])
 original=browser.launch_account_context
 async def trusted(*args,**kwargs):
- kwargs['browser_args']=['--ignore-certificate-errors-spki-list='+os.environ['FIXTURE_SPKI'],'--host-resolver-rules=MAP *.proxy-test.invalid 127.0.0.1','--proxy-bypass-list=<-loopback>']
  context,profile=await original(*args,**kwargs)
  async def local(route):
   url=route.request.url
@@ -355,7 +409,7 @@ runpy.run_path(os.environ['FIXTURE_HELPER'],run_name='__main__')
         original_popen=subprocess.Popen
         def local_child(command,**kwargs):
             if len(command)>1 and command[1]==str(helper):
-                env={**kwargs['env'],'FIXTURE_ECHO':echo,'FIXTURE_CA':fixture.ca,'FIXTURE_SPKI':fixture.spki,'FIXTURE_HELPER':str(helper),'FIXTURE_CASE':outcome}
+                env={**kwargs['env'],'FIXTURE_ECHO':echo,'FIXTURE_CA':fixture.ca,'FIXTURE_HELPER':str(helper),'FIXTURE_CASE':outcome}
                 return original_popen([command[0],str(wrapper),*command[2:]],**{**kwargs,'env':env})
             return original_popen(command,**kwargs)
         monkeypatch.setattr(subprocess,'Popen',local_child)
@@ -405,7 +459,7 @@ runpy.run_path(os.environ['FIXTURE_HELPER'],run_name='__main__')
                     assert app._run_maintenance_probe(resumed,check_login=True,expected_identity='fixture_identity_123')=='success'
                     assert restored.profile_key==snap.profile_key and restored.context_id!=snap.context_id
                     assert accounts.get(account['id'])['risk_count']==1
-        assert (tmp_path/'profiles'/snap.profile_key/'adapter.lock').exists()
+        assert (app.settings.crawler_camoufox_state_root/'profiles'/snap.profile_key/'adapter.lock').exists()
         assert all(o['path']=='/echo' for o in fixture.origins)
         assert not fixture.traps
         if direct_server:direct_server.shutdown();direct_server.server_close()
@@ -468,51 +522,49 @@ def test_live_orphan_retains_account_profile_fences_then_exact_reconciliation(tm
 
 def test_inactive_crawl_child_supplement_uses_crawler_helper_in_app_interpreter(tmp_path,monkeypatch):
     import functools,importlib.util,json
-    from proxy_fixture import local_proxy
+    from proxy_fixture import local_proxy, prepare_camoufox_account
     from backend.audit_agent.crawler_account_store import CrawlerAccountStore
     from backend.audit_agent.crawler_proxy_store import CrawlerProxyStore
     from backend.audit_agent.asset_utils import download_url_with_error
     from backend.task_admission.resources import ExecutionLeaseBundle
     assert importlib.util.find_spec('cloakbrowser') is None
     with local_proxy(tmp_path/'network') as fixture:
-        for name,value in dict(crawler_login_python=Path('/Users/hose/project/zhanyun/media-crawler/.venv/bin/python'),
+        for name,value in dict(crawler_login_python=Path(os.environ['LOGIN_BROWSER_TEST_PYTHON']),
             crawler_safety_enabled=True,crawler_proxy_enabled=True,app_auth_mode='disabled',
             crawler_proxy_echo_url=fixture.url(host='echo'),crawler_browser_profile_root=tmp_path/'profiles',
             request_scheduler_db=tmp_path/'gate.db',task_resource_lock_dir=tmp_path/'locks',crawler_account_min_interval=0,
             crawler_account_requests_per_minute=1000).items():monkeypatch.setattr(app.settings,name,value)
         accounts=CrawlerAccountStore(tmp_path/'accounts.db');proxies=CrawlerProxyStore(accounts)
         account=accounts.create(platform='dy',display_name='asset-source')
+        profile=prepare_camoufox_account(fixture,app.settings.crawler_camoufox_state_root/'profiles',account['id'],account['profile_generation'])
+        monkeypatch.setattr(app.settings,'crawler_camoufox_browser_version',profile['version'])
+        monkeypatch.setattr(app.settings,'crawler_camoufox_executable',profile['executable'])
+        monkeypatch.syspath_prepend(str(app.settings.media_crawler_dir))
+        from tools.persistent_request_gate import RequestScheduler
+        RequestScheduler(tmp_path/'gate.db',platform='dy',min_interval=0,per_minute=1000,max_concurrency=1,media_interval=0)
         resource=proxies.create(display_name='fixture',endpoint=fixture.server,credentials={'username':fixture.username,'password':fixture.password},expires_at=time.time()+600)
         bound=proxies.bind(account['id'],resource['id'],expected_binding_revision=account['binding_revision'])
         proxies.observe_exit(resource['id'],fixture.exit_ip);accounts.save_auth_state(account['id'],'fixture-ciphertext')
         proxies.mark_route_login_validated(account['id'],expected_binding_revision=bound['binding_revision'],expected_config_revision=1)
         monkeypatch.setattr(app,'_store',proxies)
-        bundle=app.acquire_route_execution(account['id'],'source-task','owner',account_store=accounts)
-        old=bundle.snapshot
         helper=Path(app.__file__).resolve().parents[2]/'scripts/crawler_proxy_probe.py'
         wrapper=tmp_path/'asset_helper.py'
         wrapper.write_text(r'''import os,sys,runpy,functools
 sys.path.insert(0,os.environ['MEDIACRAWLER_DIR'])
-from cloakbrowser.config import get_binary_path
-os.environ['CLOAKBROWSER_BINARY_PATH']=str(get_binary_path());os.environ['CLOAKBROWSER_AUTO_UPDATE']='false'
 import tools.bound_proxy as transport
-import tools.cloak_browser as browser
-transport.BoundProxySession=functools.partial(transport.BoundProxySession,echo_url=os.environ['FIXTURE_ECHO'],verify=os.environ['FIXTURE_CA'],policy=dict(min_interval=0,per_minute=1000,max_concurrency=1,media_interval=0,cooldown_seconds=1))
-original=browser.launch_account_context
-async def trusted(*args,**kwargs):
- kwargs['browser_args']=['--ignore-certificate-errors-spki-list='+os.environ['FIXTURE_SPKI'],'--host-resolver-rules=MAP *.proxy-test.invalid 127.0.0.1','--proxy-bypass-list=<-loopback>']
- return await original(*args,**kwargs)
-browser.launch_account_context=trusted
+transport.BoundProxySession=functools.partial(transport.BoundProxySession,echo_url=os.environ['FIXTURE_ECHO'],verify=os.environ['FIXTURE_CA'])
 runpy.run_path(os.environ['FIXTURE_HELPER'],run_name='__main__')
 ''')
         original_popen=subprocess.Popen;children=[]
         def local_child(command,**kwargs):
             if len(command)>1 and command[1]==str(helper):
                 assert command[0]==str(app.settings.crawler_login_python)
-                env={**kwargs['env'],'FIXTURE_ECHO':fixture.url(host='echo'),'FIXTURE_CA':fixture.ca,'FIXTURE_SPKI':fixture.spki,'FIXTURE_HELPER':str(helper)}
+                env={**kwargs['env'],'FIXTURE_ECHO':fixture.url(host='echo'),'FIXTURE_CA':fixture.ca,'FIXTURE_HELPER':str(helper)}
                 child=original_popen([command[0],str(wrapper),*command[2:]],**{**kwargs,'env':env});children.append(child);return child
             return original_popen(command,**kwargs)
         monkeypatch.setattr(subprocess,'Popen',local_child)
+        bundle=app.acquire_route_execution(account['id'],'source-task','owner',account_store=accounts)
+        old=bundle.snapshot
         try:
             # A real original browser has ended; a new helper must preserve its source route.
             with accounts._connect() as health_db:
@@ -619,12 +671,14 @@ def test_actual_manager_challenge_pauses_once_but_qr_and_human_claim_remain_vali
 def test_two_fresh_proxy_samples_share_newer_canonical_exit_without_timestamp_replay(tmp_path,monkeypatch):
     from backend.audit_agent.crawler_account_store import CrawlerAccountStore
     from backend.audit_agent.crawler_proxy_store import CrawlerProxyStore
+    from crawler_auth_fixtures import mark_camoufox_login_verified
     for name,value in dict(crawler_safety_enabled=True,crawler_proxy_enabled=True,app_auth_mode='disabled',
         request_scheduler_db=tmp_path/'gate.db',task_resource_lock_dir=tmp_path/'locks',crawler_browser_profile_root=tmp_path/'profiles').items():monkeypatch.setattr(app.settings,name,value)
     accounts=CrawlerAccountStore(tmp_path/'accounts.db');proxies=CrawlerProxyStore(accounts)
     now=time.time();items=[]
     for index,at in enumerate((now-.1,now)):
         a=accounts.create(platform='dy',display_name=str(index));accounts.save_auth_state(a['id'],'fixture-ciphertext')
+        mark_camoufox_login_verified(accounts,a['id'])
         p=proxies.create(display_name=str(index),endpoint='http://127.0.0.1:9',expires_at=now+3600)
         bound=proxies.bind(a['id'],p['id'],expected_binding_revision=a['binding_revision'])
         proxies.observe_exit(p['id'],'198.51.100.8',observed_at=at)

@@ -1,3 +1,4 @@
+from crawler_auth_fixtures import mark_camoufox_login_verified
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import sqlite3
@@ -29,7 +30,8 @@ def create_proxy(proxies, **changes):
 
 def create_account(accounts, platform='dy'):
     account = accounts.create(platform=platform, display_name='fixture')
-    return accounts.save_auth_state(account['id'], 'test-ciphertext')
+    result = accounts.save_auth_state(account['id'], 'test-ciphertext')
+    return mark_camoufox_login_verified(accounts, account['id']) if platform == 'dy' else result
 
 
 def test_additive_migration_and_encrypted_projection(stores):
@@ -195,7 +197,7 @@ def test_proxy_use_grant_does_not_grant_private_account(tmp_path, stores):
     assert not service.can_manage_crawler_proxy(principal, proxy['id'])
     assert service.can_use_crawler_proxy(Principal('admin', role='admin'), proxy['id'])
     projection = service.public_crawler_account({**account, 'unknown_secret': 'secret', 'credentials': {'password': 'secret'}})
-    assert projection == {key: value for key,value in account.items() if key not in {'shared_exit_key','recovery_claim','recovery_incident','validated_direct_generation'}}
+    assert projection == {key: value for key,value in account.items() if key not in {'shared_exit_key','recovery_claim','recovery_incident','validated_direct_generation','profile_engine','profile_generation','auth_source_generation'}}
     assert service.public_crawler_proxy({**proxy, 'password': 'secret', 'transport_ciphertext': 'secret'}) == proxy
     auth.revoke_resource(user_id=user['id'], resource_type='crawler-proxy', resource_id=proxy['id'], permission='use', actor_user_id='admin')
     with pytest.raises(AuthorizationError):

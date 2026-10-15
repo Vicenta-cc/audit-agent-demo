@@ -20,6 +20,7 @@ const USER_CACHE_KEYS = new Set([
   "crawler-account-login-target"
 ]);
 const USER_CACHE_PREFIXES = [
+  "crawler-login-control-token:",
   "crawler-account-login-session:",
   "crawler-account-login-intent:",
   "crawler-account-login-command:",

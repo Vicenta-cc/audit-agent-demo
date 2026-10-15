@@ -130,6 +130,8 @@ class CrawlerAccountLoginManager:
         owner_user_id: str,
         owner_is_admin: bool,
     ) -> dict:
+        if account["platform"] == "dy":
+            raise ValueError("抖音账号请使用 Login V2 登录入口")
         interactive = account["platform"] == "dy" and settings.crawler_login_interactive
         if interactive and not (32 <= len(owner_token) <= 128):
             raise PermissionError("请刷新页面后重新打开登录窗口")
@@ -194,7 +196,7 @@ class CrawlerAccountLoginManager:
                 command.extend(["--expected-platform-account-id", account["platform_account_id"]])
             # The helper and crawler load the same adapter implementation.
             env["MEDIACRAWLER_DIR"] = str(settings.media_crawler_dir.expanduser().resolve())
-            env["CRAWLER_BROWSER_PROFILE_ROOT"] = browser_env["MEDIACRAWLER_CLOAK_PROFILE_ROOT"]
+            env["CRAWLER_BROWSER_PROFILE_ROOT"] = str(settings.crawler_browser_profile_root)
         env["PYTHONUNBUFFERED"] = "1"
         root_path = str(settings.root_dir)
         current_python_path = env.get("PYTHONPATH", "")

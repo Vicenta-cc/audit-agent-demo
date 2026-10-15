@@ -201,7 +201,7 @@ class AdmissionStore:
 
     def user_record(self, db, owner):
         if not self.enabled:
-            return ""
+            return None
         schema = "main" if self.auth_db == self.db_path else "admission_auth"
         return db.execute(
             f"SELECT * FROM {schema}.app_users WHERE id=?", (owner,)

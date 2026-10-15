@@ -86,6 +86,9 @@ def test_bound_redirects_preserve_explicit_bundle_for_every_hop(tmp_path, monkey
 def _real_transport_helper(monkeypatch, tmp_path, bundle, fixture):
     """Exercise production HTTPX+deadline+four-scope slot; browser proof is independent."""
     import asyncio
+    # The scheduler is deliberately loaded by file spec. Resolve its real
+    # sibling authority modules as they are resolved in the configured owner.
+    monkeypatch.syspath_prepend(str(settings.media_crawler_dir.resolve()))
     from backend.audit_agent.crawler_browser import load_request_scheduler
     snapshot = bundle.snapshot
     snapshot.account_id = "source"

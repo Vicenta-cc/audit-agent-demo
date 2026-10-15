@@ -152,6 +152,9 @@ class CrawlerAccountStore:
                 state TEXT NOT NULL DEFAULT 'active', created_at REAL NOT NULL);
         """)
 
+        from .crawler_browser_migration import ensure_migration_schema
+        ensure_migration_schema(conn)
+
         manual_columns={row[1] for row in conn.execute('PRAGMA table_info(crawler_manual_recovery_operations)')}
         for name in ('initial_login','risk_recorded'):
             if name not in manual_columns:
@@ -253,6 +256,9 @@ class CrawlerAccountStore:
                     now,
                 ),
             )
+            if normalized_platform == "dy":
+                conn.execute("UPDATE crawler_accounts SET profile_engine='camoufox',profile_generation=? WHERE id=?",
+                             (uuid4().hex, account_id))
             row = conn.execute(
                 "SELECT * FROM crawler_accounts WHERE id = ?",
                 (account_id,),
@@ -490,10 +496,27 @@ class CrawlerAccountStore:
             )
 
     def mark_cooldown(self, account_id: str, message: str, until: str, *, failure_kind: str = "rate_limit") -> None:
+        proposed = str(until)
+        proposed_time = datetime.fromisoformat(proposed).timestamp()
         with self._lock, self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT cooldown_until FROM crawler_accounts WHERE id=?', (account_id,)).fetchone()
+            if row is None:
+                return
+            existing = row['cooldown_until']
+            if existing:
+                try:
+                    if datetime.fromisoformat(existing).timestamp() >= proposed_time:
+                        proposed = existing
+                except (TypeError, ValueError, OverflowError):
+                    # An invalid existing fence is not proof that it expired.
+                    proposed = existing
             conn.execute(
-                "UPDATE crawler_accounts SET status='active', last_error=?, failure_kind=?, cooldown_until=?, updated_at=? WHERE id=?",
-                (str(message or "账号进入冷却")[:500], str(failure_kind), str(until), datetime.now().isoformat(timespec="seconds"), account_id),
+                "UPDATE crawler_accounts SET last_error=?, "
+                "failure_kind=CASE WHEN failure_kind='verify' THEN failure_kind ELSE ? END, "
+                "cooldown_until=?, updated_at=? WHERE id=?",
+                (str(message or "账号进入冷却")[:500], str(failure_kind), proposed,
+                 datetime.now().isoformat(timespec="seconds"), account_id),
             )
 
     def record_risk(self, account_id: str, *, window: timedelta = timedelta(hours=24)) -> int:
@@ -522,6 +545,8 @@ class CrawlerAccountStore:
             conn.execute("UPDATE crawler_accounts SET risk_count=0 WHERE id=? AND risk_count<>0", (account_id,))
 
     def available_accounts(self, platform: str, *, exclude_ids=()) -> list[dict]:
+        if platform == 'dy' and settings.crawler_browser_maintenance:
+            return []
         now = datetime.now().isoformat(timespec="seconds")
         excluded = tuple(str(value) for value in exclude_ids if str(value))
         placeholders = ",".join("?" for _ in excluded)
@@ -530,6 +555,9 @@ class CrawlerAccountStore:
             rows = conn.execute(
                 "SELECT * FROM crawler_accounts WHERE platform=? AND status='active' "
                 "AND COALESCE(auth_state_ciphertext,'')<>'' AND route_state='active' AND (paused_until IS NULL OR paused_until<=strftime('%s','now')) "
+                "AND (platform<>'dy' OR (profile_engine='camoufox' AND profile_generation<>'' "
+                "AND auth_source_generation=profile_generation AND NOT EXISTS "
+                "(SELECT 1 FROM crawler_browser_migrations m WHERE m.account_id=crawler_accounts.id AND m.phase<>'COMMITTED'))) "
                 + exclusion +
                 "AND (cooldown_until IS NULL OR cooldown_until<=?) "
                 "ORDER BY CASE access_scope WHEN 'public' THEN 0 ELSE 1 END, "
@@ -546,7 +574,7 @@ class CrawlerAccountStore:
                         available.append(account)
                     continue
                 if not account["proxy_id"]:
-                    if not account["proxy_required"] and not (account['platform']=='dy' and settings.crawler_proxy_enabled):
+                    if not account["proxy_required"]:
                         available.append(account)
                     continue
                 resource = conn.execute("SELECT * FROM proxy_resources WHERE id=?", (account["proxy_id"],)).fetchone() if table_exists else None
@@ -640,6 +668,9 @@ class CrawlerAccountStore:
         with self._lock,self._connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
             row=conn.execute('SELECT * FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
+            if row and row['platform'] == 'dy' and (settings.crawler_browser_maintenance or
+                    conn.execute("SELECT 1 FROM crawler_browser_migrations WHERE account_id=? AND phase<>'COMMITTED'", (account_id,)).fetchone()):
+                return None
             if not row or self._stale_route_candidate(conn,row) is None: return None
             prior=conn.execute('SELECT * FROM crawler_exit_refreshes WHERE account_id=?',(account_id,)).fetchone()
             if prior and (prior['state']=='claimed' or time.time()-prior['claimed_at']<settings.crawler_proxy_probe_interval): return None
@@ -728,6 +759,9 @@ class CrawlerAccountStore:
             "cooldown_until": row["cooldown_until"] or "",
             "failure_kind": row["failure_kind"] or "",
             "auth_state_revision": int(row["auth_state_revision"]),
+            "profile_engine": row["profile_engine"],
+            "profile_generation": row["profile_generation"],
+            "auth_source_generation": row["auth_source_generation"],
             "has_auth_state": bool(row["auth_state_ciphertext"]),
             "auth_state_updated_at": row["auth_state_updated_at"] or "",
             "risk_count": int(row["risk_count"] or 0),
@@ -899,6 +933,7 @@ class CrawlerAccountStore:
             row = conn.execute('SELECT * FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
             if row is None:
                 raise ValueError('ACCOUNT_NOT_FOUND')
+            until = max(until, row['paused_until'] or 0)
             key = row['shared_exit_key']
             if not key and row['proxy_id'] and conn.execute("SELECT 1 FROM sqlite_master WHERE name='proxy_resources'").fetchone():
                 proxy = conn.execute('SELECT shared_exit_key FROM proxy_resources WHERE id=?',(row['proxy_id'],)).fetchone()
@@ -907,6 +942,9 @@ class CrawlerAccountStore:
             incident = row['recovery_incident'] if in_check and row['recovery_incident'] else uuid4().hex
             if in_check:
                 conn.execute('UPDATE crawler_accounts SET paused_until=?,pause_reason=?,recovery_incident=?,shared_exit_key=? WHERE id=?',(max(until,row['paused_until'] or 0),reason,incident,key,account_id))
+            elif row['route_state'] == 'manual_required':
+                conn.execute('UPDATE crawler_accounts SET paused_until=?,pause_reason=?,shared_exit_key=? WHERE id=?',
+                    (until, reason, key, account_id))
             else:
                 conn.execute("UPDATE crawler_accounts SET route_state='challenge_paused',paused_until=?,pause_reason=?,recovery_incident=?,recovery_state='pending',recovery_claim='',shared_exit_key=? WHERE id=?",(until,reason,incident,key,account_id))
             if key:
@@ -918,6 +956,9 @@ class CrawlerAccountStore:
         with self._lock, self._connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
             row=conn.execute('SELECT * FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
+            if row and row['platform'] == 'dy' and (settings.crawler_browser_maintenance or
+                    conn.execute("SELECT 1 FROM crawler_browser_migrations WHERE account_id=? AND phase<>'COMMITTED'", (account_id,)).fetchone()):
+                return None
             if not row or row['recovery_state']!='pending' or row['route_state']!='challenge_paused' or row['paused_until'] is None or row['paused_until']>time.time():
                 return None
             claim=uuid4().hex

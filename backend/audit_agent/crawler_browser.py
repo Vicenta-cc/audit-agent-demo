@@ -14,7 +14,7 @@ def account_profile_directory(account_id: str, profile_root: Path | None = None)
     if not account_id.strip():
         raise ValueError("抖音采集必须选择已保存的账号")
     key = hashlib.sha256(("dy:" + account_id).encode()).hexdigest()
-    return (profile_root or settings.crawler_browser_profile_root).expanduser().resolve() / key
+    return (profile_root or (settings.crawler_camoufox_state_root / "profiles")).expanduser().resolve() / key
 
 
 def account_profile_owns_auth(account_id: str, profile_root: Path | None = None) -> bool:
@@ -27,21 +27,21 @@ def account_browser_env(account_id: str, profile_root: Path | None = None) -> di
         raise ValueError("抖音采集必须选择已保存的账号")
     return {
         "MEDIACRAWLER_ACCOUNT_ID": account_id,
-        "MEDIACRAWLER_CLOAK_PROFILE_ROOT": str(
-            (profile_root or settings.crawler_browser_profile_root).expanduser().resolve()
+        "MEDIACRAWLER_CAMOUFOX_PROFILE_ROOT": str(
+            (profile_root or (settings.crawler_camoufox_state_root / "profiles")).expanduser().resolve()
         ),
-        "MEDIACRAWLER_DY_BROWSER_ENGINE": "cloakbrowser",
+        "MEDIACRAWLER_DY_BROWSER_ENGINE": "camoufox",
     }
 
 
 def load_account_browser(media_crawler_dir: Path | None = None):
-    path = (media_crawler_dir or settings.media_crawler_dir).resolve() / "tools" / "cloak_browser.py"
+    path = (media_crawler_dir or settings.media_crawler_dir).resolve() / "tools" / "camoufox_browser.py"
     if not path.is_file():
-        raise RuntimeError("MediaCrawler 缺少账号浏览器适配器，请安装配套的 CloakBrowser 接入版本")
+        raise RuntimeError("MediaCrawler 缺少账号浏览器适配器，请安装配套的 Camoufox 接入版本")
     crawler_root = str(path.parent.parent)
     if crawler_root not in sys.path:
         sys.path.insert(0, crawler_root)
-    spec = importlib.util.spec_from_file_location("audit_account_cloak_browser", path)
+    spec = importlib.util.spec_from_file_location("audit_account_camoufox_browser", path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -68,6 +68,9 @@ def scheduler_env() -> dict[str, str]:
 
 
 def load_request_scheduler():
+    crawler_root = str(settings.media_crawler_dir.resolve())
+    if crawler_root not in sys.path:
+        sys.path.insert(0, crawler_root)
     path = settings.media_crawler_dir.resolve() / "tools" / "persistent_request_gate.py"
     if not path.is_file():
         raise RuntimeError("缺少配套请求调度器，请安装统一限速版 MediaCrawler")

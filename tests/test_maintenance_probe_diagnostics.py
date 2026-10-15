@@ -22,7 +22,7 @@ def test_real_crawler_httpx_exception_is_classified_without_raw_message():
 async def test_actual_helper_failure_branch_preserves_primary_safe_stage_before_cleanup(tmp_path,monkeypatch,capsys,origin):
     monkeypatch.setattr(helper,'_diagnostic_emitted',False)
     monkeypatch.setenv('MEDIACRAWLER_DIR',str(tmp_path))
-    monkeypatch.setenv('MEDIACRAWLER_CLOAK_PROFILE_ROOT',str(tmp_path))
+    monkeypatch.setenv('MEDIACRAWLER_CAMOUFOX_PROFILE_ROOT',str(tmp_path))
     namespace={}
     exec(compile('async def '+origin+'():\n raise RuntimeError("https://secret.invalid/password")','/private/local/bound_proxy.py','exec'),namespace)
     async def launch(*args,**kwargs):await namespace[origin]()
@@ -31,7 +31,7 @@ async def test_actual_helper_failure_branch_preserves_primary_safe_stage_before_
         async def close(self):raise ValueError('secret-cleanup-cookie')
     monkeypatch.setitem(sys.modules,'tools.collection_route',SimpleNamespace(load_route_from_env=lambda **kwargs:SimpleNamespace()))
     monkeypatch.setitem(sys.modules,'tools.bound_proxy',SimpleNamespace(BoundProxySession=Session))
-    monkeypatch.setitem(sys.modules,'tools.cloak_browser',SimpleNamespace(launch_account_context=launch))
+    monkeypatch.setitem(sys.modules,'tools.camoufox_browser',SimpleNamespace(launch_account_context=launch))
     with pytest.raises(ValueError):await helper.probe('a')
     lines=capsys.readouterr().out.splitlines()
     assert len(lines)==1 and 'secret' not in lines[0]
@@ -52,7 +52,7 @@ def test_parent_only_logs_fixed_diagnostic_fields(tmp_path,caplog,alteration):
 def test_actual_subprocess_diagnostic_does_not_replace_probe_error(tmp_path,monkeypatch,caplog):
     c=app.route_contract()
     snapshot=c.BoundRoute('dy','a',c.derive_profile_key('a'),'p',1,1,'127.0.0.1',9,'','',time.time()+120,None,None,str(tmp_path/'gate.db'),c.derive_scope_ids('dy','a','p',None))
-    bundle=SimpleNamespace(snapshot=snapshot,account_id='a',execution_id='login-safe',pass_fds=())
+    bundle=SimpleNamespace(snapshot=snapshot,account_id='a',execution_id='login-safe',pass_fds=(),account_store=SimpleNamespace(get=lambda account_id: {'profile_engine':'camoufox','profile_generation':'fixture-generation'}))
     original=subprocess.Popen
     def child(command,**kwargs):
         if len(command)>1 and command[1].endswith('crawler_proxy_probe.py'):
@@ -69,7 +69,7 @@ def test_actual_subprocess_diagnostic_does_not_replace_probe_error(tmp_path,monk
 def test_failed_child_or_unconfirmed_drain_cannot_retire_health(tmp_path,monkeypatch,failure):
     c=app.route_contract()
     snapshot=c.BoundRoute('dy','a',c.derive_profile_key('a'),'p',1,1,'127.0.0.1',9,'','',time.time()+120,'203.0.113.10',time.time(),str(tmp_path/'gate.db'),c.derive_scope_ids('dy','a','p','203.0.113.10'))
-    bundle=SimpleNamespace(snapshot=snapshot,account_id='a',execution_id='login-safe',pass_fds=())
+    bundle=SimpleNamespace(snapshot=snapshot,account_id='a',execution_id='login-safe',pass_fds=(),account_store=SimpleNamespace(get=lambda account_id: {'profile_engine':'camoufox','profile_generation':'fixture-generation'}))
     result=dict(schema_version=1,account_id='a',proxy_id='p',binding_revision=1,config_revision=1,context_id='verified',ip='203.0.113.10',observed_at=time.time())
     original=subprocess.Popen;retired=[]
     def child(command,**kwargs):

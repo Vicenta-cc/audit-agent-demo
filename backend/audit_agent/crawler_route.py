@@ -21,7 +21,8 @@ from .config import settings
 BROWSER_GUARD_REASONS = frozenset({'BOUND_REQUEST_GUARD','BOUND_RUNTIME_GUARD','BOUND_DATABASE_GUARD',
     'SHARED_ADMISSION_GUARD','SHARED_COOLDOWN_GUARD','SHARED_REQUEST_LIMIT','SHARED_ACTIVE_LIMIT',
     'PAGE_REQUEST_LIMIT','PAGE_ROLLING_LIMIT','PAGE_LIFETIME_LIMIT','PAGE_BYTE_LIMIT','PAGE_SIZES_FAILED',
-    'CDP_GUARD_TIMEOUT','CDP_GUARD_FAILED','PERIODIC_PROBE_GUARD','BROWSER_QUEUE_LIMIT'})
+    'CDP_GUARD_TIMEOUT','CDP_GUARD_FAILED','DOCUMENT_GUARD_TIMEOUT','DOCUMENT_GUARD_FAILED',
+    'PERIODIC_PROBE_GUARD','BROWSER_QUEUE_LIMIT'})
 
 
 @lru_cache(maxsize=8)
@@ -42,6 +43,9 @@ def load_route_module():
 
 
 def route_contract():
+    crawler_root = str(settings.media_crawler_dir.resolve())
+    if crawler_root not in sys.path:
+        sys.path.insert(0, crawler_root)
     return _load_contract(str(settings.media_crawler_dir.resolve() / 'tools' / 'collection_route.py'))
 
 
@@ -315,6 +319,20 @@ def resolve_account_route(account_id, *, account_store=None, expected_binding_re
         accounts = crawler_account_store
         getter = accounts.get
     account = getter(account_id)
+    if account and account.get('platform') == 'dy' and not account.get('proxy_required') and not account.get('proxy_id') and account.get('route_mode') != 'direct_degraded':
+        if expected_binding_revision is not None and expected_binding_revision != account.get('binding_revision', 1):
+            raise CollectionRouteError('PROXY_REVISION_MISMATCH')
+        contract = route_contract()
+        direct = accounts.get_direct_route(account_id, allow_stale_recovery=allow_probe)
+        ip = direct['observed_exit_ip'] if direct else None
+        observed_at = direct['observed_exit_at'] if direct else None
+        scopes = (tuple(sorted(['dy', 'dy:account:' + account_id,
+            'dy:service_exit:' + ip, 'dy:exit:' + ip])) if ip else contract.derive_scope_ids('dy', account_id, 'service-direct'))
+        return contract.BoundRoute('dy', account_id, contract.derive_profile_key(account_id),
+            'service-direct', account.get('binding_revision', 0), 1, 'direct.invalid', 1,
+            '', '', time.time() + 1200, ip, observed_at,
+            str(settings.request_scheduler_db.resolve()), scopes, route_mode='legacy_direct',
+            exit_generation=direct['shared_exit_generation'] if direct else 0)
     if not getattr(settings, 'crawler_proxy_enabled', False) and (
         account is None or not account.get('proxy_required') and not account.get('proxy_id')
     ):
@@ -364,15 +382,20 @@ def resolve_account_route(account_id, *, account_store=None, expected_binding_re
 
 
 def acquire_route_execution(account_id, execution_id, owner_id, *, account_store=None,
-                            account_handle=None, snapshot=None, allow_probe=False, recovery_claim=None, human_login_operation_id=None):
+                            account_handle=None, snapshot=None, allow_probe=False, recovery_claim=None, human_login_operation_id=None,
+                            migration_id=None):
+    from .crawler_child_runtime import require_browser_available
+    require_browser_available(account_id, store=account_store, owner_id=owner_id,
+        migration_id=migration_id, operation_id=execution_id)
     from backend.task_admission.resources import ExecutionLeaseBundle
     snapshot = snapshot or resolve_account_route(account_id, account_store=account_store, allow_probe=allow_probe)
-    store = get_proxy_store(account_store) if snapshot else None
-    resource = store.get_public(snapshot.proxy_id) if snapshot and snapshot.route_mode != 'direct_degraded' else None
+    store = get_proxy_store(account_store) if snapshot and snapshot.route_mode not in {'direct_degraded', 'legacy_direct'} else None
+    resource = store.get_public(snapshot.proxy_id) if snapshot and snapshot.route_mode not in {'direct_degraded', 'legacy_direct'} else None
     if snapshot:
-        authorize_route_owner(account_id, snapshot.proxy_id if snapshot.route_mode != 'direct_degraded' else None, owner_id, account_store=account_store)
+        authorize_route_owner(account_id, snapshot.proxy_id if snapshot.route_mode not in {'direct_degraded', 'legacy_direct'} else None, owner_id, account_store=account_store)
     bundle = ExecutionLeaseBundle(execution_id, owner_id, account_id, snapshot)
     bundle.proxy_store = store
+    bundle.migration_id = migration_id
     if store is not None:
         bundle.account_store = store.accounts
     elif account_store is not None:
@@ -380,7 +403,7 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
     else:
         from .crawler_account_store import crawler_account_store
         bundle.account_store = crawler_account_store
-    if not bundle.acquire(account_handle=account_handle, max_active_accounts=min(resource['max_active_accounts'], max(1, int(settings.request_concurrency))) if resource else 1):
+    if not bundle.acquire(account_handle=account_handle, max_active_accounts=min(resource['max_active_accounts'], max(1, int(settings.request_concurrency))) if resource else max(1, int(settings.request_concurrency))):
         raise CollectionRouteError('PROXY_BUSY')
     try:
         fresh = resolve_account_route(account_id, account_store=account_store,
@@ -391,7 +414,7 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
     except Exception:
         bundle.close()
         raise
-    if snapshot is not None and getattr(settings, 'crawler_safety_enabled', False):
+    if snapshot is not None and (getattr(settings, 'crawler_safety_enabled', False) or snapshot.route_mode == 'legacy_direct'):
         try:
             from dataclasses import replace
             contract = route_contract()
@@ -409,9 +432,9 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
                 if original_snapshot.observed_exit_ip is not None and observed.ip != original_snapshot.observed_exit_ip:
                     raise CollectionRouteError('PROXY_EXIT_CHANGED')
                 snapshot = replace(snapshot, observed_exit_ip=observed.ip, observed_exit_at=observed.observed_at,
-                    scope_ids=(tuple(sorted(['dy','dy:account:'+account_id,'dy:service_exit:'+observed.ip,'dy:exit:'+observed.ip])) if snapshot.route_mode=='direct_degraded' else contract.derive_scope_ids('dy', account_id, snapshot.proxy_id, observed.ip)))
+                    scope_ids=(tuple(sorted(['dy','dy:account:'+account_id,'dy:service_exit:'+observed.ip,'dy:exit:'+observed.ip])) if snapshot.route_mode in {'direct_degraded','legacy_direct'} else contract.derive_scope_ids('dy', account_id, snapshot.proxy_id, observed.ip)))
                 bundle.snapshot = snapshot
-            observation = bundle.account_store.consume_cached_exit(snapshot.observed_exit_ip, observed_at=snapshot.observed_exit_at, service_exit=snapshot.route_mode == 'direct_degraded')
+            observation = bundle.account_store.consume_cached_exit(snapshot.observed_exit_ip, observed_at=snapshot.observed_exit_at, service_exit=snapshot.route_mode in {'direct_degraded', 'legacy_direct'})
             if not bundle.acquire_exit_capacity(snapshot.observed_exit_ip):
                 bundle.close()
                 raise CollectionRouteError('PROXY_BUSY')
@@ -420,7 +443,7 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
                 if not recovery_claim:raise CollectionRouteError('PROXY_BUSY')
             bundle.manual_recovery_claim=recovery_claim if human_login_operation_id else None
             bundle.login_operation_id=human_login_operation_id
-            mode = bundle.account_store.get(account_id).get('route_mode', 'proxy_required')
+            mode = 'legacy_direct' if snapshot.route_mode == 'legacy_direct' else bundle.account_store.get(account_id).get('route_mode', 'proxy_required')
             managed = replace(snapshot, route_mode=mode, operation_id=secrets.token_hex(16), lease_id=secrets.token_hex(16),
                 lease_version=1, owner_id=owner_id, context_id=secrets.token_hex(16),
                 exit_generation=observation['shared_exit_generation'],
@@ -450,6 +473,9 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
 
 
 def parent_renew_ticket(bundle, prior):
+    from .crawler_child_runtime import require_browser_available
+    require_browser_available(bundle.account_id, store=getattr(bundle, 'account_store', None),
+        owner_id=bundle.owner_id, migration_id=getattr(bundle, 'migration_id', None), operation_id=bundle.execution_id)
     snapshot = bundle.snapshot
     store = bundle.route_operation_store
     deadline = time.monotonic()+2
@@ -614,11 +640,11 @@ def authorize_source_route(provenance, owner_id, execution_id, *, route_context=
     except Exception as exc:
         raise _safe_error(exc) from None
     account_id = value['source_account_id']
-    authorize_route_owner(account_id, value['proxy_id'] if value['route_mode'] != 'direct_degraded' else None, owner_id, account_store=account_store, auth_store=auth_store)
+    authorize_route_owner(account_id, value['proxy_id'] if value['route_mode'] not in {'direct_degraded', 'legacy_direct'} else None, owner_id, account_store=account_store, auth_store=auth_store)
     snapshot = resolve_account_route(account_id, account_store=account_store,
         expected_binding_revision=value['binding_revision'], expected_config_revision=value['config_revision'])
-    if (snapshot is None) != (value['route_mode'] == 'legacy_direct'):
-        raise CollectionRouteError('PROXY_REVISION_MISMATCH')
+    if snapshot is None or value['route_mode'] == 'legacy_direct' and not value.get('operation_id'):
+        raise CollectionRouteError('SUPPLEMENT_DEFERRED')
     if snapshot and 'exit_generation' in value and snapshot.exit_generation != value['exit_generation']:
         raise CollectionRouteError('PROXY_REVISION_MISMATCH')
     if snapshot and (snapshot.route_mode != value['route_mode'] and not (snapshot.route_mode == 'proxy_required' and value['route_mode'] == 'proxy_preferred') or snapshot.proxy_id != value['proxy_id'] or snapshot.observed_exit_ip is not None and snapshot.observed_exit_ip != value['observed_exit_ip']):
@@ -662,6 +688,7 @@ def probe_env(bundle):
     budget_digest = hashlib.sha256(budget_identity.encode()).hexdigest()
     result = {
         'MEDIACRAWLER_PROXY_PROBE_BUDGET_ID': budget_prefix + budget_digest,
+        'MEDIACRAWLER_PROXY_ECHO_URL': settings.crawler_proxy_echo_url,
         'MEDIACRAWLER_PROXY_REQUIRED': 'true' if bundle.snapshot else 'false',
     }
     if trial_id:
@@ -769,7 +796,7 @@ def _asset_helper(bundle, *, lazy=False):
 def asset_request_slot(bundle, timeout=60):
     """Reauthorize every hop; proxy route must have real paired browser receipt."""
     snapshot = bundle.snapshot
-    authorize_route_owner(bundle.account_id, snapshot.proxy_id if snapshot and snapshot.route_mode != 'direct_degraded' else None, bundle.owner_id, account_store=getattr(bundle, "account_store", None))
+    authorize_route_owner(bundle.account_id, snapshot.proxy_id if snapshot and snapshot.route_mode not in {'direct_degraded', 'legacy_direct'} else None, bundle.owner_id, account_store=getattr(bundle, "account_store", None))
     fresh = resolve_account_route(bundle.account_id, account_store=getattr(bundle, "account_store", None),
         expected_binding_revision=snapshot.binding_revision if snapshot else None,
         expected_config_revision=snapshot.config_revision if snapshot else None)
@@ -960,7 +987,7 @@ class RouteReceiptPipe:
                                 return
                             self.bundle.child_receipt = receipt
                         store = getattr(self.bundle, "proxy_store", None)
-                        if snapshot.route_mode == 'direct_degraded':
+                        if snapshot.route_mode in {'direct_degraded', 'legacy_direct'}:
                             self.bundle.account_store.observe_shared_exit(receipt.ip, observed_at=receipt.observed_at, service_exit=True)
                         elif store is not None:
                             store.observe_exit(snapshot.proxy_id, receipt.ip, observed_at=receipt.observed_at)
@@ -1109,7 +1136,8 @@ def start_asset_browser_child(bundle):
                 raise CollectionRouteError('SUPPLEMENT_DEFERRED')
             old_pipe.drain()
     config=RouteConfigPipe(bundle.snapshot);receipt=RouteReceiptPipe(bundle)
-    env=os.environ.copy()
+    from .crawler_child_runtime import child_environment, child_process_options, authority_for
+    env=child_environment()
     for name in ('MEDIACRAWLER_PROXY_CONFIG_FD','MEDIACRAWLER_PROXY_RECEIPT_FD','MEDIACRAWLER_ROUTE_ACK_FD','MEDIACRAWLER_MANAGED_ROUTE'):
         env.pop(name,None)
     env.update(account_browser_env(bundle.account_id));env.update(scheduler_env());env.update(probe_env(bundle))
@@ -1119,17 +1147,22 @@ def start_asset_browser_child(bundle):
     env['PYTHONPATH']=str(settings.root_dir)+os.pathsep+env.get('PYTHONPATH','')
     helper=Path(__file__).resolve().parents[2]/'scripts/crawler_proxy_probe.py'
     process=None
+    authority=authority_for(bundle)
+    env.update(authority.env)
     try:
         process=subprocess.Popen([str(settings.crawler_login_python),str(helper),'--account-id',bundle.account_id,'--hold-context'],
-            cwd=settings.media_crawler_dir,env=env,pass_fds=(*bundle.pass_fds,*config.pass_fds,*receipt.pass_fds),
-            stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,text=True,start_new_session=True)
+            cwd=settings.media_crawler_dir,env=env,pass_fds=(*bundle.pass_fds,*config.pass_fds,*receipt.pass_fds,*authority.pass_fds),
+            stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,text=True,start_new_session=True,**child_process_options())
+        authority.bind_child(process.pid)
         config.start(process);receipt.start(process)
+        bundle.add_closer(authority.close)
         bundle.add_closer(lambda:close_asset_browser_child(process,receipt))
         bundle.add_closer(config.close)
         bundle.asset_browser_process=process
         bundle.child_active=True
     except Exception:
         if process is not None:_stop_probe_process_group(process)
+        authority.close()
         config.close();receipt.close()
         raise
 
@@ -1248,7 +1281,7 @@ def make_bound_proxy_session(snapshot, *, login_bootstrap=False):
         except CollectionRouteError as exc:
             return exc.code
         return False
-    return BoundProxySession(snapshot, stop_checker=check, login_bootstrap=login_bootstrap,
+    return BoundProxySession(snapshot, stop_checker=None if os.getenv('CRAWLER_RESTRICTED_CHILD') == '1' else check, login_bootstrap=login_bootstrap,
         trial_id=getattr(settings, 'crawler_proxy_trial_id', ''))
 
 
@@ -1318,8 +1351,12 @@ def probe_account_route(account_id, owner_id, *, expected_binding_revision=None,
         resolve_account_route(account_id, account_store=account_store,
             expected_binding_revision=snapshot.binding_revision,
             expected_config_revision=snapshot.config_revision, allow_probe=True)
-        bundle.proxy_store.observe_exit(snapshot.proxy_id, receipt.ip, observed_at=receipt.observed_at)
-        resource = bundle.proxy_store.get_public(snapshot.proxy_id)
+        if snapshot.route_mode in {'legacy_direct', 'direct_degraded'}:
+            bundle.account_store.observe_shared_exit(receipt.ip, observed_at=receipt.observed_at, service_exit=True)
+            resource = {'status': 'active'}
+        else:
+            bundle.proxy_store.observe_exit(snapshot.proxy_id, receipt.ip, observed_at=receipt.observed_at)
+            resource = bundle.proxy_store.get_public(snapshot.proxy_id)
         return dict(schema_version=1, proxy_id=snapshot.proxy_id, account_id=account_id,
             config_revision=snapshot.config_revision, binding_revision=snapshot.binding_revision,
             observed_exit_ip=receipt.ip, observed_at=receipt.observed_at,
@@ -1353,20 +1390,24 @@ def _consume_probe_diagnostic(line,bundle):
     return True
 
 
-def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_identity=''):
+def _run_maintenance_probe(bundle, *, timeout=None, check_login=False, expected_identity='', verified_result=False):
     """Bounded subprocess protocol; dependency imports stay in crawler Python."""
     import json
     import subprocess
     from pathlib import Path
     from .crawler_browser import account_browser_env, scheduler_env
+    if timeout is None:
+        timeout = min(300, settings.crawler_login_v2_preparation_timeout_seconds + 90) if check_login else 45
     snapshot = bundle.snapshot
     pipe = RouteConfigPipe(snapshot)
     receipt_pipe = RouteReceiptPipe(bundle) if snapshot.managed else None
     process = None
+    authority = None
     verified_receipt = None
     poll = selectors.DefaultSelector()
     try:
-        env = os.environ.copy()
+        from .crawler_child_runtime import child_environment, child_process_options, authority_for
+        env = child_environment()
         for name in ('MEDIACRAWLER_PROXY_CONFIG_FD', 'MEDIACRAWLER_PROXY_RECEIPT_FD', 'MEDIACRAWLER_ROUTE_ACK_FD', 'MEDIACRAWLER_MANAGED_ROUTE',
                      'MEDIACRAWLER_PROXY_REQUIRED', 'MEDIACRAWLER_PROXY_PROBE_BUDGET_ID'):
             env.pop(name, None)
@@ -1383,9 +1424,12 @@ def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_id
         command = [str(settings.crawler_login_python), str(helper), '--account-id', bundle.account_id]
         if check_login:
             command += ['--check-login', '--expected-identity', expected_identity]
+        authority = authority_for(bundle, maintenance_only=not check_login)
+        env.update(authority.env)
         process = subprocess.Popen(command, cwd=settings.media_crawler_dir,
-            env=env, pass_fds=(*bundle.pass_fds, *pipe.pass_fds, *(receipt_pipe.pass_fds if receipt_pipe else ())), stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, start_new_session=True)
+            env=env, pass_fds=(*bundle.pass_fds, *pipe.pass_fds, *(receipt_pipe.pass_fds if receipt_pipe else ()), *authority.pass_fds), stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, start_new_session=True, **child_process_options())
+        authority.bind_child(process.pid)
         pipe.start(process)
         if receipt_pipe:
             receipt_pipe.start(process)
@@ -1445,6 +1489,11 @@ def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_id
         if check_login:
             if result['login_result'] not in {'success', 'challenge', 'uncertain'}:
                 raise CollectionRouteError('PROXY_CONFIG_INVALID')
+            if verified_result:
+                verified_receipt = receipt
+                return {'login_result': result['login_result'], 'receipt': receipt,
+                        'child_pid': process.pid, 'process_start': authority.start_identity,
+                        'shutdown_verified': True, 'authority_verified': bool(snapshot.managed)}
             return result['login_result']
         verified_receipt=receipt
         return receipt
@@ -1463,6 +1512,8 @@ def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_id
                     assert_profile_browser_stopped(snapshot.account_id)
                     _retire_verified_probe_uncertainty(bundle,verified_receipt)
         finally:
+            if authority is not None:
+                authority.close()
             if process is not None and process.stdout is not None:
                 process.stdout.close()
             pipe.close()
@@ -1473,7 +1524,7 @@ def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_id
 def _retire_verified_probe_uncertainty(bundle,receipt):
     """Parent-only compare/delete after complete validated probe and group drain."""
     snapshot=bundle.snapshot
-    if snapshot.route_mode in {'direct_degraded','legacy_direct'} or snapshot.observed_exit_ip is None or receipt.ip!=snapshot.observed_exit_ip:
+    if snapshot.observed_exit_ip is None or receipt.ip!=snapshot.observed_exit_ip:
         return
     now=time.time()
     if snapshot.expires_at is None or snapshot.expires_at<=now or not 0<=now-receipt.observed_at<=settings.crawler_proxy_probe_ttl:
@@ -1483,6 +1534,28 @@ def _retire_verified_probe_uncertainty(bundle,receipt):
     with accounts._connect() as db:
         db.execute('ATTACH DATABASE ? AS probe_health',(snapshot.scheduler_db_path,))
         db.execute('BEGIN IMMEDIATE')
+        if snapshot.route_mode in {'direct_degraded', 'legacy_direct'}:
+            account = db.execute('SELECT * FROM crawler_accounts WHERE id=?', (snapshot.account_id,)).fetchone()
+            shared = db.execute('SELECT * FROM crawler_shared_exits WHERE exit_key=?', (receipt.ip,)).fetchone()
+            if (not account or account['binding_revision'] != snapshot.binding_revision
+                    or account['shared_exit_key'] != receipt.ip
+                    or account['shared_exit_generation'] != snapshot.exit_generation
+                    or account['status'] == 'disabled' or account['pause_reason']
+                    or account['paused_until'] is not None and account['paused_until'] > now
+                    or not shared or shared['generation'] != snapshot.exit_generation
+                    or shared['pause_reason'] or shared['paused_until'] is not None and shared['paused_until'] > now):
+                return
+            if snapshot.route_mode == 'legacy_direct' and account['proxy_id']:
+                return
+            if snapshot.route_mode == 'direct_degraded' and account['route_mode'] != 'direct_degraded':
+                return
+            from tools.bound_proxy import route_health_key
+            key = route_health_key(snapshot)
+            exists = db.execute("SELECT 1 FROM probe_health.sqlite_master WHERE type='table' AND name='collection_route_health'").fetchone()
+            if exists:
+                db.execute("DELETE FROM probe_health.collection_route_health WHERE proxy_id=? AND config_revision=? AND stop_code IN ('PROXY_UNAVAILABLE','PROXY_TRANSPORT_FAILED','PROXY_CONNECTION_REFUSED','PROXY_AUTH_FAILED','PROXY_EXPIRED')",
+                           (key, snapshot.config_revision))
+            return
         resource=db.execute('SELECT * FROM proxy_resources WHERE id=?',(snapshot.proxy_id,)).fetchone()
         account=db.execute('SELECT proxy_id,binding_revision FROM crawler_accounts WHERE id=?',(snapshot.account_id,)).fetchone()
         if (not account or tuple(account)!=(snapshot.proxy_id,snapshot.binding_revision) or not resource
@@ -1552,7 +1625,7 @@ def download_asset_hop(bundle, url, headers, timeout, verify, on_chunk, *, media
     snapshot = bundle.snapshot
     if snapshot is None:
         raise CollectionRouteError('PROXY_CONFIG_INVALID')
-    authorize_route_owner(bundle.account_id, snapshot.proxy_id if snapshot.route_mode != 'direct_degraded' else None, bundle.owner_id,
+    authorize_route_owner(bundle.account_id, snapshot.proxy_id if snapshot.route_mode not in {'direct_degraded', 'legacy_direct'} else None, bundle.owner_id,
                           account_store=getattr(bundle, 'account_store', None))
     current = resolve_account_route(bundle.account_id, account_store=getattr(bundle, 'account_store', None),
         expected_binding_revision=snapshot.binding_revision, expected_config_revision=snapshot.config_revision)
@@ -1678,7 +1751,7 @@ def consume_route_event(line, bundle):
         store = getattr(bundle,'proxy_store',None)
         if event['code'] == 'ROUTE_OBSERVED':
             ip = route_contract().canonical_exit_ip(event['observed_exit_ip'])
-            if snapshot.route_mode == 'direct_degraded':
+            if snapshot.route_mode in {'direct_degraded', 'legacy_direct'}:
                 if ip != snapshot.observed_exit_ip:
                     raise CollectionRouteError('PROXY_EXIT_CHANGED')
                 bundle.account_store.observe_shared_exit(ip, observed_at=at, service_exit=True)
@@ -1692,8 +1765,9 @@ def consume_route_event(line, bundle):
         error = CollectionRouteError(event['code'])
         if error.code != event['code'] or event['observed_exit_ip'] is not None:
             raise CollectionRouteError('PROXY_CONFIG_INVALID')
-        publish_route_stop(snapshot.proxy_id,snapshot.config_revision,error.code)
-        if snapshot.route_mode == 'direct_degraded':
+        if snapshot.route_mode != 'legacy_direct':
+            publish_route_stop(snapshot.proxy_id,snapshot.config_revision,error.code)
+        if snapshot.route_mode in {'direct_degraded', 'legacy_direct'}:
             raise error
         if store is None:
             raise error
@@ -1799,16 +1873,16 @@ def refresh_existing_route(account_id, *, account_store=None, owner_id='local-us
     account=accounts.get(account_id)
     if not account or account['status']!='active' or account.get('route_state')!='active' or account.get('pause_reason'):
         return False
-    if account.get('route_mode')=='direct_degraded':
+    if account.get('route_mode')=='direct_degraded' or not account.get('proxy_id') and not account.get('proxy_required'):
         with accounts._connect() as db:
             row=db.execute('SELECT * FROM crawler_shared_exits WHERE exit_key=?',(account.get('shared_exit_key'),)).fetchone()
         if (not row or row['pause_reason'] or row['generation']!=account.get('shared_exit_generation')
-                or account.get('validated_direct_generation')!=row['generation']):
+                or account.get('route_mode')=='direct_degraded' and account.get('validated_direct_generation')!=row['generation']):
             return False
         contract=route_contract()
         snapshot=contract.BoundRoute('dy',account_id,contract.derive_profile_key(account_id),'service-direct',
-            max(1,account['binding_revision']),1,'direct.invalid',1,'','',time.time()+1200,row['exit_key'],row['observed_at'],
-            str(settings.request_scheduler_db.resolve()),contract.derive_scope_ids('dy',account_id,'service-direct',row['exit_key']),route_mode='legacy_direct')
+            account['binding_revision'],1,'direct.invalid',1,'','',time.time()+1200,row['exit_key'],row['observed_at'],
+            str(settings.request_scheduler_db.resolve()),tuple(sorted(['dy','dy:account:'+account_id,'dy:service_exit:'+row['exit_key'],'dy:exit:'+row['exit_key']])),route_mode='legacy_direct')
         store=None
     else:
         store=get_proxy_store(accounts)
@@ -1843,27 +1917,46 @@ def refresh_existing_route(account_id, *, account_store=None, owner_id='local-us
 
 
 def assert_profile_browser_stopped(account_id):
-    """A detached Chromium owner keeps SingletonLock even after helper exit."""
+    """Check both archived Chromium ownership and current Firefox/profile fences."""
+    import fcntl
     import re
-    directory=settings.crawler_browser_profile_root.expanduser().resolve()/route_contract().derive_profile_key(account_id)
-    singleton=directory/'SingletonLock'
-    if singleton.is_symlink():
-        target=os.readlink(singleton)
-        match=re.fullmatch(r'(.+)-(\d+)',target)
-        if not match:
-            raise CollectionRouteError('PROXY_BUSY')
-        import socket
-        if match[1] not in {socket.gethostname(),socket.gethostname().split('.')[0]}:
-            raise CollectionRouteError('PROXY_BUSY')
-        try:
-            os.kill(int(match[2]),0)
-        except ProcessLookupError:
-            return
-        except (PermissionError,ValueError):
-            raise CollectionRouteError('PROXY_BUSY') from None
-        raise CollectionRouteError('PROXY_BUSY')
-    if singleton.exists():
-        raise CollectionRouteError('PROXY_BUSY')
+    import socket
+    key = route_contract().derive_profile_key(account_id)
+    directories = {settings.crawler_browser_profile_root.expanduser().resolve() / key,
+                   (settings.crawler_camoufox_state_root / 'profiles').expanduser().resolve() / key}
+    for directory in directories:
+        for name in ('SingletonLock', 'lock'):
+            path = directory / name
+            if path.is_symlink():
+                target = os.readlink(path)
+                pattern = r'(.+)-(\d+)' if name == 'SingletonLock' else r'(.+):\+?(\d+)'
+                match = re.fullmatch(pattern, target)
+                if not match or match[1] not in {socket.gethostname(), socket.gethostname().split('.')[0], '127.0.0.1', '127.0.1.1', 'localhost'}:
+                    raise CollectionRouteError('PROXY_BUSY')
+                try:
+                    os.kill(int(match[2]), 0)
+                except ProcessLookupError:
+                    continue
+                except (PermissionError, ValueError):
+                    raise CollectionRouteError('PROXY_BUSY') from None
+                raise CollectionRouteError('PROXY_BUSY')
+            if path.exists():
+                raise CollectionRouteError('PROXY_BUSY')
+        for name in ('adapter.lock', '.parentlock', 'parent.lock'):
+            path = directory / name
+            if path.is_symlink():
+                raise CollectionRouteError('PROXY_BUSY')
+            if not path.exists():
+                continue
+            try:
+                fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
+                with os.fdopen(fd, 'a') as handle:
+                    if name == 'adapter.lock':
+                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    else:
+                        fcntl.lockf(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except (OSError, ValueError):
+                raise CollectionRouteError('PROXY_BUSY') from None
 
 
 def reconcile_stopped_route_admissions(accounts, account_id, fresh_account_handle):

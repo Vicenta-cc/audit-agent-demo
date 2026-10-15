@@ -16,6 +16,8 @@ import { Button } from "../../components/common/Button";
 import { IconButton } from "../../components/common/IconButton";
 import {
   cancelCrawlerAccountLoginSession,
+  claimCrawlerAccountLogin,
+  renewLoginControlToken,
   fetchCrawlerAccountLoginSession,
   startCrawlerAccountLogin,
 } from "../../services/crawlerAccounts";
@@ -54,7 +56,10 @@ export function CrawlerAccountLoginDialog({
   const [session, setSession] = useState<CrawlerAccountLoginSession | null>(
     null,
   );
+  const [ownerLost, setOwnerLost] = useState(false);
+  const requestGeneration = useRef(0);
   const [startError, setStartError] = useState("");
+  const [startErrorCode, setStartErrorCode] = useState("");
   const [recoveries, setRecoveries] = useState<
     Array<{ id: string; updated_at: string }>
   >([]);
@@ -95,13 +100,17 @@ export function CrawlerAccountLoginDialog({
   }, [account?.id, starting, closing]);
 
   const beginLogin = useCallback(
-    async (resume = true, sourceOperationId?: string) => {
+    async (resume = true, sourceOperationId?: string, claimExisting = false) => {
       if (!account) return;
+      const generation = ++requestGeneration.current;
+      const isCurrent = () => generation === requestGeneration.current;
+      setOwnerLost(false);
       recoverySource.current = sourceOperationId;
       requestedAccountRef.current = account.id;
       successHandledRef.current = "";
       setStarting(true);
       setStartError("");
+      setStartErrorCode("");
       setSession(null);
       setRecoveries([]);
       try {
@@ -109,11 +118,29 @@ export function CrawlerAccountLoginDialog({
           ? window.sessionStorage.getItem(loginSessionStorageKey(account.id)) ||
             ""
           : "";
+        let claimed: CrawlerAccountLoginSession | null = null;
+        if ((resume || claimExisting) && !sourceOperationId && account.platform === "dy") {
+          try {
+            claimed = await claimCrawlerAccountLogin(account.id);
+          } catch (error) {
+            if (error instanceof ApiError && error.code === "SESSION_OWNER_MISMATCH") {
+              // Only an explicit new opening may renew this account's retired control token.
+              renewLoginControlToken(account.id);
+              try { claimed = await claimCrawlerAccountLogin(account.id); }
+              catch (retryError) {
+                if (!(retryError instanceof ApiError) || retryError.status !== 404 || retryError.code !== "ACTIVE_LOGIN_NOT_FOUND") throw retryError;
+              }
+            } else if (!(error instanceof ApiError) || error.status !== 404 || error.code !== "ACTIVE_LOGIN_NOT_FOUND") throw error;
+          }
+          if (!isCurrent()) return;
+        }
         let next: CrawlerAccountLoginSession;
-        if (storedSessionId) {
+        if (claimed) {
+          next = claimed;
+        } else if (storedSessionId) {
           let stored: CrawlerAccountLoginSession | null = null;
           try {
-            stored = await fetchCrawlerAccountLoginSession(storedSessionId);
+            stored = await fetchCrawlerAccountLoginSession(storedSessionId, account.id);
           } catch (error) {
             if (!(error instanceof ApiError) || error.status !== 404)
               throw error;
@@ -125,7 +152,7 @@ export function CrawlerAccountLoginDialog({
                 items: Array<{ id: string; updated_at: string }>;
               }>(
                 `/api/crawler-accounts/${encodeURIComponent(account.id)}/login-operations?recoverable=true`,
-                { headers: loginControlHeaders() },
+                { headers: loginControlHeaders(account.id) },
               );
               if (operations.items.length) {
                 setRecoveries(operations.items);
@@ -164,15 +191,20 @@ export function CrawlerAccountLoginDialog({
             sourceOperationId,
           );
         }
+        if (!isCurrent()) return;
         if (next.accountId !== account.id) {
           throw new Error("登录会话与当前账号不匹配，请重新登录");
         }
-        window.sessionStorage.setItem(
-          loginSessionStorageKey(account.id),
-          next.id,
-        );
+        if (next.id) {
+          window.sessionStorage.setItem(loginSessionStorageKey(account.id), next.id);
+        } else {
+          // A terminal operation has an operation ID, but no live browser session.
+          window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
+        }
         setSession(next);
       } catch (error) {
+        if (!isCurrent()) return;
+        setStartErrorCode(error instanceof ApiError ? error.code || "" : "");
         if (
           error instanceof ApiError &&
           error.code === "RECOVERY_REQUIRED" &&
@@ -183,7 +215,7 @@ export function CrawlerAccountLoginDialog({
               items: Array<{ id: string; updated_at: string }>;
             }>(
               `/api/crawler-accounts/${encodeURIComponent(account.id)}/login-operations?recoverable=true`,
-              { headers: loginControlHeaders() },
+              { headers: loginControlHeaders(account.id) },
             );
             setRecoveries(operations.items);
             if (!operations.items.length)
@@ -193,7 +225,7 @@ export function CrawlerAccountLoginDialog({
           }
         } else setStartError(readApiError(error));
       } finally {
-        setStarting(false);
+        if (isCurrent()) setStarting(false);
       }
     },
     [account],
@@ -201,7 +233,10 @@ export function CrawlerAccountLoginDialog({
 
   useEffect(() => {
     if (!account) {
+      requestGeneration.current++;
       requestedAccountRef.current = "";
+      setOwnerLost(false);
+      setStarting(false);
       setSession(null);
       setStartError("");
       return;
@@ -211,6 +246,8 @@ export function CrawlerAccountLoginDialog({
     }
   }, [account, beginLogin]);
 
+  useEffect(() => () => { requestGeneration.current++; }, []);
+
   useEffect(() => {
     if (!session || session.v2 || !activeLoginStatuses.includes(session.status))
       return;
@@ -218,7 +255,7 @@ export function CrawlerAccountLoginDialog({
     let timer = 0;
     const poll = async () => {
       try {
-        const next = await fetchCrawlerAccountLoginSession(session.id);
+        const next = await fetchCrawlerAccountLoginSession(session.id, session.accountId);
         if (stopped) return;
         setSession(next);
         if (activeLoginStatuses.includes(next.status)) {
@@ -273,7 +310,7 @@ export function CrawlerAccountLoginDialog({
   useEffect(() => {
     if (!account || !session?.v2 || !savingUncertain) { setSaveRecovery("none"); return; }
     let stopped = false; setSaveRecovery("checking");
-    void apiRequest<{ item: { stage: string } }>(`/api/crawler-accounts/${encodeURIComponent(account.id)}/login-operations/${encodeURIComponent(session.v2.operation_id)}`, { headers: loginControlHeaders() }).then(result => {
+    void apiRequest<{ item: { stage: string } }>(`/api/crawler-accounts/${encodeURIComponent(account.id)}/login-operations/${encodeURIComponent(session.v2.operation_id)}`, { headers: loginControlHeaders(account.id) }).then(result => {
       if (!stopped) setSaveRecovery(result.item.stage === "recovery_required" ? "ready" : "unavailable");
     }).catch(error => { if (!stopped) { setSaveRecovery("unavailable"); setStartError(readApiError(error)); } });
     return () => { stopped = true; };
@@ -295,8 +332,8 @@ export function CrawlerAccountLoginDialog({
     if (closing || starting) return;
     setClosing(true);
     try {
-      if (session && activeLoginStatuses.includes(session.status))
-        await cancelCrawlerAccountLoginSession(session.id);
+      if (!ownerLost && session?.id && activeLoginStatuses.includes(session.status))
+        await cancelCrawlerAccountLoginSession(session.id, account.id);
       window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
       onClose();
     } catch (error) {
@@ -307,16 +344,17 @@ export function CrawlerAccountLoginDialog({
   };
 
   const retry = async () => {
-    if (closing || starting) return;
+    if (ownerLost || closing || starting) return;
+    const busy = account.platform === "dy" && ["ACCOUNT_BUSY", "SESSION_OWNER_MISMATCH"].some(code => startErrorCode === code || sessionErrorCode === code);
     setClosing(true);
     try {
-      if (session && (session.v2 || activeLoginStatuses.includes(session.status))) {
-        const cancelled = await cancelCrawlerAccountLoginSession(session.id);
+      if (!busy && session?.id && (session.v2 || activeLoginStatuses.includes(session.status))) {
+        const cancelled = await cancelCrawlerAccountLoginSession(session.id, account.id);
         if (session.v2 && !cancelled.cleanupComplete) throw new Error("原登录窗口仍在释放资源，请稍后再重试");
       }
       window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
       requestedAccountRef.current = "";
-      await beginLogin(false, recoverySource.current);
+      await beginLogin(false, recoverySource.current, busy);
     } catch (error) { setStartError(readApiError(error)); }
     finally { setClosing(false); }
   };
@@ -325,8 +363,10 @@ export function CrawlerAccountLoginDialog({
     if (!session?.v2 || closing || starting || saveRecovery !== "ready") return;
     setClosing(true); setStartError("");
     try {
-      const cancelled = await cancelCrawlerAccountLoginSession(session.id);
-      if (!cancelled.cleanupComplete) throw new Error("上次登录仍在结束，请稍后继续完成登录");
+      if (session.id) {
+        const cancelled = await cancelCrawlerAccountLoginSession(session.id, account.id);
+        if (!cancelled.cleanupComplete) throw new Error("上次登录仍在结束，请稍后继续完成登录");
+      }
       await beginLogin(false, session.v2.operation_id);
     } catch (error) { setStartError(readApiError(error)); }
     finally { setClosing(false); }
@@ -389,7 +429,9 @@ export function CrawlerAccountLoginDialog({
           ) : null}
           {session?.v2 ? (
             <CrawlerLoginV2View
+              key={session.v2.operation_id}
               initial={session.v2}
+              onOwnershipLost={() => setOwnerLost(true)}
               onSnapshot={(next) =>
                 setSession((prev) =>
                   prev
@@ -518,10 +560,10 @@ export function CrawlerAccountLoginDialog({
             </div>
           ) : null}
           {session?.v2 &&
-          ["failed", "expired", "cancelled"].includes(session.status) && !savingUncertain ? (
+          !ownerLost && ["failed", "expired", "cancelled"].includes(session.status) && !savingUncertain ? (
             <div className="crawler-login-v2-retry"><p>重新开始需要再次扫码。</p><Button type="button" disabled={closing || starting} onClick={() => void retry()}>重新扫码</Button></div>
           ) : null}
-          {session?.v2 && savingUncertain ? <div className="crawler-login-v2-retry"><p>{saveRecovery === "checking" ? "正在检查已完成的登录，请勿重复扫码。" : "先确认已有登录信息，避免丢失已完成的登录。"}</p>{saveRecovery === "ready" ? <Button type="button" variant="primary" disabled={closing || starting} onClick={() => void continueSavedLogin()}>继续完成登录</Button> : null}</div> : null}
+          {session?.v2 && savingUncertain && !ownerLost ? <div className="crawler-login-v2-retry"><p>{saveRecovery === "checking" ? "正在检查已完成的登录，请勿重复扫码。" : "先确认已有登录信息，避免丢失已完成的登录。"}</p>{saveRecovery === "ready" ? <Button type="button" variant="primary" disabled={closing || starting} onClick={() => void continueSavedLogin()}>继续完成登录</Button> : null}</div> : null}
           {closing ? <p role="status">正在结束本次登录…</p> : null}
           {session?.v2 && startError ? <p role="alert">{startError}</p> : null}
         </div>

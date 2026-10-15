@@ -17,7 +17,8 @@ def trial_job_ids(value: str) -> tuple[str, ...]:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env")
+if os.getenv("CRAWLER_RESTRICTED_CHILD") != "1":
+    load_dotenv(ROOT / ".env")
 
 
 def environment_flag(name: str, *, default: bool = False) -> bool:
@@ -63,7 +64,7 @@ class Settings:
     crawler_proxy_enabled = environment_flag("CRAWLER_PROXY_ENABLED")
     crawler_proxy_pool_ids = trial_job_ids(os.getenv("CRAWLER_PROXY_POOL_IDS", ""))
     crawler_proxy_default_id = os.getenv("CRAWLER_PROXY_DEFAULT_ID", "").strip()
-    crawler_proxy_echo_url = os.getenv("CRAWLER_PROXY_ECHO_URL", "").strip()
+    crawler_proxy_echo_url = os.getenv("CRAWLER_PROXY_ECHO_URL", "https://api.ip.sb/ip").strip()
     crawler_proxy_probe_interval = 300
     crawler_proxy_probe_budget = 96
     crawler_proxy_probe_ttl = 300
@@ -319,6 +320,7 @@ class Settings:
         raise ValueError("Invalid CRAWLER_LOGIN_V2_BROWSER_MODE")
     if crawler_login_v2_resource_policy not in {"conservative", "precise"}:
         raise ValueError("Invalid CRAWLER_LOGIN_V2_RESOURCE_POLICY")
+    crawler_login_v2_preparation_timeout_seconds = max(15, min(180, int(os.getenv("CRAWLER_LOGIN_V2_PREPARATION_TIMEOUT_SECONDS", "120"))))
     crawler_login_v2_timeout_seconds = max(180, min(1800, int(os.getenv("CRAWLER_LOGIN_V2_TIMEOUT_SECONDS", "600"))))
     crawler_login_v2_active_fps = max(5, min(20, int(os.getenv("CRAWLER_LOGIN_V2_ACTIVE_FPS", "15"))))
     crawler_login_v2_idle_fps = max(1, min(5, int(os.getenv("CRAWLER_LOGIN_V2_IDLE_FPS", "2"))))
@@ -362,6 +364,20 @@ class Settings:
     crawler_browser_profile_root = Path(os.getenv(
         "CRAWLER_BROWSER_PROFILE_ROOT", str(data_dir / "crawler_browser_profiles")
     )).expanduser().resolve()
+    crawler_camoufox_state_root = Path(os.getenv(
+        "CRAWLER_CAMOUFOX_STATE_ROOT", str(data_dir / "camoufox_state")
+    )).expanduser().resolve()
+    crawler_camoufox_browser_version = os.getenv("CRAWLER_CAMOUFOX_BROWSER_VERSION", "156.0.1-beta.39")
+    crawler_camoufox_executable = os.getenv("CRAWLER_CAMOUFOX_EXECUTABLE", "").strip()
+    crawler_camoufox_executable_sha256 = os.getenv("CRAWLER_CAMOUFOX_EXECUTABLE_SHA256", "").strip()
+    crawler_camoufox_archive_root = Path(os.getenv(
+        "CRAWLER_CAMOUFOX_ARCHIVE_ROOT", str(data_dir / "browser_profile_archives")
+    )).expanduser().resolve()
+    crawler_browser_maintenance = environment_flag("CRAWLER_BROWSER_MAINTENANCE")
+    crawler_child_uid = os.getenv("CRAWLER_CHILD_UID", "").strip()
+    crawler_child_gid = os.getenv("CRAWLER_CHILD_GID", "").strip()
+    crawler_child_output_max_bytes = max(1, int(os.getenv("CRAWLER_CHILD_OUTPUT_MAX_BYTES", "2147483648")))
+    crawler_child_output_max_files = max(1, int(os.getenv("CRAWLER_CHILD_OUTPUT_MAX_FILES", "20000")))
     _media_crawler_python_default = (
         media_crawler_dir / ".venv" / "Scripts" / "python.exe"
         if os.name == "nt"
@@ -471,5 +487,6 @@ class Settings:
 
 
 settings = Settings()
-settings.data_dir.mkdir(parents=True, exist_ok=True)
-settings.outputs_dir.mkdir(parents=True, exist_ok=True)
+if os.getenv("CRAWLER_RESTRICTED_CHILD") != "1":
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    settings.outputs_dir.mkdir(parents=True, exist_ok=True)

@@ -32,14 +32,18 @@ def test_visible_bounds_hidden_matches_and_preserves_first_visible():
         first = SimpleNamespace(is_visible=AsyncMock(return_value=True))
         hidden = SimpleNamespace(is_visible=AsyncMock(return_value=False))
         matches = SimpleNamespace(
-            first=first, count=AsyncMock(return_value=100), nth=Mock(return_value=hidden)
+            first=first,
+            count=AsyncMock(return_value=100),
+            nth=Mock(return_value=hidden),
         )
         adapter = DouyinLoginAdapter(None, SimpleNamespace(locator=lambda _: matches))
         assert await adapter.visible(QR_SELECTOR) is first
         matches.count.assert_not_awaited()
         first.is_visible.return_value = False
         assert await adapter.visible(QR_SELECTOR) is None
-        assert [call.args[0] for call in matches.nth.call_args_list] == list(range(1, 20))
+        assert [call.args[0] for call in matches.nth.call_args_list] == list(
+            range(1, 20)
+        )
 
     asyncio.run(run())
 
@@ -860,7 +864,7 @@ def test_home_fallback_only_applies_before_any_actionable_login_step(
             helper.media.close()
             right.close()
 
-    assert asyncio.run(scenario(["preparing", "preparing", "preparing"])) == 1
+    assert asyncio.run(scenario(["preparing", "preparing", "preparing"])) == 0
     assert asyncio.run(scenario(["qr_ready", "qr_ready", "preparing"])) == 0
 
 
@@ -1051,82 +1055,25 @@ def test_unclassified_rendered_panel_is_automatically_cropped_manual():
     asyncio.run(run())
 
 
-def test_internal_display_fallback_once_preserves_profile_and_never_resets(monkeypatch):
-    from unittest.mock import AsyncMock
-    from scripts import crawler_douyin_login_v2 as module
+def test_login_is_headed_from_first_launch_without_reopen_path():
     import socket
 
-    async def run():
-        left, right = socket.socketpair()
-        helper = DouyinLoginV2(
-            SimpleNamespace(
-                operation_id="op", media_fd=left.detach(), headed=False, entry="self"
-            )
-        )
-        profile = object()
-        helper.profile = profile
-        helper.close_context = AsyncMock()
-        helper.open_context = AsyncMock()
-        helper.adapter = SimpleNamespace(navigate=AsyncMock(), open_login=AsyncMock())
-        monkeypatch.setattr(module.sys, "platform", "darwin")
-        try:
-            await helper.display_fallback()
-            assert helper.headed_mode and helper.display_fallback_used
-            assert helper.profile is profile
-            helper.close_context.assert_awaited_once()
-            helper.open_context.assert_awaited_once()
-            with __import__("pytest").raises(
-                ValueError, match="LOGIN_PREPARATION_FAILED"
-            ):
-                await helper.display_fallback()
-            helper.open_context.assert_awaited_once()
-        finally:
-            helper.media.close()
-            right.close()
-            helper.display.close()
-
-    asyncio.run(run())
-
-
-def test_display_fallback_rejected_after_progress_or_unavailable(monkeypatch):
-    from unittest.mock import AsyncMock
-    from scripts import crawler_douyin_login_v2 as module
-    import socket
-
-    async def run():
-        left, right = socket.socketpair()
-        helper = DouyinLoginV2(
-            SimpleNamespace(
-                operation_id="op", media_fd=left.detach(), headed=False, entry="self"
-            )
-        )
-        helper.close_context = AsyncMock()
-        helper.open_context = AsyncMock()
-        try:
-            helper.progress_observed = True
-            with __import__("pytest").raises(
-                ValueError, match="LOGIN_PREPARATION_FAILED"
-            ):
-                await helper.display_fallback()
-            helper.close_context.assert_not_awaited()
-            helper.progress_observed = False
-            monkeypatch.setattr(module.sys, "platform", "unsupported")
-            with __import__("pytest").raises(
-                ValueError, match="LOGIN_DISPLAY_UNAVAILABLE"
-            ):
-                await helper.display_fallback()
-            helper.open_context.assert_not_awaited()
-        finally:
-            helper.media.close()
-            right.close()
-            helper.display.close()
-
-    asyncio.run(run())
+    left, right = socket.socketpair()
+    helper = DouyinLoginV2(
+        SimpleNamespace(operation_id="op", media_fd=left.detach(), headed=False)
+    )
+    try:
+        assert helper.headed_mode == (__import__("sys").platform != "darwin")
+        assert not hasattr(helper, "display_fallback")
+    finally:
+        helper.media.close()
+        right.close()
 
 
 def test_identity_confirmation_has_short_deadline_without_false_success(
     tmp_path, monkeypatch
 ):
+    monkeypatch.setenv("CRAWLER_LOGIN_V2_PREPARATION_TIMEOUT_SECONDS", "15")
     from unittest.mock import AsyncMock
     from scripts import crawler_douyin_login_v2 as module
     import socket
@@ -1979,7 +1926,9 @@ def test_capture_metadata_mismatch_is_bounded_and_transient_change_recovers(
     asyncio.run(scenario(False))
 
 
-def test_login_entry_click_timeout_accepts_only_actual_same_page_postcondition():
+def test_login_entry_click_timeout_accepts_only_actual_same_page_postcondition(
+    monkeypatch,
+):
     pw = __import__("pytest").importorskip("playwright.async_api")
     from scripts.crawler_douyin_login_adapter import (
         DouyinLoginAdapter,
@@ -1988,6 +1937,19 @@ def test_login_entry_click_timeout_accepts_only_actual_same_page_postcondition()
     )
 
     async def scenario(panel_after, trusted=True):
+        clock = [0.0]
+
+        async def sleep(seconds):
+            clock[0] += seconds
+
+        from scripts import crawler_douyin_login_adapter as module
+
+        monkeypatch.setattr(module.asyncio, "sleep", sleep)
+        monkeypatch.setattr(
+            module.asyncio,
+            "get_running_loop",
+            lambda: SimpleNamespace(time=lambda: clock[0]),
+        )
         page = SimpleNamespace(
             url="https://www.douyin.com/jingxuan"
             if trusted
@@ -2032,6 +1994,7 @@ def test_login_entry_click_timeout_accepts_only_actual_same_page_postcondition()
 
 
 def test_login_entry_without_control_fails_explicitly_after_bounded_wait(monkeypatch):
+    monkeypatch.setenv("CRAWLER_LOGIN_V2_PREPARATION_TIMEOUT_SECONDS", "15")
     from unittest.mock import AsyncMock
     from scripts import crawler_douyin_login_adapter as module
 
@@ -2056,12 +2019,13 @@ def test_login_entry_without_control_fails_explicitly_after_bounded_wait(monkeyp
 
         monkeypatch.setattr(module.asyncio, "sleep", sleep)
         monkeypatch.setattr(
-            module.asyncio, "get_running_loop",
+            module.asyncio,
+            "get_running_loop",
             lambda: SimpleNamespace(time=lambda: clock[0]),
         )
         with __import__("pytest").raises(ValueError, match="LOGIN_PREPARATION_FAILED"):
             await adapter.open_login()
-        assert 12 <= sum(waited) < 12.2
+        assert 15 <= sum(waited) < 15.2
 
     asyncio.run(run())
 
@@ -2083,5 +2047,218 @@ def test_qr_error_after_verification_panel_disappears_enters_bounded_identity():
         adapter.region = AsyncMock(return_value=Region(10, 10, 300, 200))
         adapter.region_signature = AsyncMock(return_value="actual-verification")
         assert (await adapter.observe_once())["phase"] == "challenge_required"
+
+    asyncio.run(run())
+
+
+def test_account_admission_wait_is_separate_from_browser_action_timeout(monkeypatch):
+    import socket
+    from contextlib import asynccontextmanager
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_v2 as module
+
+    async def scenario(replace_controller):
+        left, right = socket.socketpair()
+        helper = module.DouyinLoginV2(
+            SimpleNamespace(operation_id="op", media_fd=left.detach())
+        )
+        helper.epoch = 1
+        helper.available_actions = ["switch_to_sms"]
+        helper._apply_command = AsyncMock(return_value={"executed": True})
+
+        @asynccontextmanager
+        async def slot(operation, **limits):
+            assert operation == "login_action"
+            assert limits["timeout"] == 0.01
+            await asyncio.sleep(0.03)  # More than the browser action deadline.
+            helper._apply_command.assert_not_awaited()
+            if replace_controller:
+                helper.epoch = 2
+            yield
+
+        helper.bound_proxy_session = SimpleNamespace(
+            ensure_business=AsyncMock(), slot=slot
+        )
+        command = {
+            "type": "action",
+            "action": "switch_to_sms",
+            "operation_id": "op",
+            "controller_epoch": 1,
+            "sequence": 1,
+        }
+        try:
+            if replace_controller:
+                with __import__("pytest").raises(
+                    module.ActionNotExecuted, match="CONTROLLER_REPLACED"
+                ):
+                    await helper.apply_command(command)
+                helper._apply_command.assert_not_awaited()
+            else:
+                assert await helper.apply_command(command) == {"executed": True}
+                helper._apply_command.assert_awaited_once_with(command)
+        finally:
+            helper.media.close()
+            right.close()
+
+    monkeypatch.setattr(module, "ACTION_EXECUTION_TIMEOUT", 0.01)
+    asyncio.run(scenario(False))
+    asyncio.run(scenario(True))
+
+
+def test_login_preparation_budget_allows_slow_hydration_and_returns_immediately(
+    monkeypatch,
+):
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_adapter as module
+    from scripts.crawler_account_login import PLATFORMS
+
+    monkeypatch.setenv("CRAWLER_LOGIN_V2_PREPARATION_TIMEOUT_SECONDS", "120")
+
+    async def run(ready_at, dom_seconds):
+        clock = [0.0]
+        empty = SimpleNamespace(count=AsyncMock(return_value=0))
+
+        async def dom(*args, **kwargs):
+            assert kwargs["timeout"] == 60000
+            clock[0] += dom_seconds
+
+        page = SimpleNamespace(
+            url="https://www.douyin.com",
+            wait_for_load_state=dom,
+            get_by_role=lambda *a, **k: empty,
+            get_by_text=lambda *a, **k: empty,
+        )
+        adapter = module.DouyinLoginAdapter(None, page)
+        opened = [False]
+
+        async def click(**kwargs):
+            opened[0] = True
+
+        trigger = SimpleNamespace(click=click)
+
+        async def visible(selector):
+            if selector == module.PANEL_SELECTOR and opened[0]:
+                return object()
+            if selector in PLATFORMS["dy"]["login_triggers"] and clock[0] >= ready_at:
+                return trigger
+            return None
+
+        adapter.visible = visible
+
+        async def sleep(seconds):
+            clock[0] += seconds
+
+        monkeypatch.setattr(module.asyncio, "sleep", sleep)
+        monkeypatch.setattr(
+            module.asyncio,
+            "get_running_loop",
+            lambda: SimpleNamespace(time=lambda: clock[0]),
+        )
+        await adapter.open_login()
+        assert opened[0]
+        return clock[0]
+
+    assert 20 <= asyncio.run(run(20, 5)) < 20.3
+    assert asyncio.run(run(0, 0)) == 0
+
+
+@__import__("pytest").mark.parametrize(
+    "identity_delay,expected,error",
+    [
+        (0, "", ""),
+        (24, "", ""),
+        (None, "", "IDENTITY_UNCONFIRMED"),
+        (0, "different-original", "IDENTITY_MISMATCH"),
+    ],
+)
+def test_self_navigation_and_identity_observation_have_separate_bounded_budgets(
+    tmp_path, monkeypatch, identity_delay, expected, error
+):
+    import socket
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_v2 as module
+
+    monkeypatch.setenv("CRAWLER_LOGIN_V2_PREPARATION_TIMEOUT_SECONDS", "60")
+
+    async def run():
+        clock = [0.0]
+        self_completed = [None]
+        navigation = [0]
+        monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+
+        async def sleep(seconds):
+            clock[0] += seconds
+
+        monkeypatch.setattr(module.asyncio, "sleep", sleep)
+        left, right = socket.socketpair()
+        helper = module.DouyinLoginV2(
+            SimpleNamespace(
+                operation_id="op",
+                media_fd=left.detach(),
+                intent="check_or_login",
+                entry="home",
+                expected_platform_account_id=expected,
+            )
+        )
+        helper.profile = {"directory": tmp_path}
+
+        async def navigate(entry):
+            navigation[0] += 1
+            if entry == "self" and self_completed[0] is None:
+                clock[0] += 20  # More than the old entire 15-second identity budget.
+                self_completed[0] = clock[0]
+
+        async def trusted():
+            if (
+                identity_delay is not None
+                and self_completed[0] is not None
+                and clock[0] - self_completed[0] >= identity_delay
+            ):
+                return "trusted-first-party-self"
+            return ""
+
+        helper.adapter = SimpleNamespace(
+            navigate=navigate,
+            has_auth=AsyncMock(return_value=True),
+            observe=AsyncMock(return_value={"phase": "preparing"}),
+            trusted_identity=trusted,
+            identity="",
+            identity_source="",
+        )
+        helper.context = SimpleNamespace(
+            storage_state=AsyncMock(return_value={"cookies": [], "origins": []})
+        )
+        monkeypatch.setattr(
+            module,
+            "export_douyin_auth_state",
+            AsyncMock(return_value={"cookies": [], "origins": []}),
+        )
+        helper.open_context = AsyncMock()
+        helper.close_context = AsyncMock()
+        helper.handshake = AsyncMock()
+        helper.abort_gesture = AsyncMock()
+        helper.emit = lambda *args, **kwargs: None
+        helper.publish = lambda *args, **kwargs: None
+        helper.media.auth = AsyncMock()
+        try:
+            if error:
+                with __import__("pytest").raises(ValueError, match=error):
+                    await helper.flow()
+                helper.media.auth.assert_not_awaited()
+                if error == "IDENTITY_UNCONFIRMED":
+                    assert 80 <= clock[0] < 81
+            else:
+                await helper.flow()
+                candidate = helper.media.auth.await_args.args[0]
+                assert candidate["identity_verified"] and candidate["reuse_verified"]
+                assert candidate["platform_account_id"] == "trusted-first-party-self"
+                assert (
+                    helper.open_context.await_count == 2
+                )  # Login + persistence verification only.
+                assert clock[0] < 60
+            assert not helper.display_fallback_used
+        finally:
+            helper.media.close()
+            right.close()
 
     asyncio.run(run())
