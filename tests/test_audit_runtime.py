@@ -188,3 +188,26 @@ def test_receipt_saved_without_secrets(config, monkeypatch):
 
 def test_installed_dependency_check_works_without_pip():
     runtime.check_dependencies()
+
+
+def test_login_v2_whitelist_and_exact_rollback(config):
+    config["settings"].update(CRAWLER_LOGIN_V2_ENABLED="false", CRAWLER_LOGIN_V2_ORIGINS="https://app.example")
+    old_keys = runtime.SETTING_KEYS - runtime.LOGIN_V2_SETTING_KEYS
+    original = copy.deepcopy(config)
+    result = runtime.login_v1_rollback_config(config, target_setting_keys=old_keys,
+                                             repository="/release/protected-v1", commit="a" * 40)
+    assert config == original
+    assert not set(result["settings"]) & runtime.LOGIN_V2_SETTING_KEYS
+    for field in ("runtime_root", "secrets_file", "crawler_repository", "crawler_python"):
+        assert result[field] == original[field]
+    assert runtime.environment(result)["CRAWLER_BROWSER_PROFILE_ROOT"] == runtime.environment(original)["CRAWLER_BROWSER_PROFILE_ROOT"]
+    config["settings"]["FUTURE_UNKNOWN_SETTING"] = "value"
+    with pytest.raises(ValueError, match="non-V2"):
+        runtime.login_v1_rollback_config(config, target_setting_keys=old_keys, repository="/release/v1", commit="a" * 40)
+
+
+def test_login_v2_keys_accepted_by_manifest(config):
+    config["settings"].update({key: "false" for key in runtime.LOGIN_V2_SETTING_KEYS})
+    path = Path(config["runtime_root"]) / "runtime.json"
+    path.write_text(json.dumps(config))
+    assert runtime.load_config(path) == config

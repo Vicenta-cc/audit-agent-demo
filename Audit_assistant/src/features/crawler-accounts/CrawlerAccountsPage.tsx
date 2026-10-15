@@ -575,7 +575,7 @@ function formatDateTime(value: string): string {
 }
 
 function isCooling(account: CrawlerAccount, now: number): boolean {
-  if (account.status !== "active" || !account.cooldownUntil) return false;
+  if (account.status === "disabled" || !account.cooldownUntil) return false;
   const until = new Date(account.cooldownUntil).getTime();
   return Number.isFinite(until) && until > now;
 }

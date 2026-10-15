@@ -43,6 +43,7 @@ interface ApiSharedCrawlerPoolSummary {
 }
 
 interface ApiCrawlerAccountLoginSession {
+  protocol_version?: number;
   id: string;
   account_id: string;
   platform: CrawlerAccountPlatform;
@@ -119,11 +120,15 @@ export function loginControlHeaders(): Record<string, string> {
   return { "X-Login-Token": token };
 }
 
-export async function startCrawlerAccountLogin(accountId: string): Promise<CrawlerAccountLoginSession> {
+export async function startCrawlerAccountLogin(accountId: string, intent: "check_or_login" | "reauth" | "recover" = "check_or_login", sourceOperationId?: string, browserMode?: "compatibility"): Promise<CrawlerAccountLoginSession> {
+  const intentKey = `crawler-account-login-intent:${accountId}:${intent}:${sourceOperationId || "new"}:${browserMode || "default"}`;
+  const key = window.sessionStorage.getItem(intentKey) || crypto.randomUUID();
+  window.sessionStorage.setItem(intentKey, key);
   const payload = await apiRequest<{ item: ApiCrawlerAccountLoginSession }>(
     `/api/crawler-accounts/${encodeURIComponent(accountId)}/login-sessions`,
-    { method: "POST", headers: loginControlHeaders() }
+    { method: "POST", headers: { ...loginControlHeaders(), "Idempotency-Key": key }, body: JSON.stringify({ supported_protocols: browserMode === "compatibility" ? [2] : [2, 1], intent, ...(browserMode ? { browser_mode: browserMode } : {}), ...(sourceOperationId ? { source_operation_id: sourceOperationId } : {}) }) }
   );
+  window.sessionStorage.removeItem?.(intentKey);
   return mapLoginSession(payload.item);
 }
 
@@ -135,11 +140,12 @@ export async function fetchCrawlerAccountLoginSession(sessionId: string): Promis
   return mapLoginSession(payload.item);
 }
 
-export async function cancelCrawlerAccountLoginSession(sessionId: string): Promise<void> {
-  await apiRequest(`/api/crawler-account-login-sessions/${encodeURIComponent(sessionId)}`, {
+export async function cancelCrawlerAccountLoginSession(sessionId: string): Promise<{ cleanupComplete: boolean }> {
+  const result = await apiRequest<{ item?: { cleanup_state?: string } }>(`/api/crawler-account-login-sessions/${encodeURIComponent(sessionId)}`, {
     headers: loginControlHeaders(),
     method: "DELETE"
   });
+  return { cleanupComplete: result.item?.cleanup_state === "complete" };
 }
 
 function toApiInput(input: CrawlerAccountInput) {
@@ -192,6 +198,7 @@ function mapSharedPool(item?: ApiSharedCrawlerPoolSummary): SharedCrawlerPoolSum
 
 function mapLoginSession(item: ApiCrawlerAccountLoginSession): CrawlerAccountLoginSession {
   return {
+    v2: item.protocol_version === 2 ? item as unknown as import("./crawlerLoginV2").LoginSnapshot : undefined,
     id: item.id,
     accountId: item.account_id,
     platform: item.platform,

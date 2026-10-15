@@ -27,6 +27,24 @@ def parse_cors_allow_origins(value: str, *, auth_mode: str) -> list[str]:
     return origins
 
 
+def parse_login_v2_origins(value: str, *, auth_mode: str, enabled: bool) -> list[str]:
+    from urllib.parse import urlsplit
+    origins = parse_cors_allow_origins(value, auth_mode=auth_mode)
+    for origin in origins:
+        url = urlsplit(origin)
+        try:
+            port = url.port
+        except ValueError as exc:
+            raise ValueError("Invalid CRAWLER_LOGIN_V2_ORIGINS port") from exc
+        if (url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password
+                or url.path or url.query or url.fragment or "*" in origin
+                or any(c.isspace() for c in origin) or (port is not None and not 1 <= port <= 65535)):
+            raise ValueError("CRAWLER_LOGIN_V2_ORIGINS must contain explicit origins")
+    if enabled and auth_mode == "required" and not origins:
+        raise ValueError("CRAWLER_LOGIN_V2_ORIGINS required when V2 is enabled")
+    return origins
+
+
 class Settings:
     investigation_multi_round_enabled = environment_flag("INVESTIGATION_MULTI_ROUND_ENABLED")
     continuous_resource_session_enabled = environment_flag("CONTINUOUS_RESOURCE_SESSION_ENABLED")
@@ -86,6 +104,9 @@ class Settings:
         item.strip()
         for item in os.getenv("HERMES_AUTHORIZED_REPORT_VERSION_IDS", "").split(",")
         if item.strip()
+    )
+    historical_report_demo_auto_register = environment_flag(
+        "HISTORICAL_REPORT_DEMO_AUTO_REGISTER"
     )
     _historical_report_a_db_value = os.getenv("HISTORICAL_REPORT_A_DB", "").strip()
     historical_report_a_db = (
@@ -270,6 +291,22 @@ class Settings:
     crawler_login_headed = os.getenv("CRAWLER_LOGIN_HEADED", "false").lower() == "true"
     crawler_login_interactive = os.getenv("CRAWLER_LOGIN_INTERACTIVE", "false").lower() == "true"
     crawler_login_interactive_timeout_seconds = max(180, min(1800, int(os.getenv("CRAWLER_LOGIN_INTERACTIVE_TIMEOUT_SECONDS", "600"))))
+    crawler_login_v2_enabled = environment_flag("CRAWLER_LOGIN_V2_ENABLED")
+    crawler_login_v2_entry = os.getenv("CRAWLER_LOGIN_V2_ENTRY", "home").strip()
+    crawler_login_v2_browser_mode = os.getenv("CRAWLER_LOGIN_V2_BROWSER_MODE", "headless").strip()
+    crawler_login_v2_resource_policy = os.getenv("CRAWLER_LOGIN_V2_RESOURCE_POLICY", "conservative").strip()
+    if crawler_login_v2_entry not in {"home", "self"}:
+        raise ValueError("Invalid CRAWLER_LOGIN_V2_ENTRY")
+    if crawler_login_v2_browser_mode not in {"headless", "compatibility"}:
+        raise ValueError("Invalid CRAWLER_LOGIN_V2_BROWSER_MODE")
+    if crawler_login_v2_resource_policy not in {"conservative", "precise"}:
+        raise ValueError("Invalid CRAWLER_LOGIN_V2_RESOURCE_POLICY")
+    crawler_login_v2_timeout_seconds = max(180, min(1800, int(os.getenv("CRAWLER_LOGIN_V2_TIMEOUT_SECONDS", "600"))))
+    crawler_login_v2_active_fps = max(5, min(20, int(os.getenv("CRAWLER_LOGIN_V2_ACTIVE_FPS", "15"))))
+    crawler_login_v2_idle_fps = max(1, min(5, int(os.getenv("CRAWLER_LOGIN_V2_IDLE_FPS", "2"))))
+    crawler_login_v2_jpeg_quality = max(50, min(90, int(os.getenv("CRAWLER_LOGIN_V2_JPEG_QUALITY", "70"))))
+    crawler_login_v2_operation_retention_days = max(1, int(os.getenv("CRAWLER_LOGIN_V2_OPERATION_RETENTION_DAYS", "7")))
+    crawler_login_v2_origins = parse_login_v2_origins(os.getenv("CRAWLER_LOGIN_V2_ORIGINS", ""), auth_mode=app_auth_mode, enabled=crawler_login_v2_enabled)
     crawler_login_browser_version = os.getenv("CRAWLER_LOGIN_BROWSER_VERSION", "").strip()
     crawler_auth_encryption_key = os.getenv("CRAWLER_AUTH_ENCRYPTION_KEY", "").strip()
     crawler_auth_key_file = Path(

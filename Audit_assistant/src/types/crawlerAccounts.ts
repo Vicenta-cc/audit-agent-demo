@@ -37,6 +37,7 @@ export interface CrawlerAccountLoginSession {
   platform: CrawlerAccountPlatform;
   status: CrawlerAccountLoginStatus;
   interactive?: boolean;
+  v2?: import("../services/crawlerLoginV2").LoginSnapshot;
   qrImageDataUrl: string;
   qrExpiresAt: string;
   finalizingStartedAt: string;

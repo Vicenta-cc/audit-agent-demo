@@ -381,6 +381,26 @@ async def rendered_link_candidates(page, selector: str) -> list[dict]:
 
 async def identify_logged_in_account(platform: str, context) -> str:
     """Passively identify the current account without making an extra platform request."""
+    if platform == "dy":
+        # An open /user/<id> may be a video author's page, never proof of self.
+        # Require a visible personal-menu marker and reject conflicting pages or
+        # selectors instead of returning whichever candidate was visited first.
+        personal_ids = set()
+        for candidate_page in list(context.pages):
+            for selector, _ in IDENTITY_LINK_SELECTORS["dy"]:
+                personal_ids.update(
+                    extract_platform_account_id("dy", candidate.get("href", ""))
+                    for candidate in await rendered_link_candidates(candidate_page, selector)
+                    if candidate_is_personal_link("dy", candidate, require_marker=True)
+                    and any(
+                        str(candidate.get(field) or "").strip()
+                        in {"我的主页", "个人主页", "我的抖音"}
+                        for field in ("text", "label")
+                    )
+                )
+        personal_ids.discard("")
+        return next(iter(personal_ids)) if len(personal_ids) == 1 else ""
+
     for candidate_page in list(context.pages):
         current_id = extract_platform_account_id(platform, candidate_page.url)
         if current_id:
@@ -595,13 +615,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-platform-account-id", default="")
     parser.add_argument("--headed", action="store_true")
     parser.add_argument("--interactive", action="store_true")
+    parser.add_argument("--protocol-v2", action="store_true")
+    parser.add_argument("--media-fd", type=int, default=-1)
+    parser.add_argument("--operation-id", default="")
+    parser.add_argument("--intent", choices=("check_or_login", "reauth", "recover"), default="check_or_login")
+    parser.add_argument("--entry", choices=("self", "home"), default="self")
+    parser.add_argument("--block-media", action="store_true")
+    parser.add_argument("--has-auth-backup", action="store_true")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
     try:
-        if args.interactive:
+        if args.protocol_v2:
+            if args.platform != "dy" or args.media_fd < 0 or not args.operation_id:
+                raise ValueError("V2 requires Douyin, operation ID and inherited media channel")
+            from scripts.crawler_douyin_login_v2 import run_login_v2
+            asyncio.run(run_login_v2(args))
+        elif args.interactive:
             if args.platform != "dy":
                 raise ValueError("当前平台不支持交互登录")
             from scripts.crawler_interactive_login import run_interactive_login

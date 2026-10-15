@@ -96,6 +96,8 @@ class CrawlerAccountStore:
             )
         if "risk_count" not in columns:
             conn.execute("ALTER TABLE crawler_accounts ADD COLUMN risk_count INTEGER NOT NULL DEFAULT 0")
+        if "auth_state_revision" not in columns:
+            conn.execute("ALTER TABLE crawler_accounts ADD COLUMN auth_state_revision INTEGER NOT NULL DEFAULT 0")
         if "last_risk_at" not in columns:
             conn.execute("ALTER TABLE crawler_accounts ADD COLUMN last_risk_at TEXT")
 
@@ -236,6 +238,11 @@ class CrawlerAccountStore:
                 platform_account_id=next_platform_account_id,
                 exclude_id=account_id,
             )
+            if current["platform"] == "dy" and any(
+                key in updates and updates[key] != (current[key] or "")
+                for key in ("platform_account_id", "status")
+            ):
+                updates["auth_state_revision"] = int(current["auth_state_revision"]) + 1
             updates["updated_at"] = datetime.now().isoformat(timespec="seconds")
             assignments = ", ".join(f"{column} = ?" for column in updates)
             conn.execute(
@@ -290,10 +297,11 @@ class CrawlerAccountStore:
                 UPDATE crawler_accounts
                 SET auth_state_ciphertext = ?, auth_state_updated_at = ?,
                     status = 'active', last_validated_at = ?, last_error = '',
-                    cooldown_until = NULL, failure_kind = NULL, updated_at = ?
+                    cooldown_until = NULL, failure_kind = NULL, updated_at = ?,
+                    auth_state_revision = auth_state_revision + CASE WHEN platform='dy' AND (COALESCE(auth_state_ciphertext,'') <> ? OR status <> 'active' OR (? <> '' AND COALESCE(platform_account_id,'') <> ?)) THEN 1 ELSE 0 END
                 WHERE id = ?
                 """,
-                (normalized_ciphertext, now, now, now, account_id),
+                (normalized_ciphertext, now, now, now, normalized_ciphertext, normalized_platform_account_id or "", normalized_platform_account_id or "", account_id),
             )
             if normalized_platform_account_id:
                 conn.execute(
@@ -305,6 +313,76 @@ class CrawlerAccountStore:
                 (account_id,),
             ).fetchone()
             return self._row_to_account(row)
+
+    def save_douyin_auth_state(
+        self, account_id: str, ciphertext: str, platform_account_id: str | None = None,
+        *, connection: sqlite3.Connection | None = None, expected_revision: int | None = None,
+        credentials_changed: bool = True,
+    ) -> dict | None:
+        if not str(ciphertext or "").strip():
+            raise ValueError("auth_state 密文不能为空")
+        def write(conn):
+            current = self.get(account_id, connection=conn)
+            if current is None:
+                return None
+            if current["platform"] != "dy":
+                raise ValueError("DY_ACCOUNT_REQUIRED")
+            if expected_revision is not None and current["auth_state_revision"] != expected_revision:
+                raise ValueError("AUTH_REVISION_CONFLICT")
+            identity = str(platform_account_id or current["platform_account_id"]).strip()
+            self._ensure_account_id_available(conn, platform="dy", platform_account_id=identity, exclude_id=account_id)
+            now = datetime.now().isoformat(timespec="seconds")
+            risk = current["failure_kind"] not in ("", "auth")
+            status = "disabled" if current["status"] == "disabled" else "active"
+            existing_ciphertext = conn.execute("SELECT auth_state_ciphertext FROM crawler_accounts WHERE id=?", (account_id,)).fetchone()[0]
+            changed_credentials = (credentials_changed or not existing_ciphertext) and ciphertext != (existing_ciphertext or "")
+            stored_ciphertext = ciphertext if changed_credentials else existing_ciphertext
+            revision_change = changed_credentials or identity != current["platform_account_id"] or status != current["status"]
+            conn.execute("""UPDATE crawler_accounts SET auth_state_ciphertext=?,
+                platform_account_id=?, status=?, last_validated_at=?, updated_at=?,
+                auth_state_updated_at=CASE WHEN ? THEN ? ELSE auth_state_updated_at END,
+                auth_state_revision=auth_state_revision+?, last_error=?, failure_kind=? WHERE id=?""",
+                (stored_ciphertext, identity, status, now, now, changed_credentials, now, int(revision_change),
+                 current["last_error"] if risk else "", current["failure_kind"] if risk else None, account_id))
+            return self.get(account_id, connection=conn)
+        if connection is not None:
+            return write(connection)
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            return write(conn)
+
+    save_douyin_login_auth_state = save_douyin_auth_state
+
+    def mark_douyin_auth_invalid(
+        self, account_id: str, message: str = "", *, status: str = "expired",
+        reset: bool = False, connection: sqlite3.Connection | None = None,
+    ) -> dict | None:
+        if status not in ("expired", "login_required"):
+            raise ValueError("INVALID_AUTH_STATUS")
+        def write(conn):
+            current = self.get(account_id, connection=conn)
+            if current is None:
+                return None
+            if current["platform"] != "dy":
+                raise ValueError("DY_ACCOUNT_REQUIRED")
+            risk = current["failure_kind"] not in ("", "auth")
+            next_status = "disabled" if current["status"] == "disabled" else status
+            changed = reset or current["status"] != next_status
+            conn.execute("""UPDATE crawler_accounts SET status=?,
+                auth_state_ciphertext=CASE WHEN ? THEN NULL ELSE auth_state_ciphertext END,
+                auth_state_updated_at=CASE WHEN ? THEN NULL ELSE auth_state_updated_at END,
+                auth_state_revision=auth_state_revision+?, failure_kind=?, last_error=?, updated_at=? WHERE id=?""",
+                (next_status, reset, reset, int(changed), current["failure_kind"] if risk else "auth",
+                 current["last_error"] if risk else str(message)[:500], datetime.now().isoformat(timespec="seconds"), account_id))
+            return self.get(account_id, connection=conn)
+        if connection is not None:
+            return write(connection)
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            return write(conn)
+
+    def reset_douyin_auth_state(self, account_id: str, *, connection=None) -> dict | None:
+        return self.mark_douyin_auth_invalid(account_id, status="login_required", reset=True, connection=connection)
 
     def get_auth_state_ciphertext(self, account_id: str) -> str:
         with self._lock, self._connect() as conn:
@@ -344,7 +422,8 @@ class CrawlerAccountStore:
             conn.execute(
                 """
                 UPDATE crawler_accounts
-                SET status = 'expired', last_error = ?, failure_kind = 'auth',
+                SET auth_state_revision = auth_state_revision + CASE WHEN platform='dy' AND status <> 'expired' THEN 1 ELSE 0 END,
+                    status = 'expired', last_error = ?, failure_kind = 'auth',
                     cooldown_until = NULL, updated_at = ?
                 WHERE id = ?
                 """,
@@ -458,6 +537,7 @@ class CrawlerAccountStore:
             "last_error": row["last_error"] or "",
             "cooldown_until": row["cooldown_until"] or "",
             "failure_kind": row["failure_kind"] or "",
+            "auth_state_revision": int(row["auth_state_revision"]),
             "has_auth_state": bool(row["auth_state_ciphertext"]),
             "auth_state_updated_at": row["auth_state_updated_at"] or "",
             "risk_count": int(row["risk_count"] or 0),

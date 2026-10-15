@@ -56,6 +56,7 @@ class LoginSession:
     frame: bytes = field(default=b"", repr=False)
     frame_sequence: int = 0
     resource_handle: object | None = field(default=None, repr=False)
+    global_handle: object | None = field(default=None, repr=False)
     input_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def public(self) -> dict:
@@ -198,11 +199,25 @@ class CrawlerAccountLoginManager:
         session.resource_handle = acquire_account_handle(session.platform, session.account_id)
         if session.resource_handle is None:
             raise ValueError("该采集账号正在采集或登录，请等待结束后再打开登录。")
+        import fcntl
+
+        global_path = (
+            Path(settings.crawler_browser_profile_root).expanduser().resolve()
+            / ".resource-locks" / "login-global.lock"
+        )
+        global_path.parent.mkdir(parents=True, exist_ok=True)
+        session.global_handle = global_path.open("a+b")
+        try:
+            fcntl.flock(session.global_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            session.global_handle.close()
+            session.resource_handle.close()
+            raise ValueError("已有账号正在登录，请等待结束。")
         diagnostic_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
         try:
             process = subprocess.Popen(
                 command,
-                pass_fds=(session.resource_handle.fileno(),),
+                pass_fds=(session.resource_handle.fileno(), session.global_handle.fileno()),
                 cwd=str(settings.root_dir),
                 env=env,
                 stdout=subprocess.PIPE,
@@ -219,6 +234,7 @@ class CrawlerAccountLoginManager:
         except OSError as exc:
             diagnostic_file.close()
             session.resource_handle.close()
+            session.global_handle.close()
             raise RuntimeError(f"无法启动登录浏览器：{exc}") from exc
 
         session.process = process
@@ -349,7 +365,9 @@ class CrawlerAccountLoginManager:
             session.updated_at = _iso(_utc_now())
             process = session.process
             account_id = session.account_id
-        self.store.mark_expired(account_id, session.error)
+        # Timeout is a login-session result, not evidence that account auth expired.
+        if session.platform != "dy":
+            self.store.mark_expired(account_id, session.error)
         self._stop_process(process)
 
     def cancel(
@@ -442,6 +460,8 @@ class CrawlerAccountLoginManager:
         finally:
             if session.resource_handle is not None:
                 session.resource_handle.close()
+            if session.global_handle is not None:
+                session.global_handle.close()
 
     def _read_process_diagnostic(self, session_id: str) -> str:
         with self._lock:
@@ -573,11 +593,21 @@ class CrawlerAccountLoginManager:
                     session = self._sessions.get(session_id)
                     if not session or session.status not in ACTIVE_LOGIN_STATUSES:
                         return
-                    account = self.store.save_auth_state(
-                        session.account_id,
-                        ciphertext,
-                        platform_account_id=platform_account_id or None,
-                    )
+                    if session.platform == "dy":
+                        expected = self.store.get(session.account_id)
+                        if not platform_account_id:
+                            self.store.mark_douyin_auth_invalid(session.account_id, status="login_required")
+                            raise ValueError("IDENTITY_UNVERIFIED")
+                        if expected and expected.get("platform_account_id") and expected["platform_account_id"] != platform_account_id:
+                            self.store.mark_douyin_auth_invalid(session.account_id, status="login_required")
+                            raise ValueError("IDENTITY_MISMATCH")
+                        account = self.store.save_douyin_auth_state(
+                            session.account_id, ciphertext, platform_account_id or ""
+                        )
+                    else:
+                        account = self.store.save_auth_state(
+                            session.account_id, ciphertext, platform_account_id=platform_account_id or None
+                        )
                     if not account:
                         raise RuntimeError("采集账号已不存在")
                     session.status = "success"
@@ -617,7 +647,8 @@ class CrawlerAccountLoginManager:
             session.finalizing_duration_seconds = 0
             session.updated_at = _iso(_utc_now())
             account_id = session.account_id
-        self.store.record_login_error(account_id, message)
+        if session.platform != "dy":
+            self.store.record_login_error(account_id, message)
 
     @staticmethod
     def _stop_process(process: subprocess.Popen[str] | None) -> None:

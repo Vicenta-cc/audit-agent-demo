@@ -21,7 +21,7 @@ class CrawlerAccountLoginManagerTest(unittest.TestCase):
                 "import json, sys\n"
                 "assert '--headed' in sys.argv\n"
                 "print(json.dumps({'type': 'success', "
-                "'auth_state': {'cookies': [], 'origins': []}}), flush=True)\n",
+                "'auth_state': {'cookies': [], 'origins': []}, 'platform_account_id':'identity'}), flush=True)\n",
                 encoding="utf-8",
             )
             store = CrawlerAccountStore(root / "audit.sqlite3")
