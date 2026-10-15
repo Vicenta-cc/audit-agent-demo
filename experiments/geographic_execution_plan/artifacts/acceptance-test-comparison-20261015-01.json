@@ -1,0 +1,123 @@
+{
+  "schema": "p2-acceptance-test-comparison-v1",
+  "groups": {
+    "acceptance-full-20261015-01": {
+      "tests.test_geographic_execution_plan": {
+        "passed": 29
+      },
+      "tests.test_geographic_execution_plan_guards": {
+        "passed": 17
+      },
+      "tests.test_geographic_execution_plan_integration": {
+        "passed": 20
+      },
+      "tests.test_geographic_execution_plan_p3": {
+        "passed": 49
+      },
+      "tests.test_geographic_execution_plan_provenance": {
+        "passed": 11
+      },
+      "tests.test_geographic_execution_plan_resources": {
+        "passed": 13
+      },
+      "tests.test_geographic_execution_plan_risk": {
+        "passed": 8
+      },
+      "tests.test_geographic_execution_plan_storage": {
+        "passed": 4
+      },
+      "tests.test_geographic_draft_configuration": {
+        "passed": 32
+      },
+      "tests.test_geographic_scope_catalog": {
+        "passed": 36
+      },
+      "tests.test_geographic_national_catalog": {
+        "passed": 34
+      },
+      "tests.test_geographic_scope_context": {
+        "passed": 8
+      },
+      "tests.test_geographic_scope_selection": {
+        "passed": 21
+      },
+      "tests.test_geographic_scope_selection_history": {
+        "passed": 12
+      },
+      "tests.test_geographic_scope_intent": {
+        "passed": 15
+      },
+      "tests.test_unified_draft_configuration": {
+        "passed": 78
+      },
+      "tests.test_frozen_workspace_configuration": {
+        "passed": 22
+      },
+      "tests.test_temporary_ruleset_execution": {
+        "passed": 49
+      },
+      "tests.test_search_terms_cap": {
+        "passed": 20,
+        "failed": 4
+      },
+      "tests.test_investigation_draft_configuration_m3": {
+        "passed": 117
+      },
+      "tests.test_task_settings": {
+        "passed": 14
+      },
+      "tests.test_triage_engine": {
+        "passed": 55
+      },
+      "tests.test_triage_matcher": {
+        "passed": 9
+      }
+    },
+    "acceptance-p1-baseline-20261015-01": {
+      "tests.test_search_terms_cap": {
+        "failed": 4
+      }
+    }
+  },
+  "failures": {
+    "acceptance-full-20261015-01": [
+      {
+        "nodeid": "tests.test_search_terms_cap::test_prompts_are_formatted_with_the_setting[10]",
+        "signature": "outdated-resource-prompt-assertion"
+      },
+      {
+        "nodeid": "tests.test_search_terms_cap::test_prompts_are_formatted_with_the_setting[6]",
+        "signature": "outdated-resource-prompt-assertion"
+      },
+      {
+        "nodeid": "tests.test_search_terms_cap::test_task_creation_caps_search_terms_for_every_source[formal-temporary]",
+        "signature": "missing-valid-session-resource-ref"
+      },
+      {
+        "nodeid": "tests.test_search_terms_cap::test_task_creation_caps_search_terms_for_every_source[temporary-temporary]",
+        "signature": "missing-valid-session-resource-ref"
+      }
+    ],
+    "acceptance-p1-baseline-20261015-01": [
+      {
+        "nodeid": "tests.test_search_terms_cap::test_prompts_are_formatted_with_the_setting[10]",
+        "signature": "outdated-resource-prompt-assertion"
+      },
+      {
+        "nodeid": "tests.test_search_terms_cap::test_prompts_are_formatted_with_the_setting[6]",
+        "signature": "outdated-resource-prompt-assertion"
+      },
+      {
+        "nodeid": "tests.test_search_terms_cap::test_task_creation_caps_search_terms_for_every_source[formal-temporary]",
+        "signature": "missing-valid-session-resource-ref"
+      },
+      {
+        "nodeid": "tests.test_search_terms_cap::test_task_creation_caps_search_terms_for_every_source[temporary-temporary]",
+        "signature": "missing-valid-session-resource-ref"
+      }
+    ]
+  },
+  "exact_failure_nodes_and_causes_equal": true,
+  "new_tests_passed": 151,
+  "test_suite_claim": "673 passed, 4 baseline failures; not a clean test suite; code-review defects may be untested"
+}

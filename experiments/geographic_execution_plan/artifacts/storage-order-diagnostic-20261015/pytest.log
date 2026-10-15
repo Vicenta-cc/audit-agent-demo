@@ -1,0 +1,36 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+___________ test_blob_roundtrip_is_immutable_and_independent_process ___________
+tests/test_geographic_execution_plan_storage.py:24: in test_blob_roundtrip_is_immutable_and_independent_process
+    assert result.returncode == 0, result.stderr
+E   AssertionError: b'Traceback (most recent call last):
+E       File "<string>", line 1, in <module>
+E       File "/Users/ext.wanghongtao6/.codex/w...t be under experiment or temporary directory")
+E     ValueError: database must be under experiment or temporary directory
+E     '
+E   assert 1 == 0
+E    +  where 1 = CompletedProcess(args=['/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python', '-c', 'fr... be under experiment or temporary directory")\nValueError: database must be under experiment or temporary directory\n').returncode
+_______ test_plan_process_restore_external_identity_and_embedded_copies ________
+tests/test_geographic_execution_plan_storage.py:120: in test_plan_process_restore_external_identity_and_embedded_copies
+    assert result.returncode == 0, result.stderr
+E   AssertionError: b'Traceback (most recent call last):
+E       File "<string>", line 1, in <module>
+E       File "/Users/ext.wanghongtao6/.codex/w...t be under experiment or temporary directory")
+E     ValueError: database must be under experiment or temporary directory
+E     '
+E   assert 1 == 0
+E    +  where 1 = CompletedProcess(args=['/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python', '-c', "im... be under experiment or temporary directory")\nValueError: database must be under experiment or temporary directory\n').returncode
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_execution_plan_storage.py::test_blob_roundtrip_is_immutable_and_independent_process
+FAILED tests/test_geographic_execution_plan_storage.py::test_plan_process_restore_external_identity_and_embedded_copies
+2 failed, 119 deselected, 2 warnings in 2.39s

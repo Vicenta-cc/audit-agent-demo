@@ -1,0 +1,4 @@
+!artifacts/
+artifacts/*
+!artifacts/*.json
+!artifacts/pytest.log

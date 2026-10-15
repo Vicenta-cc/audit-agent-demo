@@ -1,0 +1,34 @@
+{
+  "schema_version": "p3-admin-catalog-snapshot-v1",
+  "copied_at": "2026-10-15T08:08:16.112392+00:00",
+  "source_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/backend/investigation_creation/data/geographic_catalog.json",
+  "source_worktree_head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "snapshot_file": "geographic_catalog.json",
+  "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+  "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+  "record_count": 3218,
+  "upstream_sources": [
+    {
+      "coverage_review": "Third-party cn-division commit 88f2021ea21769bdb95d93699d8a625fcd9165ef, MIT. The raw snapshot envelope is derived; inputs preserve exact upstream bytes and SHA256. Commit date is not official effective date. 34 provinces supplemented from official sources; true prefecture/county types retained; 5 virtual municipality layers and 84 township/street rows excluded with audit trail. Province short forms and exact terminal 市/区/县 removal only for known true types are materialized offline as reviewed aliases; all cross-level conflicts retained. All 367 province/prefecture identities (including 297 supported P1 city targets (293 prefecture cities and four municipalities)) individually match independent official historical full-table evidence plus verified Laiwu removal/Nagqu reclassification, with zero missing/extra/different identities; official 2024 counts corroborate. This is not a freshly published 2026 official nationwide full table. County auxiliaries are upstream third-party data, not independently officially verified; they provide auxiliary type evidence for unsupported inputs; runtime city matching ignores cross-level aliases outside the supported city set. See official_verification/comparison_report.json and EVIDENCE.md.",
+      "data_date": "2026-09-02",
+      "full_table_evidence_url": "https://github.com/kk-418/cn-division/tree/88f2021ea21769bdb95d93699d8a625fcd9165ef",
+      "normalized_file": "normalized.json",
+      "normalized_sha256": "3ae65e9f130492b1cf9150d4630f7f9e63ed7d016f4d0f43545440df8674f750",
+      "raw_file": "snapshot.json",
+      "raw_sha256": "1662df76ab88778307049e1ff9182892c68d9df071aa287d1016bce13dce4b42",
+      "retrieved_date": "2026-10-15",
+      "transform": {
+        "id": "cn_division_snapshot_v1",
+        "implementation_sha256": "8b8b3efef9cec6fedd2b17afda9d358c8fc8713b19a3f9a07fde144206b4f6a9",
+        "version": "geographic-json-transform-v1"
+      },
+      "url": "https://github.com/kk-418/cn-division/tree/88f2021ea21769bdb95d93699d8a625fcd9165ef",
+      "version": "cn-division-2026.0.1@88f2021ea21769bdb95d93699d8a625fcd9165ef"
+    }
+  ],
+  "limitations": [
+    "Fixed byte-identical P1 snapshot; not a live cross-worktree dependency.",
+    "Province/prefecture identities reviewed in P1; county auxiliaries are upstream third-party data, not independently officially verified.",
+    "Not a claim of newest remote data or a newly official 2026 national table."
+  ]
+}

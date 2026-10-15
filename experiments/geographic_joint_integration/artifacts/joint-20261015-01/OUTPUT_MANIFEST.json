@@ -1,0 +1,1071 @@
+{
+  "schema": "p234-offline-output-manifest-v1",
+  "status": "P2/P3/P4 离线联调完成、待原会话验收；正式链路未接入、地域启动阻断保留。",
+  "p4_original_session_reacceptance": "pending; not replaced by implementer tests",
+  "files": [
+    {
+      "path": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/bootstrap/sitecustomize.py",
+      "bytes": 117,
+      "sha256": "09596c4f831c63a30010eaa66ea32d0d95321cd524094217b497d31a1f2b5043",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/captured-risk-comparison.json",
+      "bytes": 354194,
+      "sha256": "3dfd59894fb4f4b0543c2da65695866cb02fa28a7261b3de411b87bd766dc27d",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/commands.json",
+      "bytes": 2421,
+      "sha256": "e595766f8a12ddaa51e373495c6a49bcbee7613c9dac42c0950e38f86dc95203",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/example-fixture-plan.json",
+      "bytes": 521848,
+      "sha256": "35497da7a5d4a39616276f335bd7ddb0903c4691094a2d92bdc495f63c4d8823",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/example-fixture-plan.sqlite3",
+      "bytes": 540672,
+      "sha256": "f7bad6e6eb7d1a4eb1529110d5ccd5372e983707b4e4641cb702ec9058bcedb9",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/guard-attempts.jsonl",
+      "bytes": 258,
+      "sha256": "458951859bd21db05443bbe5efd146fbe9dfc350af9174875e0c3d270a5d7277",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/junit.xml",
+      "bytes": 113301,
+      "sha256": "95eb08f0df8e8b91cb5a9a7c297e38f6760ab0b7f1fb3dedf7dbe7d5b5fc1403",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/p3-manual-replay.json",
+      "bytes": 843997,
+      "sha256": "733aa022b2c6d1858e27e9fb6b1b1bad32bf61cb524bcaa3f38fe4ac2af5bf7b",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/pytest.log",
+      "bytes": 12778,
+      "sha256": "18219c54f56b87ff80b326619965355146071aa237ff35c0dee2c1f5c3fcfa99",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/replay-cli.json",
+      "bytes": 231,
+      "sha256": "db3e01b64703e6e48748bf8b69cc20978c98641e6e45397135db2ebc3f90df57",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/risk-comparison.json",
+      "bytes": 67339,
+      "sha256": "ae41026c165dcff58dfeeda19201071a39c0197541ea8eecc053afef0b981b00",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/summary.json",
+      "bytes": 786,
+      "sha256": "58b21fdff162ca3762c9fc917a21f90ea1540ca6a72c59ad2b7bc5609e0e1124",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/CASE_MATRIX.md",
+      "bytes": 6232,
+      "sha256": "332d6c3310264b7aad189337ca045ee02e1ca67371b322e399928e89a01bef26",
+      "kind": "new_document"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/INTERFACE_GAPS.md",
+      "bytes": 1236,
+      "sha256": "1408c17424ee3de25cce86d2dc0a73050058f543a340bb79527be42e2870a41b",
+      "kind": "new_document"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/INTERFACE_MAP.md",
+      "bytes": 4189,
+      "sha256": "003bcf6044c8e92d78970947a8b236eefabf40becaf46195aced7bcd563250b8",
+      "kind": "new_document"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/README.md",
+      "bytes": 1737,
+      "sha256": "02bc0941e42424f2863ffcb2a6f274139f1ed3094095c40267da31f010fb63c6",
+      "kind": "new_document"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/REPORT.md",
+      "bytes": 10810,
+      "sha256": "e18281d9576da73b85e54db1e77bf640274a7955cc1249f2d49f8fcca9add92d",
+      "kind": "new_document"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/SOURCE_INVENTORY.md",
+      "bytes": 10830,
+      "sha256": "e2243214b3d9bdcbd7057fcfbab866e7af01c7acaedd68ea2dc3743bdc2db3bc",
+      "kind": "new_document"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/adapter.py",
+      "bytes": 12003,
+      "sha256": "e20ac7f5e821da3176a40b52b311ab13b400538d37cfe0146884c9a41cdec386",
+      "kind": "new_source"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/adapter-20261015-01/allowed-children.jsonl",
+      "bytes": 453,
+      "sha256": "f9660cdb526b73592c2db69e519e928efccdf2c5ad7bd54b7cd84a4326e776bd",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/adapter-20261015-01/commands.json",
+      "bytes": 1006,
+      "sha256": "0a1358e80b438bf69db1b81c29fa25330f5a44dd9436f2c33ca3ce046d313408",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/adapter-20261015-01/guard-attempts.jsonl",
+      "bytes": 544,
+      "sha256": "66afd017746f886644b44b48018af578158978d02a394bf36dd5b8c2397ff032",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/adapter-20261015-01/invocation.json",
+      "bytes": 1119,
+      "sha256": "c1f8ead33d42ad18229bca151d8fe44dd3cefd9cdfb509c8a0fee1c5d97b35bf",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/adapter-20261015-01/junit.xml",
+      "bytes": 39422,
+      "sha256": "10de9ac4d5b3e78f887202e89852d47a1985733fcae6f8a709512697b1ee0c7f",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/adapter-20261015-01/pytest.log",
+      "bytes": 36770,
+      "sha256": "d92289803ecfa0722f1c1f3eed5bafcc5557d92b3d1910c17196ed6a277890f1",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/adapter-20261015-01/summary.json",
+      "bytes": 965,
+      "sha256": "8810eb5ac1914f0c16cc854fb0321f31dcd8fc3613b9cb66476df921c7d536c1",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/adapter-check-02/commands.json",
+      "bytes": 946,
+      "sha256": "982d53bce15b7cb6362d4b9772001e39640bae28dc9479229134a56653aacd81",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/adapter-check-02/invocation.json",
+      "bytes": 1005,
+      "sha256": "3edf9235b45cb7e0187b843c1771b4461b762876255587a26454cb02053337ea",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/adapter-check-02/junit.xml",
+      "bytes": 2553,
+      "sha256": "c3ad4f5a030ecce055dad0a9902ff5bd87ba177bb7334b9031dda949efb0ff0f",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/adapter-check-02/pytest.log",
+      "bytes": 1029,
+      "sha256": "193e711230ae32271d9513e9f3fb0bd1eefd6b0be2505d25948ce93c3c281f72",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/adapter-check-02/summary.json",
+      "bytes": 312,
+      "sha256": "64dbc1b1bd4b5213ede46aa7485f657c72359a6daf8d57453acf608f9f2575c1",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/allowed-children.jsonl",
+      "bytes": 722,
+      "sha256": "d2e54db48c659b2a644dd91429d855afd17c493ff165d8952baffa869dd8e076",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/detail-change-comments.json",
+      "bytes": 23930743,
+      "sha256": "fd954e31f2c1fc77571bf5a51593399e6fb9fdcf45f2038cb7bc6daa9ce8a4af",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/detail-change-identity.json",
+      "bytes": 23923689,
+      "sha256": "b2849e04f0c9495013dd6ff28b58953d9ca222ec828f1d0725f315d5136e70aa",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/detail-change-post.json",
+      "bytes": 23923219,
+      "sha256": "62dc9774fde6115b07127fa6c44a464d5753d4bc24057117157b1028663e1a63",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/detail-change-tier.json",
+      "bytes": 23915005,
+      "sha256": "431be1e1620f7e4fdad12e78ed48c0ff3fbbd55c382241f507d513ed3cd192b1",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/explicit-other-city.json",
+      "bytes": 10645300,
+      "sha256": "2ec339935c972fbec1da485158d38b68564dbcda2065c21c97cb7fa7fe3708f5",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/independent-process-reserve-child.json",
+      "bytes": 20660540,
+      "sha256": "98d112691d502ec73e2d72974a39ca469723641ff6fd0639fa0497765295bcff",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/independent-process-reserve.json",
+      "bytes": 22943689,
+      "sha256": "e6cec07f3c12875a828234e6fb8524eec851d75b25944a7b03363f134c78d8de",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/local-only-excludes-province.json",
+      "bytes": 10637623,
+      "sha256": "ef8cb3e13e53180e9b9a8ffbcd459a61bc3ca6bf4e851d52815081073ff593a9",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/municipality-target.json",
+      "bytes": 22933188,
+      "sha256": "394626a9f5d4589426ad3821676e4a0fca36e5491471867f2e07deab3f0fb780",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/non-xinjiang-ip-strong.json",
+      "bytes": 22882814,
+      "sha256": "5bb7c1b48896ee4250c0c9e5c507294149927852ccfa2c14d51f77df231f9102",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/non-xinjiang-ip-weak.json",
+      "bytes": 10619611,
+      "sha256": "049a3d44f190b9ce3bf2e30f31be9424ce60741cef7466733f8520e939d3cb39",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/old-risk-comments.json",
+      "bytes": 721768,
+      "sha256": "d9c126846c657454dba2f88f60582875049427f868df77a6dce24831d7f6d981",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/old-risk-identity.json",
+      "bytes": 717072,
+      "sha256": "283efad6548a09ad09b0ce70b006a03f030f88dec5e89c708f77638abae24316",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/old-risk-post.json",
+      "bytes": 718572,
+      "sha256": "853f4e8850975daf22af5b7b1869c81a30b8a7caf518dd7d63620ccb04a87cca",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/pause-and-empty.json",
+      "bytes": 671226,
+      "sha256": "87876e74cd6752fbfac5a6ad50e0297682d5007e6e0f41030afc0283d6b081a1",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/province-before-ip.json",
+      "bytes": 32873367,
+      "sha256": "9e902d19fb21214c151619e86ec900602060806a12aeef9f626f40ff84c298fb",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/province-target-local.json",
+      "bytes": 22934954,
+      "sha256": "09892405e193e2d1a6fca71f28899e746351ffaaffca2b690ec053ee67e3ece2",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/resources-0-0-0.json",
+      "bytes": 32908350,
+      "sha256": "bbbbf0aa082d2c52bef27012bfb0bb32a842e55b67535b64447a4a4d292b9f1a",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/resources-0-1-1.json",
+      "bytes": 32950034,
+      "sha256": "35ca39c7aefa29af58465ea0a267048311110eb5b944f40c5166f8a51a522882",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/resources-1-0-1.json",
+      "bytes": 32893494,
+      "sha256": "e8c87f4e76cd3bc7c955a6b9adb7cdff5540b09cee7ce2e12d205a7f53a012bf",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/resources-1-1-0.json",
+      "bytes": 32929077,
+      "sha256": "fee08fab192c582d2fcec704498bc189ecfaa130df8f8f152b9d194e2e1dcf12",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/restore-after_capture.json",
+      "bytes": 22941959,
+      "sha256": "0c500f32a83de02063dc8e1d8b068fb4701c56d4ac4cebb8990f4ed0d6dadb21",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/restore-after_delivery.json",
+      "bytes": 22942253,
+      "sha256": "3b99187957a10c64cdf4331d0d22181f49fdcc9ab791e934943dcf9028aae87f",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/restore-after_geo.json",
+      "bytes": 22941843,
+      "sha256": "7e2cb34e22a71621077e4eb4038f324f9dbc2f57f43e5d1c2716ff8b430d560b",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/restore-after_receipt.json",
+      "bytes": 22941959,
+      "sha256": "b02c3d57aa0e60c0df2fff9c1c5c7dd9a6cf5f948fa6162ad0be2e5ba93f4bbd",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/restore-after_reserve.json",
+      "bytes": 22941959,
+      "sha256": "43479114f797b3493b3ecc976c802ac31541c799c5e510430cbd8bba28f3b41e",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/restore-after_risk.json",
+      "bytes": 22941872,
+      "sha256": "f4520d94648f7a9e77dfc46324be912dc04b28ed2ca98f33fcb1354a2c6bd6a6",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/restore-after_settle.json",
+      "bytes": 22941930,
+      "sha256": "a796ed5d46f95143dedeb39c828559830805d1b70881503e1f4106ee699bb646",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/restore-no-live-reads.json",
+      "bytes": 22942032,
+      "sha256": "3c92d9beaa813b8b5792d341db630bf3f010fec47e6bd2269e03452ec41ac491",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/restore-unknown-result.json",
+      "bytes": 22943891,
+      "sha256": "4a3b6d5cd92049e404cf996ced96f694079ea3891e7fc8b4ad3a72df7e5e1f9b",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/cases/same-tier-query-order.json",
+      "bytes": 32920667,
+      "sha256": "5d533c662cf550ef30722f07ab355fad86a28ab49b5f792325c7d3b34be3383b",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/commands.json",
+      "bytes": 952,
+      "sha256": "b47d78a6c5e16abeba094c963cba70d81ec6df1a7d6c8a40e1708ae61bafe024",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/invocation.json",
+      "bytes": 1013,
+      "sha256": "7336ef9bec26b599007ba349176aa4b2fa75f2e74967a3f82f61888b307f9190",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/junit.xml",
+      "bytes": 18284,
+      "sha256": "c8f8fb2fff527c2fc378ff05c89bcda0360141acc4e2b660bfb21f37309acb03",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/pytest.log",
+      "bytes": 13963,
+      "sha256": "847a15247b04f2a7366aa348eb79ad8b95413e7bf5c0509d07dac5a2f1759ef6",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-02/summary.json",
+      "bytes": 313,
+      "sha256": "c972fd377c5fd85785bd0de1319b415e5755fbfd49b4537f593b4611d83018bb",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/cases/capture-failed-barrier.json",
+      "bytes": 10629796,
+      "sha256": "41ce04417ed9b710dd0e7844aa7f2a7d0f8bd66056fd7a5c9257662869a3cf81",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/cases/failure-authentication.json",
+      "bytes": 38053051,
+      "sha256": "421ca456bbb5baa4c7cd8549bcbbfc7d8cb864090afa9fc3645fa5b67b5c9d33",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/cases/failure-empty.json",
+      "bytes": 25755923,
+      "sha256": "26097cb0081c11510fb9ab33a395ac0cfe95f4c41535689fb981ec833c77bec3",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/cases/failure-media.json",
+      "bytes": 25755817,
+      "sha256": "02fc9d44c05e0d3366dd9fbb90b9199707b5356329dc569400507284d3b06d0e",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/cases/original-rank-order.json",
+      "bytes": 32920786,
+      "sha256": "ddf8f1b94260dfc40fb1f6f636f42b2ae33ece49155fc19525e701d3dd96be50",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/cases/p3-known-mixed-province-city.json",
+      "bytes": 22990393,
+      "sha256": "de6978e58ce848a56334bc91da7b29a03910b7c98a82fa62d8d37d1cdfa73b45",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/cases/province-before-ip.json",
+      "bytes": 32873367,
+      "sha256": "b84b78c4667f0693e926393dc1fbfe2edb8cea77d1b92b630241ffe26b5b5725",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/cases/same-entity-later-query.json",
+      "bytes": 55188878,
+      "sha256": "ffaa0827cefbd732b9350fd36b7426c6d0b63980c053f8c1423e5de17c5b859f",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/cases/same-tier-query-order.json",
+      "bytes": 32920667,
+      "sha256": "e3b5fcbd1ad85817a84eb89714bf59a2c06479e87c9ed4be9c20328cafd60907",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/commands.json",
+      "bytes": 1297,
+      "sha256": "d1b0e54b47501196ca882ca1c3321c6d47f11cd501c529270d83f21cd027b81a",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/invocation.json",
+      "bytes": 1703,
+      "sha256": "7dc6d243288f349da189722002b79a9ebc6f42e61f58d7ed55a9aff28df2130a",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/junit.xml",
+      "bytes": 3766,
+      "sha256": "fa3ead2a11390d5adbb944bbad0495ecea49c58ad17cdd734c35caff14f287df",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/pytest.log",
+      "bytes": 3199,
+      "sha256": "08e9dd36e79379b9ac39e9b6f1a5c9054a199e690f6603b5b3b5a846ee3c9168",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-03/summary.json",
+      "bytes": 313,
+      "sha256": "f47d41732e4f80fe97d1c7198a9174064285ce85fa942e7981ac0a9c0e6db4ab",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-04/cases/failure-rate_limit.json",
+      "bytes": 25755203,
+      "sha256": "2c8b4cadc6b59bd7bab56a5b189e15d99db8fc33339325a35414faecb2ea8979",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-04/commands.json",
+      "bytes": 1015,
+      "sha256": "47f3a25bc8289b3d31b12c4b63c3afada8782ba81ff101c56a0717cb7b179797",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-04/invocation.json",
+      "bytes": 1139,
+      "sha256": "67c0a4bed167dac83f1b9dd467a20aa9f45df9f4ddfca80a212fb47de075287a",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-04/junit.xml",
+      "bytes": 398,
+      "sha256": "3f074f2d2dfd29c542ac13d25ca05cffb554a3de2be575366eeb623917b84339",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-04/pytest.log",
+      "bytes": 1028,
+      "sha256": "f6095f9d7058287f35f3cc17fd7a3fa925d83f7a8c72859476ed4d2fe3a69d2f",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-check-04/summary.json",
+      "bytes": 311,
+      "sha256": "0a891cc2b83c498902b006e35d99d4b45330e1b0ca98d91e056044429085ed9b",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-risk-20261015-01/commands.json",
+      "bytes": 1011,
+      "sha256": "16de4e92e9204e7befdcba99982c992b8aebe6f54b22903ff93e142e72acb717",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-risk-20261015-01/invocation.json",
+      "bytes": 1115,
+      "sha256": "a8d6d955217d190f90a85bb514844557d645f214e24a62458e27b74d704bd459",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-risk-20261015-01/junit.xml",
+      "bytes": 165578,
+      "sha256": "83190d5ad83c4500143c6b18f8681e9631532b43501425c11aaa50d59ce82029",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-risk-20261015-01/pytest.log",
+      "bytes": 164438,
+      "sha256": "615390607c491aae7719c5b67772b94373a39c2ed813ec13a5979d816322cd9d",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/execution-risk-20261015-01/summary.json",
+      "bytes": 312,
+      "sha256": "3f8107e6800d5ca3b5efb9831178e3a6725bfe7f9f2a955709721192afdff78b",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/adapter-contract-cases.json",
+      "bytes": 12475887,
+      "sha256": "05906fc3e648feb46d60c0cbc8f2716046eba75ffeb87a0759ee86381a650ba8",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/allowed-children.jsonl",
+      "bytes": 1175,
+      "sha256": "06fa56cf8a5595db73789238eb73865492ed61c7c0398052ce91b85372481345",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/capture-failed-barrier.json",
+      "bytes": 10629796,
+      "sha256": "8c249a73c147062d5ead90e474c73232c3c14c2455f67b9c383aa7434ceaef7c",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/detail-change-comments.json",
+      "bytes": 23930743,
+      "sha256": "3ff627f75ab65e6f37ff649b6c6717d3e24dd6ee295787503c3c046f8f8ff2a7",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/detail-change-identity.json",
+      "bytes": 23923689,
+      "sha256": "5f9f2cea0d954d68672b8cdf9d4e9cbd6de011bfb5c536f0bfb7f4beae009404",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/detail-change-post.json",
+      "bytes": 23923219,
+      "sha256": "e982edeee3b9d55c5e960885a32439b8de03117048b4c010fec07d023a5a2952",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/detail-change-tier.json",
+      "bytes": 23915005,
+      "sha256": "a07aa86d9e6f42d7ff8e2bbbc5014491bf705c327e4499097e0c13ea223266eb",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/explicit-other-city.json",
+      "bytes": 10645300,
+      "sha256": "81b42b59ac1487f042ace2424950dbe01baf10284d8386857f042a04097d683c",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/failure-authentication.json",
+      "bytes": 38053051,
+      "sha256": "b472383849372ebe526866f284ff8453d3b8ffd8174e1be9c864adcff166d51d",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/failure-empty.json",
+      "bytes": 25755923,
+      "sha256": "69da3b60ff4ff6f46aec7183817446d54a85d7c52d535eec9d6b642563487b8d",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/failure-media.json",
+      "bytes": 25755817,
+      "sha256": "18e933276e5992f1e2493a5f781299246b3d9ef799e55429fd93d5a764e269fa",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/failure-rate_limit.json",
+      "bytes": 25755203,
+      "sha256": "f9cee39605bbd5e780e13b636fa1ebeebec2f4bda8268ff4bebc9cb1f025ab1a",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/independent-process-reserve-child.json",
+      "bytes": 20660540,
+      "sha256": "5560651e10856be2548473110ed3b6538ead15dfca4d898cbf6ff876e7093db8",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/independent-process-reserve.json",
+      "bytes": 22943689,
+      "sha256": "65859f8dd66cfb93afa3db4d7819bf7d435ab7f4f8b99d6818bc84fc49370354",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/local-only-excludes-province.json",
+      "bytes": 10637623,
+      "sha256": "32cd7da81bbd67ac65f79491e981f016d42701ee5f6223afd503e9aeaa996c5a",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/municipality-target.json",
+      "bytes": 22933188,
+      "sha256": "3467fd2cf9027236220712b4f1455cac0128792f201f15ac895225852c9e7448",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/non-xinjiang-ip-strong.json",
+      "bytes": 22882814,
+      "sha256": "db32650a660a77e938e2b0b572741b96972d559b462077e5d34d644843c4a87a",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/non-xinjiang-ip-weak.json",
+      "bytes": 10619611,
+      "sha256": "66a249088b63a5f29314af6c82ecb88dbf4aa460eddc6a7cc2015792410f8057",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/old-risk-comments.json",
+      "bytes": 721768,
+      "sha256": "b0b2223f5d8f9575871b44db0da2f97118e09ebc53fd976b9a50fb165568af65",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/old-risk-identity.json",
+      "bytes": 717072,
+      "sha256": "9868159837ce75c54986e0757eb26e6f5ef1f60d9b576a10e65007847ac78f1f",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/old-risk-post.json",
+      "bytes": 718572,
+      "sha256": "31b67ec6297233ab68af358ede3bb15a3f0d194d76d07f685dbfac86ddda9bbc",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/original-rank-order.json",
+      "bytes": 32920786,
+      "sha256": "52cbe5a0627a26a085bd3a93efc3fddebbdfedfda5037004d2cd3260e6c6e03e",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/p3-known-mixed-province-city.json",
+      "bytes": 22990393,
+      "sha256": "7dee5d7a7c735d10b4125b6b48567acf29345a098131e37ce1bf85acf2f5331f",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/pause-and-empty.json",
+      "bytes": 671226,
+      "sha256": "a89fcaa65a6d1fe94d7f72f6162fbd64791ece340cad01b166193620f6481ab2",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/province-before-ip.json",
+      "bytes": 32873367,
+      "sha256": "6197522354ef202da25bf35f3faea93730b51bfd348c0059890e8898830eb231",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/province-target-local.json",
+      "bytes": 22934954,
+      "sha256": "8629530768b19054c24027b7d38958e2853a775d859b4fed27c210e27e10ff8f",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/resources-0-0-0.json",
+      "bytes": 32908350,
+      "sha256": "65b132609a0e84355b1e3caf2811f1373d4eab50e1257ac05060d65eb3bd55e7",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/resources-0-1-1.json",
+      "bytes": 32950034,
+      "sha256": "bf46b7aa4af6e59c420c9108443818b0c5a52396ecea95a80a097d4ed459871c",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/resources-1-0-1.json",
+      "bytes": 32893494,
+      "sha256": "0c439bddf14e05768c7a9c56d6c4eb5463d8cc347c5bd09ab5ee6d87b5cf3006",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/resources-1-1-0.json",
+      "bytes": 32929077,
+      "sha256": "8fe00314a2a7976c850156c053ce2aa4a88bd66941f56eddb07e24d6692136d3",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/restore-after_capture.json",
+      "bytes": 22941959,
+      "sha256": "9f32488999c6ceb1bb57956c133dac79a7ca5e5b12d8802410e6db05d6cd7f98",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/restore-after_delivery.json",
+      "bytes": 22942253,
+      "sha256": "0febdb71ca7121c0d635c49742446d7eb7fa94fca4bbf50ccbe8c084cabbc7af",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/restore-after_geo.json",
+      "bytes": 22941843,
+      "sha256": "21ae865ce0b29e8bac29c275c83c1ad5640d85e83d87f9c8a114eb106949d252",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/restore-after_receipt.json",
+      "bytes": 22941959,
+      "sha256": "feafd80682d6188760385223c6d6acdac3fb80f25890debf4030a4afacd59a78",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/restore-after_reserve.json",
+      "bytes": 22941959,
+      "sha256": "d0bfdc1814dcd5279e80063827defb3b645d6d26679fecf20ce9a38a502cce6f",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/restore-after_risk.json",
+      "bytes": 22941872,
+      "sha256": "882d22c66564e2d71dc551f4afd61d26d9491478b170b0f6f535bdc82a7814f0",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/restore-after_settle.json",
+      "bytes": 22941930,
+      "sha256": "c4abdb6edaf8306eb63593ed45c2128bee817e757f581a284c82552115451b46",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/restore-no-live-reads.json",
+      "bytes": 22942032,
+      "sha256": "17e5e1980481018633c9dcdf1bc022a7d86cebaa96947b0a29310b3ec0395946",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/restore-unknown-result.json",
+      "bytes": 22943891,
+      "sha256": "30c58c3e34127192f01c09ae55ffb4d0551226172f7a1985c28e710077cb1388",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/same-entity-later-query.json",
+      "bytes": 55188878,
+      "sha256": "d2d683dc0261928c5c7f04723d8bfafb5e11c3b980df80d23d3f8513e447efab",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/cases/same-tier-query-order.json",
+      "bytes": 32920667,
+      "sha256": "6633ab415c2e08368cb036c49a38fcdc56ba59578b61548a0651737f3e52de18",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/commands.json",
+      "bytes": 1105,
+      "sha256": "62a8f0ae21d977f59fe5f30aa350bceb3e7368f41b319c484350385ea8563662",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/guard-attempts.jsonl",
+      "bytes": 544,
+      "sha256": "b762ed1c75702683902d6d411ea1ed9b479832feccf6995c13c54da706eaed64",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/invocation.json",
+      "bytes": 1309,
+      "sha256": "037bf260447356131bab05d6d7f310548f624af9e7a6b5cef1a915a9529b1bf6",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/junit.xml",
+      "bytes": 13370,
+      "sha256": "ac69d7280005ebbbc666826ffe03c3bd3517704558616bfab179c7188c187dcb",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/pytest.log",
+      "bytes": 1120,
+      "sha256": "b5149c0f2fedc7e1e1018ac5bc229ef7d8e2103d7305718150f71a25c720abe4",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/risk-contract-cases.json",
+      "bytes": 26799369,
+      "sha256": "672f835bdcad5bce45b677f59d39abddbd44bde028e4858cc3eae4f03beba8e3",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/summary.json",
+      "bytes": 964,
+      "sha256": "d1fe8d720a7aa76bd886949c0b43d07354d40d848ff046ed5a69ce3c8b6a3d1c",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/guard-smoke-20261015-01/allowed-children.jsonl",
+      "bytes": 1951,
+      "sha256": "9bca124783997e563d9090dd8c976ab24de251dcd60c0c8592bfc89766cfcecf",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/guard-smoke-20261015-01/commands.json",
+      "bytes": 1058,
+      "sha256": "7cea8e29eb41c498950fde1d209e15a45ad5078ae44e0b7ecd97b1f5ff7b3698",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/guard-smoke-20261015-01/guard-attempts.jsonl",
+      "bytes": 545,
+      "sha256": "2ce0976671ee53a9f0238e9d15bf7f8c55e46e2048365396ceb1c8d0795eab50",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/guard-smoke-20261015-01/invocation.json",
+      "bytes": 1172,
+      "sha256": "e030d90b9dcf7e227b43d2dec3632f04c543cf3fa72e1e8e59dde8554c27fb5a",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/guard-smoke-20261015-01/junit.xml",
+      "bytes": 5588,
+      "sha256": "cde1aba958a5cffc683459422c90a9ab4d7863756195e3282c8509df07dad528",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/guard-smoke-20261015-01/pytest.log",
+      "bytes": 1029,
+      "sha256": "6e8bff0edf37f7b7a0cba05adc1cde7a6d3f10624c8a0da20dedbc9ef21b740f",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/guard-smoke-20261015-01/summary.json",
+      "bytes": 970,
+      "sha256": "b34d1eb973ac9ff7e5296ead3856068e1418cdefa36a39c63aecdcf90d584d27",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/joint-20261015-01/FINAL_TESTED_SOURCE.json",
+      "bytes": 1476,
+      "sha256": "d8e9d26f0b8bb710628c839e5d7254ad2952a18cff357fdc5a629f81718540ec",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/joint-20261015-01/INPUT_MANIFEST.json",
+      "bytes": 104293,
+      "sha256": "14df289193ef93f3f053fac6d7f9fa82d53c32c4dc33e5a5cb86ce1b4a1e1efe",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/joint-20261015-01/RUN_HISTORY.json",
+      "bytes": 78020,
+      "sha256": "035bfd4c4ce114c330dbe10bd9834ea018f508a2b730c6cc75480f74d190108e",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/joint-20261015-01/evidence-completeness.json",
+      "bytes": 498,
+      "sha256": "582b69f25be0a6720a7837a2b920d0a38e8bdf072c9278cb578580ef7f9d5d53",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/joint-20261015-01/p2-regression-comparison.json",
+      "bytes": 7944,
+      "sha256": "ef366f3eee209f89d352f4844dbd33cd011555106d9dcbe5e1fa19cdb6db0561",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/joint-20261015-01/source-audit-final.json",
+      "bytes": 1283,
+      "sha256": "65d7670ff694e9176c4c033eb4df8717239e3f9e5c17b9410b69ed95be4fb99a",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/joint-20261015-01/static-checks.json",
+      "bytes": 713,
+      "sha256": "b44ac3642f6f873d195f5679aa7161b5b02e47b5173ddc8182ec5d95f3f8cdb2",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/risk-check-02/commands.json",
+      "bytes": 937,
+      "sha256": "eb1ef934cc4881d805a7f643caff8e6fffe69c9cc1bf3d9f14528520cfb944af",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/risk-check-02/invocation.json",
+      "bytes": 993,
+      "sha256": "5e24b47e58110830ff7854571763805bf3c988698d7692be16cbaa8dac421535",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/risk-check-02/junit.xml",
+      "bytes": 14661,
+      "sha256": "68d942980ded17545816fd6f8a01e28b5e4ab2d53cb67c813857bda1d7c5bc4e",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/risk-check-02/pytest.log",
+      "bytes": 12653,
+      "sha256": "8c114c4b0415adfc7e993e6a0cacac46e72cfe6497d685bec13e344ec1fe692e",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/risk-check-02/risk-contract-cases.json",
+      "bytes": 24449545,
+      "sha256": "b20ceec8bb57728054067a5c12719b544a7a50a3936e94ac5185f91f49cbbc1c",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/risk-check-02/summary.json",
+      "bytes": 312,
+      "sha256": "56d38f661e884e5983dc2d7f0b56fc44ee71e2143f863e42d98d8c01faa66d1b",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/risk-check-03/commands.json",
+      "bytes": 1106,
+      "sha256": "d298145b0ed1da90f1e30cc029506ba57bdb7d1a7c4ab3f6aebcd6643bc4acb0",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/risk-check-03/invocation.json",
+      "bytes": 1331,
+      "sha256": "c6f6a0eaa88423a44de3869718d5415d004664703f7fcc4d9304022761472ac0",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/risk-check-03/junit.xml",
+      "bytes": 820,
+      "sha256": "5a463dd3383f39e0c7f3da06c37803b9ccc89dc15598db4c28a357c9a11e8554",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/risk-check-03/pytest.log",
+      "bytes": 1028,
+      "sha256": "c0ae939f09b482ce38db664d734e78e4305055c6bb06db304fd76f7163d10437",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/risk-check-03/risk-contract-cases.json",
+      "bytes": 2349964,
+      "sha256": "e6393e2e73708874f48a609154244104721c4dc12a651872ab58b6ed8fae5422",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/artifacts/risk-check-03/summary.json",
+      "bytes": 311,
+      "sha256": "a86c3399d214d08bb3af956762ae87871692c7354b0d948a88571ddbf58eb4fe",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/audit.py",
+      "bytes": 3835,
+      "sha256": "2cf1961ba4dfc6d9c2878dcd5809cfd8cc2bac811b15712ba8389ecab9113a22",
+      "kind": "new_source"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/replay.py",
+      "bytes": 1413,
+      "sha256": "161a5afd0bb452a00ddbb8632625f8294289cc5857e5ee1165e87ee3664d4c95",
+      "kind": "new_source"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/run_offline.py",
+      "bytes": 9944,
+      "sha256": "e5a27c42110fe85ef46cf15fa65be79fdf9a7e2c649b69f1e776d0a276552ebd",
+      "kind": "new_source"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/scenarios.py",
+      "bytes": 10377,
+      "sha256": "f5c298db84959b16aab5b2e1b4c65e7bbcedc85a4bc521cd94f6fe89632fcb92",
+      "kind": "new_source"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/joint-regression-20261015-01/checks.json",
+      "bytes": 38644,
+      "sha256": "1b4735c6e98e898e665a93a19a8997546ef89f8d91ea5834fa2e66b800228df0",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/joint-regression-20261015-01/pytest.log",
+      "bytes": 1281,
+      "sha256": "3ca9f0ddfd76d300d8ecbdabb353a73d909656399e5c32642663b8f1ff79dc05",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/joint-regression-20261015-01/rerun.py",
+      "bytes": 705,
+      "sha256": "f8d72c76c01908d4ddc4f56fb291c2a86089913a2de091ca0d1a0de27633b9ed",
+      "kind": "new_run_evidence"
+    },
+    {
+      "path": "tests/test_geographic_joint_adapter.py",
+      "bytes": 10927,
+      "sha256": "90c021a729ec837cf6f02e8f38c8806eae92a559065792ec8b9deb16c4e0cebf",
+      "kind": "new_source"
+    },
+    {
+      "path": "tests/test_geographic_joint_execution.py",
+      "bytes": 17998,
+      "sha256": "f4888b2b7b62de23e69550afcd7ee7220d4d98b675109ccb7d4f6706980fdb34",
+      "kind": "new_source"
+    },
+    {
+      "path": "tests/test_geographic_joint_risk.py",
+      "bytes": 25724,
+      "sha256": "ce35409cbc01e50b8b5032bb8c3984e822a15042255573aba8cfddda45f5fd1d",
+      "kind": "new_source"
+    }
+  ],
+  "self_excluded": true,
+  "input_and_output_inventories_separate": true
+}

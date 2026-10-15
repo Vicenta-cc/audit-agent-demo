@@ -1,0 +1,54 @@
+[
+  {
+    "path": "backend/audit_agent/scoped_execution.py",
+    "sha256": "da1af9dceb59bd97f9330868d4f3f2f7eabbf8805e23b88d15859c25eaff7d8a"
+  },
+  {
+    "path": "backend/audit_agent/scoped_selection.py",
+    "sha256": "65bad9ecce718f29038656acab5ac7279670e1d5f13e1873ea60ddc958a78912"
+  },
+  {
+    "path": "backend/audit_agent/scoped_selection_store.py",
+    "sha256": "c5ebdb4580db875cfee113c70864b13cbb5ee4706ddc9ec9ec413d907f8ca931"
+  },
+  {
+    "path": "experiments/geographic_selection/ACCEPTANCE-20261015.md",
+    "sha256": "2f60b52710a3002fad0880fc7d6318b713350442df21d85dd4f5acbb655722fd"
+  },
+  {
+    "path": "experiments/geographic_selection/REPORT.md",
+    "sha256": "735a88b15a3ddc74480836166a7365490b91b8ee168c24e2fbe46065f530d7d8"
+  },
+  {
+    "path": "experiments/geographic_selection/artifacts/DELIVERY_MANIFEST.json",
+    "sha256": "c08ad9d6998b1bcdc9c04de36ee8b082b5911170110d8ffedcc5477315019931"
+  },
+  {
+    "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/checks.json",
+    "sha256": "1ab9be23a98d84454d357b0803325991029955502cc8d909e8bb6f5f5724a981"
+  },
+  {
+    "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/independent-review.md",
+    "sha256": "f92eedd221f811f25066940c6e0efb5d466b7625cc246a1b3a503dbd67fae8a1"
+  },
+  {
+    "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/input-audit.json",
+    "sha256": "6a6cd916625e139ff8871b00a83c839236e89fdd8797133eec243e0518abfe1d"
+  },
+  {
+    "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/pytest.log",
+    "sha256": "5fbee40a76c68e662ad4862a52414320fb654c2414a39a0887034f368be60046"
+  },
+  {
+    "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/reproduce_review_findings.json",
+    "sha256": "867ab303db9a23e06548b3b2d4e023ff43d792faf4b4c0b223ed42d32e5fc8c0"
+  },
+  {
+    "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/reproduce_review_findings.py",
+    "sha256": "d1adf477ed9f3f251254d8c2088f0420c666f20f29b155e0903f4eaa280ccf3d"
+  },
+  {
+    "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/rerun.py",
+    "sha256": "f903b4c3954bec43ea379ac91fe7071ddc53a75be408416afaa03051ce95e77d"
+  }
+]

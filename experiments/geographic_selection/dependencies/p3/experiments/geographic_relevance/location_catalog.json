@@ -1,0 +1,341 @@
+{
+  "version": "p3-offline-location-catalog-v1-20261015",
+  "scope": "limited_experimental_reference_not_national_gazetteer",
+  "accessed_at": "2026-10-15",
+  "complete": false,
+  "entities": [
+    {
+      "id": "province-xinjiang",
+      "name": "新疆维吾尔自治区",
+      "aliases": [
+        "新疆"
+      ],
+      "level": "province",
+      "province": "新疆维吾尔自治区",
+      "city": "",
+      "source_url": "https://www.xinjiang.gov.cn/xinjiang/gszrmzf/zfjg_list.shtml",
+      "source_title": "各地（州、市）—新疆维吾尔自治区人民政府",
+      "accessed_at": "2026-10-15",
+      "province_aliases": [
+        "新疆"
+      ]
+    },
+    {
+      "id": "province-shanxi",
+      "name": "山西省",
+      "aliases": [
+        "山西"
+      ],
+      "level": "province",
+      "province": "山西省",
+      "city": "",
+      "source_url": "https://www.dt.gov.cn/english/overview/listCon.shtml",
+      "source_title": "Overview—大同市人民政府",
+      "accessed_at": "2026-10-15",
+      "province_aliases": [
+        "山西"
+      ]
+    },
+    {
+      "id": "province-heilongjiang",
+      "name": "黑龙江省",
+      "aliases": [
+        "黑龙江"
+      ],
+      "level": "province",
+      "province": "黑龙江省",
+      "city": "",
+      "source_url": "https://www.shhk.gov.cn/zjhk/001006/001006001/20060831/2f714824-e83c-4204-a5fa-0e490a7f4a3f.html",
+      "source_title": "黑龙江省大庆市—上海市虹口区人民政府",
+      "accessed_at": "2026-10-15",
+      "province_aliases": [
+        "黑龙江"
+      ],
+      "source_note": "官方友好城区介绍；页面正文含2024年统计信息，URL年份不作为内容发布日期。"
+    },
+    {
+      "id": "province-gansu",
+      "name": "甘肃省",
+      "aliases": [
+        "甘肃"
+      ],
+      "level": "province",
+      "province": "甘肃省",
+      "city": "",
+      "source_url": "https://jiuquan.chinagscourt.gov.cn/About/1018",
+      "source_title": "关于我们—酒泉市中级人民法院",
+      "accessed_at": "2026-10-15",
+      "province_aliases": [
+        "甘肃"
+      ],
+      "source_note": "官方法院页面检索返回正文可见；直接打开返回405。行政归属另由甘肃自然资源厅公开材料交叉支持。",
+      "additional_sources": [
+        {
+          "url": "https://zrzy.gansu.gov.cn/zrzy/c107676/202312/173812910/files/05358d7d915e4d0da47224633730814f.pdf",
+          "title": "甘肃省自然资源厅公开矿山资料：3.3社会经济概况",
+          "supports": "敦煌市隶属甘肃省酒泉市"
+        }
+      ]
+    },
+    {
+      "id": "city-karamay",
+      "name": "克拉玛依市",
+      "aliases": [
+        "克拉玛依"
+      ],
+      "level": "city",
+      "province": "新疆维吾尔自治区",
+      "city": "克拉玛依市",
+      "source_url": "https://www.xinjiang.gov.cn/xinjiang/gszrmzf/zfjg_list.shtml",
+      "source_title": "各地（州、市）—新疆维吾尔自治区人民政府",
+      "accessed_at": "2026-10-15",
+      "province_aliases": [
+        "新疆"
+      ]
+    },
+    {
+      "id": "city-datong",
+      "name": "大同市",
+      "aliases": [
+        "大同"
+      ],
+      "level": "city",
+      "province": "山西省",
+      "city": "大同市",
+      "source_url": "https://www.dt.gov.cn/english/overview/listCon.shtml",
+      "source_title": "Overview—大同市人民政府",
+      "accessed_at": "2026-10-15",
+      "province_aliases": [
+        "山西"
+      ]
+    },
+    {
+      "id": "city-daqing",
+      "name": "大庆市",
+      "aliases": [
+        "大庆"
+      ],
+      "level": "city",
+      "province": "黑龙江省",
+      "city": "大庆市",
+      "source_url": "https://www.shhk.gov.cn/zjhk/001006/001006001/20060831/2f714824-e83c-4204-a5fa-0e490a7f4a3f.html",
+      "source_title": "黑龙江省大庆市—上海市虹口区人民政府",
+      "accessed_at": "2026-10-15",
+      "province_aliases": [
+        "黑龙江"
+      ],
+      "source_note": "官方友好城区介绍；页面正文含2024年统计信息，URL年份不作为内容发布日期。"
+    },
+    {
+      "id": "prefecture-ili",
+      "name": "伊犁哈萨克自治州",
+      "aliases": [
+        "伊犁州",
+        "伊犁"
+      ],
+      "level": "city",
+      "province": "新疆维吾尔自治区",
+      "city": "伊犁哈萨克自治州",
+      "source_url": "https://www.xinjiang.gov.cn/xinjiang/gszrmzf/zfjg_list.shtml",
+      "source_title": "各地（州、市）—新疆维吾尔自治区人民政府",
+      "accessed_at": "2026-10-15",
+      "province_aliases": [
+        "新疆"
+      ],
+      "administrative_type": "autonomous_prefecture"
+    },
+    {
+      "id": "city-hami",
+      "name": "哈密市",
+      "aliases": [
+        "哈密"
+      ],
+      "level": "city",
+      "province": "新疆维吾尔自治区",
+      "city": "哈密市",
+      "source_url": "https://www.xinjiang.gov.cn/xinjiang/gszrmzf/zfjg_list.shtml",
+      "source_title": "各地（州、市）—新疆维吾尔自治区人民政府",
+      "accessed_at": "2026-10-15",
+      "province_aliases": [
+        "新疆"
+      ]
+    },
+    {
+      "id": "city-jiuquan",
+      "name": "酒泉市",
+      "aliases": [
+        "酒泉"
+      ],
+      "level": "city",
+      "province": "甘肃省",
+      "city": "酒泉市",
+      "source_url": "https://jiuquan.chinagscourt.gov.cn/About/1018",
+      "source_title": "关于我们—酒泉市中级人民法院",
+      "accessed_at": "2026-10-15",
+      "province_aliases": [
+        "甘肃"
+      ],
+      "source_note": "官方法院页面检索返回正文可见；直接打开返回405。行政归属另由甘肃自然资源厅公开材料交叉支持。",
+      "additional_sources": [
+        {
+          "url": "https://zrzy.gansu.gov.cn/zrzy/c107676/202312/173812910/files/05358d7d915e4d0da47224633730814f.pdf",
+          "title": "甘肃省自然资源厅公开矿山资料：3.3社会经济概况",
+          "supports": "敦煌市隶属甘肃省酒泉市"
+        }
+      ]
+    },
+    {
+      "id": "county-xinyuan",
+      "name": "新源县",
+      "aliases": [
+        "新源"
+      ],
+      "level": "county",
+      "province": "新疆维吾尔自治区",
+      "city": "伊犁哈萨克自治州",
+      "source_url": "https://www.xinjiang.gov.cn/xinjiang/gszrmzf/zfjg_list.shtml",
+      "source_title": "各地（州、市）—新疆维吾尔自治区人民政府",
+      "accessed_at": "2026-10-15",
+      "county": "新源县",
+      "province_aliases": [
+        "新疆"
+      ]
+    },
+    {
+      "id": "county-dunhuang",
+      "name": "敦煌市",
+      "aliases": [
+        "敦煌"
+      ],
+      "level": "county",
+      "province": "甘肃省",
+      "city": "酒泉市",
+      "source_url": "https://jiuquan.chinagscourt.gov.cn/About/1018",
+      "source_title": "关于我们—酒泉市中级人民法院",
+      "accessed_at": "2026-10-15",
+      "county": "敦煌市",
+      "province_aliases": [
+        "甘肃"
+      ],
+      "administrative_type": "county_level_city",
+      "source_note": "官方法院页面检索返回正文可见；直接打开返回405。行政归属另由甘肃自然资源厅公开材料交叉支持。",
+      "additional_sources": [
+        {
+          "url": "https://zrzy.gansu.gov.cn/zrzy/c107676/202312/173812910/files/05358d7d915e4d0da47224633730814f.pdf",
+          "title": "甘肃省自然资源厅公开矿山资料：3.3社会经济概况",
+          "supports": "敦煌市隶属甘肃省酒泉市"
+        }
+      ]
+    },
+    {
+      "id": "poi-world-devil-city",
+      "name": "世界魔鬼城",
+      "aliases": [
+        "世界魔鬼城景区",
+        "克拉玛依市世界魔鬼城景区",
+        "乌尔禾魔鬼城",
+        "乌尔禾风城",
+        "魔鬼城"
+      ],
+      "level": "poi",
+      "province": "新疆维吾尔自治区",
+      "city": "克拉玛依市",
+      "source_url": "https://www.weh.gov.cn/weh/ly1/202505/36181c14f6d44d87914615d7f6ffa853.shtml",
+      "source_title": "乌尔禾区旅游景区基本情况",
+      "accessed_at": "2026-10-15",
+      "county": "乌尔禾区",
+      "province_aliases": [
+        "新疆"
+      ],
+      "additional_sources": [
+        {
+          "url": "https://zrzyt.xinjiang.gov.cn/xjgtzy/zydzyj/202512/de061bfb812144e995a84d0138d588cf.shtml",
+          "title": "自治区地质遗迹名录（第一批）地质遗迹说明",
+          "supports": "乌尔禾魔鬼城、乌尔禾风城别名"
+        },
+        {
+          "url": "https://wlt.xinjiang.gov.cn/wlt/c112782/202208/f49a5a7d9ade441d952d5dc2f3410917.shtml",
+          "title": "克拉玛依市世界魔鬼城景区",
+          "supports": "世界魔鬼城又称乌尔禾风城"
+        }
+      ]
+    },
+    {
+      "id": "poi-dunhuang-yadan",
+      "name": "敦煌雅丹国家地质公园",
+      "aliases": [
+        "敦煌雅丹魔鬼城",
+        "敦煌魔鬼城",
+        "雅丹魔鬼城",
+        "魔鬼城"
+      ],
+      "level": "poi",
+      "province": "甘肃省",
+      "city": "酒泉市",
+      "source_url": "https://www.gswbj.gov.cn/a/2019/10/14/3263.html",
+      "source_title": "甘肃敦煌雅丹魔鬼城雄浑如列队仪仗兵",
+      "accessed_at": "2026-10-15",
+      "county": "敦煌市",
+      "province_aliases": [
+        "甘肃"
+      ],
+      "additional_sources": [
+        {
+          "url": "https://zrzyt.xizang.gov.cn/dt/xzzrzygk/201907/t20190731_90672.html",
+          "title": "地质公园介绍：敦煌雅丹国家地质公园",
+          "supports": "地质公园名称与敦煌魔鬼城指称"
+        },
+        {
+          "url": "https://jiuquan.chinagscourt.gov.cn/About/1018",
+          "title": "关于我们—酒泉市中级人民法院",
+          "supports": "敦煌与酒泉行政层级"
+        }
+      ]
+    },
+    {
+      "id": "poi-hami-yadan",
+      "name": "哈密市伊州区大海道雅丹地貌",
+      "aliases": [
+        "大海道雅丹",
+        "哈密魔鬼城",
+        "魔鬼城"
+      ],
+      "level": "poi",
+      "province": "新疆维吾尔自治区",
+      "city": "哈密市",
+      "source_url": "https://zrzyt.xinjiang.gov.cn/xjgtzy/dzyjxq1/202307/dfc1a85ae447443e934b5ce2450ba9d6.shtml",
+      "source_title": "哈密市伊州区大海道雅丹地貌",
+      "accessed_at": "2026-10-15",
+      "county": "伊州区",
+      "province_aliases": [
+        "新疆"
+      ]
+    },
+    {
+      "id": "poi-nalati",
+      "name": "那拉提旅游风景区",
+      "aliases": [
+        "那拉提",
+        "那拉提景区",
+        "那拉提草原"
+      ],
+      "level": "poi",
+      "province": "新疆维吾尔自治区",
+      "city": "伊犁哈萨克自治州",
+      "source_url": "https://www.xinyuan.gov.cn/xinyuan/c113962/202606/01a5d90c98c24896beefaf5590850482.shtml",
+      "source_title": "那拉提旅游风景区简介",
+      "accessed_at": "2026-10-15",
+      "county": "新源县",
+      "province_aliases": [
+        "新疆"
+      ],
+      "additional_sources": [
+        {
+          "url": "https://lcj.xinjiang.gov.cn/lcj/sdgy/202507/dc722b3ab0fa40daa87083ab2257af01.shtml",
+          "title": "湿地草原那拉提",
+          "supports": "那拉提草原属伊犁哈萨克自治州新源县"
+        }
+      ]
+    }
+  ]
+}

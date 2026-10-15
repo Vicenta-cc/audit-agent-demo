@@ -1,0 +1,215 @@
+.....................................................F.................. [ 45%]
+........................................................................ [ 90%]
+........FFFF....                                                         [100%]
+=================================== FAILURES ===================================
+______ test_structured_rule_snapshot_cannot_replace_triage_prompt_profile ______
+
+creation_stack = {'principals': <test_investigation_creation_conversation.MutablePrincipalProvider object at 0x114ea68d0>, 'resource_db...74a0>, 'app_service': <backend.investigation_creation.service.InvestigationCreationService object at 0x114ea7830>, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+
+    def test_structured_rule_snapshot_cannot_replace_triage_prompt_profile(creation_stack, content):
+        from backend.investigation_creation.scope_search_plan import digest
+        authority = make_authority(creation_stack, content)
+        assert authority['resolution']['execution']['prompt_profile_snapshot']['audit_goal']
+        wrong = deepcopy(authority)
+        risk = wrong['risk_inputs']
+        risk['rules'] = deepcopy(wrong['resolution']['execution']['rule_snapshot'])
+        risk['digest'] = digest({k: v for k, v in risk.items() if k != 'digest'})
+>       with pytest.raises(ValueError, match='risk rules differ'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+tests/test_geographic_execution_plan_integration.py:77: Failed
+___ test_actual_resolver_capture_sqlite_restore_preserves_risk[False-False] ____
+
+creation_stack = {'principals': <test_investigation_creation_conversation.MutablePrincipalProvider object at 0x116c49580>, 'resource_db...a120>, 'app_service': <backend.investigation_creation.service.InvestigationCreationService object at 0x116c49ee0>, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/geo-offline-run-ljzbiakz/pytest-of-ext.wanghongtao6/pytest-0/test_actual_resolver_capture_s0')
+formal_rules = False, formal_lexicon = False
+
+    @pytest.mark.parametrize("formal_rules", [False, True])
+    @pytest.mark.parametrize("formal_lexicon", [False, True])
+    def test_actual_resolver_capture_sqlite_restore_preserves_risk(
+            creation_stack, content, tmp_path, formal_rules, formal_lexicon):
+        """The actual P1 resolver, not a hand-authored rules fixture, is the oracle.
+    
+        In particular rule_snapshot is a rule identity, whereas the running P1
+        pipeline passes prompt_profile_snapshot to TriageEngine.score(). Artificial
+        model responses cannot conceal a different request because complete request
+        strings and kwargs are compared independently of the resulting scores.
+        """
+        from backend.audit_agent.config import settings
+        from experiments.geographic_execution_plan.storage import save_plan, load_plan
+        from test_geographic_execution_plan import make_authority, build, expected
+        from test_geographic_draft_configuration import no_effects
+        from test_unified_draft_configuration import P
+    
+        stack = creation_stack
+        authority = make_authority(stack, content, formal_rules=formal_rules,
+            formal_lexicon=formal_lexicon)
+        app = stack["app_service"]
+        draft = app.get_draft(authority["identity"]["draft_id"], principal=P)
+        with app.resource_service.confirmation_fence() as conn:
+            resolution = app.resource_service.resolve_confirmation(draft, principal=P,
+                resource_connection=conn)
+        execution = resolution.execution
+        # Mirror _run_triaged_search's real category and rules selection. No frozen
+        # adapter is involved in the baseline's terms_for() or group association.
+        library_ids = [str(value).strip() for value in execution.library_ids if str(value).strip()]
+        category = str(execution.lexicon_category or "").strip()
+        categories = library_ids or ([category] if category else [])
+        rules = dict(execution.prompt_profile_snapshot)
+>       assert rules["audit_goal"]
+                                   
+E       KeyError: 'evidence_rules'
+
+tests/test_geographic_execution_plan_risk.py:217: KeyError
+____ test_actual_resolver_capture_sqlite_restore_preserves_risk[False-True] ____
+
+creation_stack = {'principals': <test_investigation_creation_conversation.MutablePrincipalProvider object at 0x116c8e000>, 'resource_db...aba0>, 'app_service': <backend.investigation_creation.service.InvestigationCreationService object at 0x1172b97f0>, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/geo-offline-run-ljzbiakz/pytest-of-ext.wanghongtao6/pytest-0/test_actual_resolver_capture_s1')
+formal_rules = True, formal_lexicon = False
+
+    @pytest.mark.parametrize("formal_rules", [False, True])
+    @pytest.mark.parametrize("formal_lexicon", [False, True])
+    def test_actual_resolver_capture_sqlite_restore_preserves_risk(
+            creation_stack, content, tmp_path, formal_rules, formal_lexicon):
+        """The actual P1 resolver, not a hand-authored rules fixture, is the oracle.
+    
+        In particular rule_snapshot is a rule identity, whereas the running P1
+        pipeline passes prompt_profile_snapshot to TriageEngine.score(). Artificial
+        model responses cannot conceal a different request because complete request
+        strings and kwargs are compared independently of the resulting scores.
+        """
+        from backend.audit_agent.config import settings
+        from experiments.geographic_execution_plan.storage import save_plan, load_plan
+        from test_geographic_execution_plan import make_authority, build, expected
+        from test_geographic_draft_configuration import no_effects
+        from test_unified_draft_configuration import P
+    
+        stack = creation_stack
+        authority = make_authority(stack, content, formal_rules=formal_rules,
+            formal_lexicon=formal_lexicon)
+        app = stack["app_service"]
+        draft = app.get_draft(authority["identity"]["draft_id"], principal=P)
+        with app.resource_service.confirmation_fence() as conn:
+            resolution = app.resource_service.resolve_confirmation(draft, principal=P,
+                resource_connection=conn)
+        execution = resolution.execution
+        # Mirror _run_triaged_search's real category and rules selection. No frozen
+        # adapter is involved in the baseline's terms_for() or group association.
+        library_ids = [str(value).strip() for value in execution.library_ids if str(value).strip()]
+        category = str(execution.lexicon_category or "").strip()
+        categories = library_ids or ([category] if category else [])
+        rules = dict(execution.prompt_profile_snapshot)
+>       assert rules["audit_goal"]
+                                   
+E       KeyError: 'evidence_rules'
+
+tests/test_geographic_execution_plan_risk.py:217: KeyError
+____ test_actual_resolver_capture_sqlite_restore_preserves_risk[True-False] ____
+
+creation_stack = {'principals': <test_investigation_creation_conversation.MutablePrincipalProvider object at 0x116825310>, 'resource_db...2d20>, 'app_service': <backend.investigation_creation.service.InvestigationCreationService object at 0x116c51af0>, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/geo-offline-run-ljzbiakz/pytest-of-ext.wanghongtao6/pytest-0/test_actual_resolver_capture_s2')
+formal_rules = False, formal_lexicon = True
+
+    @pytest.mark.parametrize("formal_rules", [False, True])
+    @pytest.mark.parametrize("formal_lexicon", [False, True])
+    def test_actual_resolver_capture_sqlite_restore_preserves_risk(
+            creation_stack, content, tmp_path, formal_rules, formal_lexicon):
+        """The actual P1 resolver, not a hand-authored rules fixture, is the oracle.
+    
+        In particular rule_snapshot is a rule identity, whereas the running P1
+        pipeline passes prompt_profile_snapshot to TriageEngine.score(). Artificial
+        model responses cannot conceal a different request because complete request
+        strings and kwargs are compared independently of the resulting scores.
+        """
+        from backend.audit_agent.config import settings
+        from experiments.geographic_execution_plan.storage import save_plan, load_plan
+        from test_geographic_execution_plan import make_authority, build, expected
+        from test_geographic_draft_configuration import no_effects
+        from test_unified_draft_configuration import P
+    
+        stack = creation_stack
+        authority = make_authority(stack, content, formal_rules=formal_rules,
+            formal_lexicon=formal_lexicon)
+        app = stack["app_service"]
+        draft = app.get_draft(authority["identity"]["draft_id"], principal=P)
+        with app.resource_service.confirmation_fence() as conn:
+            resolution = app.resource_service.resolve_confirmation(draft, principal=P,
+                resource_connection=conn)
+        execution = resolution.execution
+        # Mirror _run_triaged_search's real category and rules selection. No frozen
+        # adapter is involved in the baseline's terms_for() or group association.
+        library_ids = [str(value).strip() for value in execution.library_ids if str(value).strip()]
+        category = str(execution.lexicon_category or "").strip()
+        categories = library_ids or ([category] if category else [])
+        rules = dict(execution.prompt_profile_snapshot)
+>       assert rules["audit_goal"]
+                                   
+E       KeyError: 'evidence_rules'
+
+tests/test_geographic_execution_plan_risk.py:217: KeyError
+____ test_actual_resolver_capture_sqlite_restore_preserves_risk[True-True] _____
+
+creation_stack = {'principals': <test_investigation_creation_conversation.MutablePrincipalProvider object at 0x1169cda90>, 'resource_db...6f90>, 'app_service': <backend.investigation_creation.service.InvestigationCreationService object at 0x116907200>, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/geo-offline-run-ljzbiakz/pytest-of-ext.wanghongtao6/pytest-0/test_actual_resolver_capture_s3')
+formal_rules = True, formal_lexicon = True
+
+    @pytest.mark.parametrize("formal_rules", [False, True])
+    @pytest.mark.parametrize("formal_lexicon", [False, True])
+    def test_actual_resolver_capture_sqlite_restore_preserves_risk(
+            creation_stack, content, tmp_path, formal_rules, formal_lexicon):
+        """The actual P1 resolver, not a hand-authored rules fixture, is the oracle.
+    
+        In particular rule_snapshot is a rule identity, whereas the running P1
+        pipeline passes prompt_profile_snapshot to TriageEngine.score(). Artificial
+        model responses cannot conceal a different request because complete request
+        strings and kwargs are compared independently of the resulting scores.
+        """
+        from backend.audit_agent.config import settings
+        from experiments.geographic_execution_plan.storage import save_plan, load_plan
+        from test_geographic_execution_plan import make_authority, build, expected
+        from test_geographic_draft_configuration import no_effects
+        from test_unified_draft_configuration import P
+    
+        stack = creation_stack
+        authority = make_authority(stack, content, formal_rules=formal_rules,
+            formal_lexicon=formal_lexicon)
+        app = stack["app_service"]
+        draft = app.get_draft(authority["identity"]["draft_id"], principal=P)
+        with app.resource_service.confirmation_fence() as conn:
+            resolution = app.resource_service.resolve_confirmation(draft, principal=P,
+                resource_connection=conn)
+        execution = resolution.execution
+        # Mirror _run_triaged_search's real category and rules selection. No frozen
+        # adapter is involved in the baseline's terms_for() or group association.
+        library_ids = [str(value).strip() for value in execution.library_ids if str(value).strip()]
+        category = str(execution.lexicon_category or "").strip()
+        categories = library_ids or ([category] if category else [])
+        rules = dict(execution.prompt_profile_snapshot)
+>       assert rules["audit_goal"]
+                                   
+E       KeyError: 'evidence_rules'
+
+tests/test_geographic_execution_plan_risk.py:217: KeyError
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_execution_plan_integration.py::test_structured_rule_snapshot_cannot_replace_triage_prompt_profile
+FAILED tests/test_geographic_execution_plan_risk.py::test_actual_resolver_capture_sqlite_restore_preserves_risk[False-False]
+FAILED tests/test_geographic_execution_plan_risk.py::test_actual_resolver_capture_sqlite_restore_preserves_risk[False-True]
+FAILED tests/test_geographic_execution_plan_risk.py::test_actual_resolver_capture_sqlite_restore_preserves_risk[True-False]
+FAILED tests/test_geographic_execution_plan_risk.py::test_actual_resolver_capture_sqlite_restore_preserves_risk[True-True]
+5 failed, 155 passed, 117 deselected, 2 warnings in 67.62s (0:01:07)

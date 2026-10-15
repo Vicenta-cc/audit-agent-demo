@@ -1,0 +1,184 @@
+{
+  "schema_version": "p2-source-boundary-audit-v1",
+  "tags": {
+    "checkpoint/geographic-relevance-p0p1-final-20261015": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+    "p3-post-only-names-v2-local-20261015": "2120c53379d1b79c45e3cb8232b9c9b96657b183"
+  },
+  "head": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+  "branch": "codex/geographic-relevance-p2",
+  "original_tracked_file_count": 1570,
+  "original_changed_files": [],
+  "tracked_diff_empty": true,
+  "p3_imports": [
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance.py",
+      "sha256": "6be6a45edf64f4896be3dbe28ab8b9115e3eea1148225076c10c3d617a52df1e",
+      "bytes": 63341
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_ip.py",
+      "sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb",
+      "bytes": 9940
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_scope.py",
+      "sha256": "6980b5ecdb00bbbbba68c0dcc1aafc007b2f88fd3b8674e405ff1e9703c82eff",
+      "bytes": 8625
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only.py",
+      "sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5",
+      "bytes": 14781
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_v2.py",
+      "sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607",
+      "bytes": 14006
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_simple.py",
+      "sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9",
+      "bytes": 7558
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_names.py",
+      "sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e",
+      "bytes": 6354
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_names_v2.py",
+      "sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907",
+      "bytes": 8739
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/admin_catalog/geographic_catalog.json",
+      "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "bytes": 677345
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/admin_catalog/SOURCE_MANIFEST.json",
+      "sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9",
+      "bytes": 3053
+    },
+    {
+      "path": "experiments/geographic_execution_plan/dependencies/p3/location_catalog.json",
+      "sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d",
+      "bytes": 11323
+    }
+  ],
+  "production_imports_of_new_plan_or_experiment": [],
+  "new_files": [
+    "backend/investigation_creation/scope_search_plan.py",
+    "experiments/geographic_execution_plan/README.md",
+    "experiments/geographic_execution_plan/REPORT.md",
+    "experiments/geographic_execution_plan/authority.py",
+    "experiments/geographic_execution_plan/dependencies/p3/admin_catalog/SOURCE_MANIFEST.json",
+    "experiments/geographic_execution_plan/dependencies/p3/admin_catalog/geographic_catalog.json",
+    "experiments/geographic_execution_plan/dependencies/p3/import_manifest.json",
+    "experiments/geographic_execution_plan/dependencies/p3/location_catalog.json",
+    "experiments/geographic_execution_plan/dependencies/p3/relevance.py",
+    "experiments/geographic_execution_plan/dependencies/p3/relevance_ip.py",
+    "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only.py",
+    "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_names.py",
+    "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_names_v2.py",
+    "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_simple.py",
+    "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_v2.py",
+    "experiments/geographic_execution_plan/dependencies/p3/relevance_scope.py",
+    "experiments/geographic_execution_plan/frozen_risk.py",
+    "experiments/geographic_execution_plan/offline_guards.py",
+    "experiments/geographic_execution_plan/p3_bridge.py",
+    "experiments/geographic_execution_plan/replay.py",
+    "experiments/geographic_execution_plan/run_offline.py",
+    "experiments/geographic_execution_plan/storage.py",
+    "experiments/geographic_execution_plan/verify_sources.py",
+    "tests/test_geographic_execution_plan.py",
+    "tests/test_geographic_execution_plan_guards.py",
+    "tests/test_geographic_execution_plan_integration.py",
+    "tests/test_geographic_execution_plan_p3.py",
+    "tests/test_geographic_execution_plan_provenance.py",
+    "tests/test_geographic_execution_plan_resources.py",
+    "tests/test_geographic_execution_plan_risk.py",
+    "tests/test_geographic_execution_plan_storage.py"
+  ],
+  "authored_files": [
+    {
+      "path": "backend/investigation_creation/scope_search_plan.py",
+      "sha256": "cbd1098451ab13dbdc53cac45dce6715525e0ddbae57324bdb824d72eebb030f"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/README.md",
+      "sha256": "93b2f8cd540e93f90bc82ea7aed72551432ae85f08b62dc4e4908dde031818ba"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/REPORT.md",
+      "sha256": "2807ad0e42c36d6821a4fe4d8ec1fc41664427b7eb97108b76c9cfd52e29a529"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/authority.py",
+      "sha256": "e2fc5c54da2eae7a87c0e1f10adbd1579d9c3166912c4167a18e3fcbd457b8ef"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/frozen_risk.py",
+      "sha256": "dec86f5f877ccbd16d7fac2201e2168f4090d0619dfa608e2d3fbd0631df2244"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/offline_guards.py",
+      "sha256": "0b09f7eb951a0647da64d8bbd8e93db4414246365a4d2d1f0c5ccdc9242d3492"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/p3_bridge.py",
+      "sha256": "5ed8fbebdeb17e652d502ae862e36a22fe5549555c7539f1718a82ced93a21c5"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/replay.py",
+      "sha256": "461799c3e6fc7e3ba4ccc59168be70ae7cfe81593c9ff2a5344807d1609c3af4"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/run_offline.py",
+      "sha256": "8bc690c606ab0dac837c9023deae6f172862801a54ea7a873bbe397496490283"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/storage.py",
+      "sha256": "d25e8722775a8f3c33c215d8df924ddfd3b50b959230fdd22097b06910f44d0e"
+    },
+    {
+      "path": "experiments/geographic_execution_plan/verify_sources.py",
+      "sha256": "6897cc1b416baff015974ae1b92b025a7aea7b884c1e7c395a3411389421ee21"
+    },
+    {
+      "path": "tests/test_geographic_execution_plan.py",
+      "sha256": "201f31f0c7bc31bd9487887225e57ddac3b9ff0d7c5d6230b3adce88b1ce8a28"
+    },
+    {
+      "path": "tests/test_geographic_execution_plan_guards.py",
+      "sha256": "57573e63d175c08f35139a712c7494c4b9bce2f18e69f0389afd35371a7f80a5"
+    },
+    {
+      "path": "tests/test_geographic_execution_plan_integration.py",
+      "sha256": "2a0675eaa2b19650ebc43e1f94cb5d179566f1761e3b365fd8eab43662f4c79f"
+    },
+    {
+      "path": "tests/test_geographic_execution_plan_p3.py",
+      "sha256": "ddf0c8aeaf4b38ea51e72bd400d093680ab56c418df7a42f1cb31d7e35d019f1"
+    },
+    {
+      "path": "tests/test_geographic_execution_plan_provenance.py",
+      "sha256": "4ea4a56b289c1d9e10bca2b3c4e4e217dea2dc7b377f1c7c0ea387b52c2d1ae7"
+    },
+    {
+      "path": "tests/test_geographic_execution_plan_resources.py",
+      "sha256": "3b1aeaf69d9432fd0f4485a1d05ff09fba401b8d8db1d8a725b40a37383a35dc"
+    },
+    {
+      "path": "tests/test_geographic_execution_plan_risk.py",
+      "sha256": "00d6abd09032d983737342903221cc7f9f41dd766ed6b2bd6156509b6d7085f9"
+    },
+    {
+      "path": "tests/test_geographic_execution_plan_storage.py",
+      "sha256": "bd3668f3dd39f1d94d421e9405f706f6627ef86f084cebf8beff065d5fad77f4"
+    }
+  ],
+  "static_compile": "passed",
+  "whitespace": "passed",
+  "git_diff_check": "passed"
+}

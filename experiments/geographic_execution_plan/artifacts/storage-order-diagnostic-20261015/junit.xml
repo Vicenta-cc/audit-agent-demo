@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="2.390" timestamp="2026-10-15T20:54:30.438605+08:00" hostname="ZBMac-M59XV50W0H"><testcase classname="tests.test_geographic_execution_plan_storage" name="test_blob_roundtrip_is_immutable_and_independent_process" time="0.146"><failure message="AssertionError: b'Traceback (most recent call last):&#10;    File &quot;&lt;string&gt;&quot;, line 1, in &lt;module&gt;&#10;    File &quot;/Users/ext.wanghongtao6/.codex/w...t be under experiment or temporary directory&quot;)&#10;  ValueError: database must be under experiment or temporary directory&#10;  '&#10;assert 1 == 0&#10; +  where 1 = CompletedProcess(args=['/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python', '-c', 'fr... be under experiment or temporary directory&quot;)\nValueError: database must be under experiment or temporary directory\n').returncode">tests/test_geographic_execution_plan_storage.py:24: in test_blob_roundtrip_is_immutable_and_independent_process
+    assert result.returncode == 0, result.stderr
+E   AssertionError: b'Traceback (most recent call last):
+E       File "&lt;string&gt;", line 1, in &lt;module&gt;
+E       File "/Users/ext.wanghongtao6/.codex/w...t be under experiment or temporary directory")
+E     ValueError: database must be under experiment or temporary directory
+E     '
+E   assert 1 == 0
+E    +  where 1 = CompletedProcess(args=['/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python', '-c', 'fr... be under experiment or temporary directory")\nValueError: database must be under experiment or temporary directory\n').returncode</failure></testcase><testcase classname="tests.test_geographic_execution_plan_storage" name="test_plan_process_restore_external_identity_and_embedded_copies" time="1.345"><failure message="AssertionError: b'Traceback (most recent call last):&#10;    File &quot;&lt;string&gt;&quot;, line 1, in &lt;module&gt;&#10;    File &quot;/Users/ext.wanghongtao6/.codex/w...t be under experiment or temporary directory&quot;)&#10;  ValueError: database must be under experiment or temporary directory&#10;  '&#10;assert 1 == 0&#10; +  where 1 = CompletedProcess(args=['/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python', '-c', &quot;im... be under experiment or temporary directory&quot;)\nValueError: database must be under experiment or temporary directory\n').returncode">tests/test_geographic_execution_plan_storage.py:120: in test_plan_process_restore_external_identity_and_embedded_copies
+    assert result.returncode == 0, result.stderr
+E   AssertionError: b'Traceback (most recent call last):
+E       File "&lt;string&gt;", line 1, in &lt;module&gt;
+E       File "/Users/ext.wanghongtao6/.codex/w...t be under experiment or temporary directory")
+E     ValueError: database must be under experiment or temporary directory
+E     '
+E   assert 1 == 0
+E    +  where 1 = CompletedProcess(args=['/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python', '-c', "im... be under experiment or temporary directory")\nValueError: database must be under experiment or temporary directory\n').returncode</failure></testcase></testsuite></testsuites>

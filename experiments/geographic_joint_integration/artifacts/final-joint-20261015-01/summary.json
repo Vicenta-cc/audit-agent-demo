@@ -1,0 +1,34 @@
+{
+  "pytest_exit_code": 0,
+  "exit_code": 0,
+  "elapsed_seconds": 569.3,
+  "pytest": {
+    "tests": 87,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "guard_expected_probes": [
+    {
+      "pid": 17018,
+      "kind": "sqlite",
+      "target": "/Users/offline-forbidden-child.sqlite3",
+      "blocked": true,
+      "actual_succeeded": false,
+      "expected_probe": true,
+      "test": "tests/test_geographic_execution_plan_guards.py::test_runner_child_inherits_guards_when_bootstrapped (call)"
+    },
+    {
+      "pid": 15800,
+      "kind": "sqlite",
+      "target": "/Users/offline-forbidden-bound.sqlite3",
+      "blocked": true,
+      "actual_succeeded": false,
+      "expected_probe": true,
+      "test": "tests/test_geographic_execution_plan_guards.py::test_bound_attach_validated_per_execution[connection] (call)"
+    }
+  ],
+  "guard_unexpected_attempts": [],
+  "actual_network_model_collection_dispatch_succeeded": 0,
+  "fixture_only": true
+}
