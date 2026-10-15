@@ -1,0 +1,24 @@
+{
+  "version": "geo-intent-p0-v1",
+  "baseline_head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "sources_sha256": {
+    "backend/investigation_creation/conversation.py": "8abf6b995d105ace432fad1e2be1a8a48c51c9640158379ba92b07bbdb0d0b93",
+    "backend/investigation_creation/configure.py": "aaf68530d1753c6ea42b2cbc150b109d2b99adf9fe4d6da915b569aa380d3f39",
+    "backend/investigation_creation/contracts.py": "11c88e0928f186795652fcb325cb7cfb31bef9b5c5c3f60ab28d12040d11a057",
+    "backend/investigation_creation/tools.py": "f7c88c0ffa4b49cecd098aac6178f8c9f2aced4337e8f980d8c6d3d135a2058a",
+    "backend/resource_management/tools.py": "d56ccfb7434f32e3b4d9020db11e500f9747ff58b5000d7ec35d54cc7800bbb6",
+    "backend/investigation_creation/rounds.py": "920b6f4812c0fbc2648e6c828d2d060c0e7ce8b1ccc91c407ef33626bb8f999f",
+    "backend/investigation_creation/continuity.py": "0e1b8e9060a7ea9a7e54e4e0cde7af56facb1fb77b79bd8ab989ec7ffcac90c2",
+    "backend/audit_agent/config.py": "a720426d186a64940c44640004e068675a52207dfc9deb489e63bf91d54f34f6"
+  },
+  "snapshots_sha256": {
+    "baseline_tools.json": "ab0138e3e60d2f46d872286363b44c4f3c7222f6e40ad507bb7416b7367f87a8",
+    "baseline_prompt.txt": "dd91b3c92ff4bf197b2423f9cf5e9cf497ac6b653c176dc70a423e696919b8a0",
+    "rounds_guidance.txt": "7b00b3132903ceb56cd1a961c758bc25f1d76bfea47b45264ea1529182449f92",
+    "continuity_guidance.txt": "955b301831ca86bdf013da200e09412084128dc881a4b05918eadefedb65d155"
+  },
+  "coordinator_model": "deepseek-v4-pro-ga-260813",
+  "provider_host": "api.qhose.net",
+  "tools_include_optional_rounds": true,
+  "note": "Frozen creation tools; per-case feature flags select rounds/continuity guidance. Report tools excluded: P0 creation intent only."
+}

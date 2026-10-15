@@ -1,0 +1,155 @@
+{
+  "purpose": "Read-only correction; original model records/snapshots/main verdicts untouched",
+  "bug": "receipt.turn_id is session:investigation-turn:<id>:suffix; exact equality to investigation-turn:<id> filtered valid receipts out",
+  "correction": "Match original accepted turn as colon-bounded substring of composite runtime ID; exclude later human turns",
+  "records": [
+    {
+      "id": "E21a",
+      "original_main_verdict": "FAIL no persisted draft",
+      "original_main_verdict_unchanged": true,
+      "corrected_actual_tool_receipts": [
+        {
+          "runtime_composite_turn_id": "investigation-session:b840ea02a92946b996f696c274facec4:investigation-turn:5347dea709254a599b963413a4c361ae:ee9dc280",
+          "tool_name": "create_ruleset_proposal",
+          "status": "SUCCEEDED",
+          "created_at": "2026-10-15T08:47:07.083176+00:00",
+          "data_keys": [
+            "content",
+            "content_hash",
+            "created_at",
+            "proposal_id",
+            "session_id",
+            "updated_at",
+            "version"
+          ],
+          "error_code": null,
+          "error_message": null
+        },
+        {
+          "runtime_composite_turn_id": "investigation-session:b840ea02a92946b996f696c274facec4:investigation-turn:5347dea709254a599b963413a4c361ae:ee9dc280",
+          "tool_name": "create_lexicon_edit",
+          "status": "FAILED",
+          "created_at": "2026-10-15T08:48:34.690006+00:00",
+          "data_keys": [],
+          "error_code": "RESOURCE_GENERATION_INVALID",
+          "error_message": "生成内容未通过结构或数量校验，未创建资源。"
+        },
+        {
+          "runtime_composite_turn_id": "investigation-session:b840ea02a92946b996f696c274facec4:investigation-turn:5347dea709254a599b963413a4c361ae:ee9dc280",
+          "tool_name": "create_lexicon_edit",
+          "status": "FAILED",
+          "created_at": "2026-10-15T08:48:49.167389+00:00",
+          "data_keys": [],
+          "error_code": "RESOURCE_GENERATION_INVALID",
+          "error_message": "生成内容未通过结构或数量校验，未创建资源。"
+        },
+        {
+          "runtime_composite_turn_id": "investigation-session:b840ea02a92946b996f696c274facec4:investigation-turn:43e7f090fbfc40dea57b1f131199cbb6:cde2f2e1",
+          "tool_name": "get_ruleset_proposal",
+          "status": "SUCCEEDED",
+          "created_at": "2026-10-15T08:49:29.037568+00:00",
+          "data_keys": [
+            "content",
+            "content_hash",
+            "created_at",
+            "proposal_id",
+            "session_id",
+            "updated_at",
+            "version"
+          ],
+          "error_code": null,
+          "error_message": null
+        }
+      ]
+    },
+    {
+      "id": "E21b",
+      "original_main_verdict": "FAIL no persisted draft",
+      "original_main_verdict_unchanged": true,
+      "corrected_actual_tool_receipts": [
+        {
+          "runtime_composite_turn_id": "investigation-session:ca55068a0fe24caf825836fb1ae7b3b2:investigation-turn:a34d6c2a548c4f1fa3fb0ae9de44f96c:b369531e",
+          "tool_name": "create_ruleset_proposal",
+          "status": "SUCCEEDED",
+          "created_at": "2026-10-15T08:47:37.798548+00:00",
+          "data_keys": [
+            "content",
+            "content_hash",
+            "created_at",
+            "proposal_id",
+            "session_id",
+            "updated_at",
+            "version"
+          ],
+          "error_code": null,
+          "error_message": null
+        },
+        {
+          "runtime_composite_turn_id": "investigation-session:ca55068a0fe24caf825836fb1ae7b3b2:investigation-turn:a34d6c2a548c4f1fa3fb0ae9de44f96c:b369531e",
+          "tool_name": "create_lexicon_edit",
+          "status": "SUCCEEDED",
+          "created_at": "2026-10-15T08:48:26.625136+00:00",
+          "data_keys": [
+            "content",
+            "content_hash",
+            "edit_id",
+            "generation_profile",
+            "item_index",
+            "kind",
+            "origin_source",
+            "recall_plan",
+            "resource_ref",
+            "saved",
+            "saves",
+            "search_terms",
+            "source",
+            "update_arguments",
+            "version"
+          ],
+          "error_code": null,
+          "error_message": null
+        },
+        {
+          "runtime_composite_turn_id": "investigation-session:ca55068a0fe24caf825836fb1ae7b3b2:investigation-turn:f4398eadda7b42869177400841ada2db:e0d227a8",
+          "tool_name": "get_ruleset_proposal",
+          "status": "SUCCEEDED",
+          "created_at": "2026-10-15T08:49:24.986327+00:00",
+          "data_keys": [
+            "content",
+            "content_hash",
+            "created_at",
+            "proposal_id",
+            "session_id",
+            "updated_at",
+            "version"
+          ],
+          "error_code": null,
+          "error_message": null
+        },
+        {
+          "runtime_composite_turn_id": "investigation-session:ca55068a0fe24caf825836fb1ae7b3b2:investigation-turn:f4398eadda7b42869177400841ada2db:e0d227a8",
+          "tool_name": "get_resource_edit",
+          "status": "SUCCEEDED",
+          "created_at": "2026-10-15T08:50:20.509860+00:00",
+          "data_keys": [
+            "content",
+            "content_hash",
+            "edit_id",
+            "item_index",
+            "kind",
+            "origin_source",
+            "proposal_snapshot",
+            "resource_ref",
+            "saved",
+            "saves",
+            "source",
+            "update_arguments",
+            "version"
+          ],
+          "error_code": null,
+          "error_message": null
+        }
+      ]
+    }
+  ]
+}

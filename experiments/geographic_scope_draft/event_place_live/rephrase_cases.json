@@ -1,0 +1,46 @@
+{
+  "version": "event-place-limited-rephrase-v1",
+  "not_statistical_holdout": true,
+  "cases": [
+    {
+      "id": "H01",
+      "input": "帮我看看宁波住房投诉",
+      "expected": {
+        "decision": "apply",
+        "status": "resolved",
+        "target": "宁波市"
+      },
+      "resource_setup": "same published synthetic general resources; no state injected"
+    },
+    {
+      "id": "H02",
+      "input": "想了解重庆暴雨这事的讨论",
+      "expected": {
+        "decision": "apply",
+        "status": "resolved",
+        "target": "重庆市"
+      },
+      "resource_setup": "same published synthetic general resources; no state injected"
+    },
+    {
+      "id": "H03",
+      "input": "调查内蒙古草原旅游投诉",
+      "expected": {
+        "decision": "apply",
+        "status": "resolved",
+        "target": "内蒙古自治区"
+      },
+      "resource_setup": "same published synthetic general resources; no state injected"
+    },
+    {
+      "id": "H04",
+      "input": "账号资料写着杭州，核查它的招聘广告违规风险",
+      "expected": {
+        "decision": "none",
+        "status": "absent",
+        "target": null
+      },
+      "resource_setup": "same published synthetic general resources; no state injected"
+    }
+  ]
+}

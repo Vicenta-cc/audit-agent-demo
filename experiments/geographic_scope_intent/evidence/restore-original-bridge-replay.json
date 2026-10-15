@@ -1,0 +1,228 @@
+{
+  "kind": "original_bridge_historical_response_replay",
+  "original_version": "geo-intent-p0-contrast-v1",
+  "original_result_sha256": "8387a70495d348e897db9d4bf43ccee2563ab690a4d57512e7dfd36202200738",
+  "new_real_model_calls": 0,
+  "not_a_new_semantic_evaluation": true,
+  "cases": 18,
+  "historical_responses_replayed": 53,
+  "initial_requests_hash_verified": 54,
+  "rows": [
+    {
+      "case_id": "city-kelamayi",
+      "requests_replayed_offline": 4,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "only-kelamayi",
+      "requests_replayed_offline": 4,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "keep-denial-clear",
+      "requests_replayed_offline": 3,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "change-daqing",
+      "requests_replayed_offline": 3,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "requests_replayed_offline": 2,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "province-xinjiang",
+      "requests_replayed_offline": 4,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "keep-rules",
+      "requests_replayed_offline": 4,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "defer-missing-all",
+      "requests_replayed_offline": 2,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "adoption-temp-first",
+      "requests_replayed_offline": 2,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "ambiguous-chaoyang",
+      "requests_replayed_offline": 1,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "new-round-national",
+      "requests_replayed_offline": 4,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "named-resource",
+      "requests_replayed_offline": 4,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "pasted-post",
+      "requests_replayed_offline": 2,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "creator-kelamayi",
+      "requests_replayed_offline": 2,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "denied-city",
+      "requests_replayed_offline": 2,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "clear-unlimited",
+      "requests_replayed_offline": 3,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "keep-title",
+      "requests_replayed_offline": 4,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    },
+    {
+      "case_id": "assistant-city",
+      "requests_replayed_offline": 3,
+      "exact_fields": {
+        "requests": true,
+        "responses": true,
+        "messages": true,
+        "calls": true,
+        "termination": true,
+        "usage": true
+      }
+    }
+  ]
+}

@@ -22,6 +22,7 @@ from backend.audit_agent.creator_url import validate_creator_url
 from backend.audit_agent.limits import MAX_SUPPORTED_INVESTIGATION_POSTS
 from backend.resource_management.contracts import LexiconContent
 from backend.rulesets.contracts import ApplicationStage, RiskLevel, RuleSetContent
+from .scope_intent import RelevanceScope, RelevanceScopeState, PublicRelevanceScopeState
 
 
 class StrictModel(BaseModel):
@@ -105,6 +106,9 @@ InvestigationBlockerCode = Literal[
     "CONFIRMATION_REQUIRED",
     "IDEMPOTENCY_CONFLICT",
     "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE",
+    "RELEVANCE_SCOPE_PENDING",
+    "RELEVANCE_SCOPE_EXECUTION_UNAVAILABLE",
+    "RELEVANCE_SCOPE_MODE_UNSUPPORTED",
 ]
 
 
@@ -325,13 +329,26 @@ class InvestigationDraftConfiguration(StrictModel):
     investigation: InvestigationMode
     judgement: RuleSetJudgement
     task_parameters: InvestigationTaskParameters | None = None
+    relevance_scope: RelevanceScope | None = None
+    relevance_scope_state: RelevanceScopeState | None = None
 
     @model_serializer(mode="wrap")
     def serialize_configuration(self, handler):
         payload = handler(self)
         if self.task_parameters is None:
             payload.pop("task_parameters", None)
+        for key in ('relevance_scope', 'relevance_scope_state'):
+            if getattr(self, key) is None:
+                payload.pop(key, None)
         return payload
+
+    @model_validator(mode='before')
+    @classmethod
+    def reject_null_geography(cls, value):
+        if isinstance(value, dict) and any(key in value and value[key] is None
+                for key in ('relevance_scope', 'relevance_scope_state')):
+            raise ValueError('omit absent geography; changes require the conversation configure tool')
+        return value
 
     @field_validator("judgement", mode="before")
     @classmethod
@@ -683,6 +700,17 @@ class CrawlerAccountConfirmedState(StrictModel):
 
 
 class ConfirmationPreview(StrictModel):
+    relevance_scope: RelevanceScope | None = None
+    relevance_scope_state: PublicRelevanceScopeState | None = None
+
+    @model_serializer(mode='wrap')
+    def serialize_preview(self, handler):
+        payload = handler(self)
+        for key in ('relevance_scope', 'relevance_scope_state'):
+            if getattr(self, key) is None:
+                payload.pop(key, None)
+        return payload
+
     max_post_limit: StrictInt = Field(
         default=MAX_SUPPORTED_INVESTIGATION_POSTS,
         ge=1,

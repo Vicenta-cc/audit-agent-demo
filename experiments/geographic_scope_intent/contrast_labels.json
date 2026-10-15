@@ -1,0 +1,182 @@
+{
+  "city-kelamayi": {
+    "action": "set",
+    "target_text": "克拉玛依",
+    "selection_policy": "local_first_with_supplement",
+    "source_quote": "用已发布综合舆情规则和欠薪词库，在抖音调查克拉玛依最近的负面舆情。",
+    "source_evidence_span": "调查克拉玛依最近的负面舆情",
+    "workflow_state": "ready",
+    "old_label": "set",
+    "critical_negative": false
+  },
+  "province-xinjiang": {
+    "action": "set",
+    "target_text": "新疆",
+    "selection_policy": "local_first_with_supplement",
+    "source_quote": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+    "source_evidence_span": "查新疆欠薪",
+    "workflow_state": "ready",
+    "old_label": "set",
+    "critical_negative": false
+  },
+  "only-kelamayi": {
+    "action": "set",
+    "target_text": "克拉玛依",
+    "selection_policy": "local_only",
+    "source_quote": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+    "source_evidence_span": "只要克拉玛依，不要其他地区",
+    "workflow_state": "ready",
+    "old_label": "set",
+    "critical_negative": false
+  },
+  "change-daqing": {
+    "action": "set",
+    "target_text": "大庆",
+    "selection_policy": "local_first_with_supplement",
+    "source_quote": "改查大庆，规则和词库保持现在的。",
+    "source_evidence_span": "改查大庆",
+    "workflow_state": "ready",
+    "old_label": "set",
+    "critical_negative": false
+  },
+  "clear-unlimited": {
+    "action": "clear",
+    "target_text": null,
+    "selection_policy": null,
+    "source_quote": "不限制地区了，其他设置不变。",
+    "source_evidence_span": "不限制地区了",
+    "workflow_state": "ready",
+    "old_label": "clear",
+    "critical_negative": false
+  },
+  "keep-title": {
+    "action": "keep",
+    "target_text": null,
+    "selection_policy": null,
+    "source_quote": null,
+    "source_evidence_span": null,
+    "workflow_state": "ready",
+    "old_label": "keep",
+    "critical_negative": true
+  },
+  "keep-rules": {
+    "action": "keep",
+    "target_text": null,
+    "selection_policy": null,
+    "source_quote": null,
+    "source_evidence_span": null,
+    "workflow_state": "ready",
+    "old_label": "keep",
+    "critical_negative": true
+  },
+  "creator-kelamayi": {
+    "action": "keep",
+    "target_text": null,
+    "selection_policy": null,
+    "source_quote": null,
+    "source_evidence_span": null,
+    "workflow_state": "ready",
+    "old_label": "keep",
+    "critical_negative": true
+  },
+  "named-resource": {
+    "action": "keep",
+    "target_text": null,
+    "selection_policy": null,
+    "source_quote": null,
+    "source_evidence_span": null,
+    "workflow_state": "ready",
+    "old_label": "keep",
+    "critical_negative": true
+  },
+  "pasted-post": {
+    "action": "no_task",
+    "target_text": null,
+    "selection_policy": null,
+    "source_quote": null,
+    "source_evidence_span": null,
+    "workflow_state": "not_applicable",
+    "old_label": "no_task",
+    "critical_negative": true
+  },
+  "ambiguous-chaoyang": {
+    "action": "clarify",
+    "target_text": null,
+    "selection_policy": null,
+    "source_quote": null,
+    "source_evidence_span": null,
+    "workflow_state": "not_applicable",
+    "old_label": "clarify",
+    "critical_negative": true
+  },
+  "defer-missing-all": {
+    "action": "set",
+    "target_text": "乌鲁木齐",
+    "selection_policy": "local_first_with_supplement",
+    "source_quote": "调查乌鲁木齐欠薪，先帮我准备规则和词库。",
+    "source_evidence_span": "调查乌鲁木齐欠薪",
+    "workflow_state": "defer",
+    "old_label": "defer",
+    "critical_negative": false
+  },
+  "denied-city": {
+    "action": "keep",
+    "target_text": null,
+    "selection_policy": null,
+    "source_quote": null,
+    "source_evidence_span": null,
+    "workflow_state": "ready",
+    "old_label": "keep",
+    "critical_negative": true
+  },
+  "keep-denial-clear": {
+    "action": "keep",
+    "target_text": null,
+    "selection_policy": null,
+    "source_quote": null,
+    "source_evidence_span": null,
+    "workflow_state": "ready",
+    "old_label": "keep",
+    "critical_negative": true
+  },
+  "adoption-temp-first": {
+    "action": "set",
+    "target_text": "克拉玛依",
+    "selection_policy": "local_first_with_supplement",
+    "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+    "source_evidence_span": "调查克拉玛依的欠薪舆情",
+    "workflow_state": "defer",
+    "old_label": "defer",
+    "critical_negative": false
+  },
+  "adoption-temp-later": {
+    "action": "set",
+    "target_text": "克拉玛依",
+    "selection_policy": "local_first_with_supplement",
+    "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+    "source_evidence_span": "调查克拉玛依的欠薪舆情",
+    "workflow_state": "ready",
+    "old_label": "set",
+    "critical_negative": false
+  },
+  "new-round-national": {
+    "action": "keep",
+    "target_text": null,
+    "selection_policy": null,
+    "source_quote": null,
+    "source_evidence_span": null,
+    "workflow_state": "ready",
+    "old_label": "keep",
+    "critical_negative": true
+  },
+  "assistant-city": {
+    "action": "keep",
+    "target_text": null,
+    "selection_policy": null,
+    "source_quote": null,
+    "source_evidence_span": null,
+    "workflow_state": "ready",
+    "old_label": "keep",
+    "critical_negative": true
+  }
+}

@@ -1,0 +1,391 @@
+{
+  "total": 17,
+  "completed": 11,
+  "passed": 8,
+  "records": [
+    {
+      "id": "E07",
+      "pass": true,
+      "errors": [],
+      "observed_status": "resolved",
+      "observed_target": "吉林市",
+      "scope": {
+        "content_unit": "parent_post_event",
+        "province": {
+          "aliases": [
+            "吉林"
+          ],
+          "name": "吉林省"
+        },
+        "schema_version": "geo-scope-v1",
+        "selection_policy": "local_first_with_supplement",
+        "target": {
+          "aliases": [
+            "吉林"
+          ],
+          "name": "吉林市"
+        },
+        "topic": null
+      },
+      "scope_state": {
+        "application_turn_id": "investigation-turn:16473aae016d4ba8819599f8c4d65cef",
+        "candidates": [
+          {
+            "kind": "地级市",
+            "level": "prefecture",
+            "name": "吉林市",
+            "province_name": "吉林省"
+          }
+        ],
+        "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+        "copied_from_draft_id": "",
+        "draft_id": "investigation-draft:c2c9f60e140a4e36bc0027bbbd4438f3",
+        "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+        "province": {
+          "aliases": [
+            "吉林"
+          ],
+          "name": "吉林省"
+        },
+        "province_code": "220000",
+        "reason": "",
+        "selection_policy": "local_first_with_supplement",
+        "session_id": "investigation-session:066247407ac84c20a71818b787d44739",
+        "source_quote": "调查吉林市火灾",
+        "source_sequence": 1,
+        "source_turn_id": "investigation-turn:a26b96c706e14ff28682a1adc0825a35",
+        "source_user_message_id": "investigation-message:92622b6a2c5549f4b816a6284d538e12",
+        "status": "resolved",
+        "target": {
+          "aliases": [
+            "吉林"
+          ],
+          "name": "吉林市"
+        },
+        "target_code": "220200",
+        "target_level": "prefecture",
+        "target_text": "吉林市",
+        "task_anchor_turn_id": "investigation-turn:a26b96c706e14ff28682a1adc0825a35"
+      }
+    },
+    {
+      "id": "E08",
+      "pass": true,
+      "errors": [],
+      "observed_status": "resolved",
+      "observed_target": "吉林省",
+      "scope": {
+        "content_unit": "parent_post_event",
+        "province": {
+          "aliases": [
+            "吉林"
+          ],
+          "name": "吉林省"
+        },
+        "schema_version": "geo-scope-v1",
+        "selection_policy": "local_first_with_supplement",
+        "target": {
+          "aliases": [
+            "吉林"
+          ],
+          "name": "吉林省"
+        },
+        "topic": null
+      },
+      "scope_state": {
+        "application_turn_id": "investigation-turn:19024ec0067f4a059903d8e06d3bf4f2",
+        "candidates": [
+          {
+            "kind": "省",
+            "level": "province",
+            "name": "吉林省",
+            "province_name": "吉林省"
+          }
+        ],
+        "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+        "copied_from_draft_id": "",
+        "draft_id": "investigation-draft:2c7dbd5743b64e55b0c4e7c16bc93347",
+        "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+        "province": {
+          "aliases": [
+            "吉林"
+          ],
+          "name": "吉林省"
+        },
+        "province_code": "220000",
+        "reason": "",
+        "selection_policy": "local_first_with_supplement",
+        "session_id": "investigation-session:0d2fd639a6fe48d6853cc9b34f45e277",
+        "source_quote": "调查吉林省消费投诉",
+        "source_sequence": 1,
+        "source_turn_id": "investigation-turn:466b9cbf651e4568bf8544ba1b83dc8d",
+        "source_user_message_id": "investigation-message:875235f19f584df1b23681e3db617628",
+        "status": "resolved",
+        "target": {
+          "aliases": [
+            "吉林"
+          ],
+          "name": "吉林省"
+        },
+        "target_code": "220000",
+        "target_level": "province",
+        "target_text": "吉林省",
+        "task_anchor_turn_id": "investigation-turn:466b9cbf651e4568bf8544ba1b83dc8d"
+      }
+    },
+    {
+      "id": "E09",
+      "pass": true,
+      "errors": [],
+      "observed_status": "pending",
+      "observed_target": null,
+      "scope": null,
+      "scope_state": {
+        "application_turn_id": "investigation-turn:2462c9069bfc4ff090f363cc52e0dfa7",
+        "candidates": [
+          {
+            "kind": "省",
+            "level": "province",
+            "name": "吉林省",
+            "province_name": "吉林省"
+          },
+          {
+            "kind": "地级市",
+            "level": "prefecture",
+            "name": "吉林市",
+            "province_name": "吉林省"
+          }
+        ],
+        "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+        "copied_from_draft_id": "",
+        "draft_id": "investigation-draft:c9875f5c4b0e45338bffe52a50c7816e",
+        "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+        "province": null,
+        "province_code": "",
+        "reason": "地域名称存在歧义，请明确选择省级地域或地级市，并提供完整名称。",
+        "selection_policy": "local_first_with_supplement",
+        "session_id": "investigation-session:48dccf15778f4b149acc512b6dd13ffd",
+        "source_quote": "调查吉林火灾",
+        "source_sequence": 1,
+        "source_turn_id": "investigation-turn:49971f4c457041df907bc004a498a21e",
+        "source_user_message_id": "investigation-message:dd18052d0af940d8af84a9662ecfa862",
+        "status": "pending",
+        "target": null,
+        "target_code": "",
+        "target_level": null,
+        "target_text": "吉林",
+        "task_anchor_turn_id": "investigation-turn:49971f4c457041df907bc004a498a21e"
+      }
+    },
+    {
+      "id": "E10",
+      "pass": false,
+      "errors": [
+        "status expected pending, got resolved",
+        "target expected None, got 北京市"
+      ],
+      "observed_status": "resolved",
+      "observed_target": "北京市",
+      "scope": {
+        "content_unit": "parent_post_event",
+        "province": {
+          "aliases": [
+            "北京"
+          ],
+          "name": "北京市"
+        },
+        "schema_version": "geo-scope-v1",
+        "selection_policy": "local_first_with_supplement",
+        "target": {
+          "aliases": [
+            "北京"
+          ],
+          "name": "北京市"
+        },
+        "topic": null
+      },
+      "scope_state": {
+        "application_turn_id": "investigation-turn:335aa355144249c38c6af38fb4f68640",
+        "candidates": [
+          {
+            "kind": "直辖市",
+            "level": "province",
+            "name": "北京市",
+            "province_name": "北京市"
+          }
+        ],
+        "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+        "copied_from_draft_id": "",
+        "draft_id": "investigation-draft:0baab732c281451b81cf1bbf8e4d2d7a",
+        "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+        "province": {
+          "aliases": [
+            "北京"
+          ],
+          "name": "北京市"
+        },
+        "province_code": "110000",
+        "reason": "",
+        "selection_policy": "local_first_with_supplement",
+        "session_id": "investigation-session:72f26873d53f4a6ba4bd8ee9ffe21dde",
+        "source_quote": "调查朝阳区火灾",
+        "source_sequence": 1,
+        "source_turn_id": "investigation-turn:b2ed500405ce448c808b1bb447bd79cf",
+        "source_user_message_id": "investigation-message:7a41f7cbe8dd4a5e9f8dbd2dd3ee3ff0",
+        "status": "resolved",
+        "target": {
+          "aliases": [
+            "北京"
+          ],
+          "name": "北京市"
+        },
+        "target_code": "110000",
+        "target_level": "province",
+        "target_text": "北京市",
+        "task_anchor_turn_id": "investigation-turn:b2ed500405ce448c808b1bb447bd79cf"
+      }
+    },
+    {
+      "id": "E11",
+      "pass": false,
+      "errors": [
+        "status expected pending, got resolved",
+        "target expected None, got 深圳市"
+      ],
+      "observed_status": "resolved",
+      "observed_target": "深圳市",
+      "scope": {
+        "content_unit": "parent_post_event",
+        "province": {
+          "aliases": [
+            "广东"
+          ],
+          "name": "广东省"
+        },
+        "schema_version": "geo-scope-v1",
+        "selection_policy": "local_first_with_supplement",
+        "target": {
+          "aliases": [
+            "深圳"
+          ],
+          "name": "深圳市"
+        },
+        "topic": null
+      },
+      "scope_state": {
+        "application_turn_id": "investigation-turn:8f61e994de084846acc3fe4c1a3ba745",
+        "candidates": [
+          {
+            "kind": "地级市",
+            "level": "prefecture",
+            "name": "深圳市",
+            "province_name": "广东省"
+          }
+        ],
+        "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+        "copied_from_draft_id": "",
+        "draft_id": "investigation-draft:57481c2ca3254ed0bb7809996eab5e7e",
+        "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+        "province": {
+          "aliases": [
+            "广东"
+          ],
+          "name": "广东省"
+        },
+        "province_code": "440000",
+        "reason": "",
+        "selection_policy": "local_first_with_supplement",
+        "session_id": "investigation-session:a58a1ddfeba543a19fc965d2d0e5b413",
+        "source_quote": "调查深训的诈骗问题",
+        "source_sequence": 1,
+        "source_turn_id": "investigation-turn:9fedc7ab5af5406a8b7e883af209ade2",
+        "source_user_message_id": "investigation-message:8a7abf8860ab4854ae917c3d0180bb27",
+        "status": "resolved",
+        "target": {
+          "aliases": [
+            "深圳"
+          ],
+          "name": "深圳市"
+        },
+        "target_code": "440300",
+        "target_level": "prefecture",
+        "target_text": "深圳",
+        "task_anchor_turn_id": "investigation-turn:9fedc7ab5af5406a8b7e883af209ade2"
+      }
+    },
+    {
+      "id": "E12",
+      "pass": true,
+      "errors": [],
+      "observed_status": "pending",
+      "observed_target": null,
+      "scope": null,
+      "scope_state": {
+        "application_turn_id": "investigation-turn:ce279531d3954bc9b9895ea74a11c7d3",
+        "candidates": [],
+        "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+        "copied_from_draft_id": "",
+        "draft_id": "investigation-draft:3cb652ed0f0347febdfde7741d3a4940",
+        "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+        "province": null,
+        "province_code": "",
+        "reason": "未找到该地域，请核对名称或补充完整名称；当前支持单一省级地域或地级市。",
+        "selection_policy": "local_first_with_supplement",
+        "session_id": "investigation-session:ee0f00c8f3bc4a12b14787c47e7b9632",
+        "source_quote": "调查深圳和宁波住房问题",
+        "source_sequence": 1,
+        "source_turn_id": "investigation-turn:235b5e9213f442aaa2793452edacde10",
+        "source_user_message_id": "investigation-message:8a892b8617eb40d483291c60b0caf380",
+        "status": "pending",
+        "target": null,
+        "target_code": "",
+        "target_level": null,
+        "target_text": "深圳、宁波",
+        "task_anchor_turn_id": "investigation-turn:235b5e9213f442aaa2793452edacde10"
+      }
+    },
+    {
+      "id": "E13",
+      "pass": true,
+      "errors": [],
+      "observed_status": "absent",
+      "observed_target": null,
+      "scope": null,
+      "scope_state": {}
+    },
+    {
+      "id": "E14",
+      "pass": false,
+      "errors": [
+        "no persisted draft; clarification-only is recorded as incomplete"
+      ]
+    },
+    {
+      "id": "E15",
+      "pass": true,
+      "errors": [],
+      "observed_status": "absent",
+      "observed_target": null,
+      "scope": null,
+      "scope_state": {}
+    },
+    {
+      "id": "E16",
+      "pass": true,
+      "errors": [],
+      "observed_status": "absent",
+      "observed_target": null,
+      "scope": null,
+      "scope_state": {}
+    },
+    {
+      "id": "E17",
+      "pass": true,
+      "errors": [],
+      "observed_status": "absent",
+      "observed_target": null,
+      "scope": null,
+      "scope_state": {}
+    }
+  ]
+}

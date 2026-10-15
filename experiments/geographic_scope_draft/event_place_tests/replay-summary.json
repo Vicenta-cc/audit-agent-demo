@@ -1,0 +1,11 @@
+{
+  "passed": 147,
+  "failed": 0,
+  "seconds": 25.54,
+  "new_historical_replay_cases": 11,
+  "ast_parse_changed_files": 3,
+  "git_diff_check": "passed",
+  "model_requests": 0,
+  "collection_requests": 0,
+  "production_database_writes": 0
+}

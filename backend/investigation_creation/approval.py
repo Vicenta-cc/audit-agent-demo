@@ -3,7 +3,8 @@
 import json
 import sqlite3
 
-from pydantic import Field, StrictInt, StrictStr, field_validator, model_validator
+from pydantic import Field, StrictInt, StrictStr, field_validator, model_validator, model_serializer
+from .scope_intent import RelevanceScope, RelevanceScopeState
 
 from .contracts import (
     InvestigationMode,
@@ -20,6 +21,16 @@ class ProposalDraftConfiguration(StrictModel):
     platform: Platform
     investigation: InvestigationMode
     task_parameters: InvestigationTaskParameters | None = None
+    relevance_scope: RelevanceScope | None = None
+    relevance_scope_state: RelevanceScopeState | None = None
+
+    @model_serializer(mode='wrap')
+    def serialize_geography(self, handler):
+        payload = handler(self)
+        for key in ('relevance_scope', 'relevance_scope_state'):
+            if getattr(self, key) is None:
+                payload.pop(key, None)
+        return payload
 
 
 class ProposalDraftCreation(StrictModel):

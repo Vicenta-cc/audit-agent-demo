@@ -1,0 +1,20 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_workflow_projection_does_not_request_manual_region_again _________
+
+    def test_workflow_projection_does_not_request_manual_region_again():
+        request = request_for_stage(case(), 'workflow', intent(case()))
+        configure = next(t['function'] for t in request['tools'] if t['function']['name'] == 'configure_investigation_draft')
+        assert 'relevance_scope_change' not in configure['parameters']['properties']
+>       assert '实验候选：relevance_scope_change' not in configure['description']
+E       AssertionError: assert '实验候选：releva...scope_change' not in '创建或局部更新调查草案...态，不在此工具重复选择。'
+E         
+E         '实验候选：relevance_scope_change' is contained here:
+E           强行替换版本重试。
+E           实验候选：relevance_scope_change 省略保留，set 携带目标/策略/用户原话，clear 只携带取消原话。
+E           地域由程序承接已记录状态，不在此工具重复选择。
+
+tests/test_geographic_scope_bridge_handoff.py:80: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_geographic_scope_bridge_handoff.py::test_workflow_projection_does_not_request_manual_region_again
+1 failed, 47 deselected in 0.10s

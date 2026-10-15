@@ -1,0 +1,2274 @@
+{
+  "id": "E21a-user-recovery",
+  "actor": "human user continued interacting in browser; agent only read state",
+  "original_E21a_remains_failed": true,
+  "not_a_clean_repetition": true,
+  "session_id": "investigation-session:b840ea02a92946b996f696c274facec4",
+  "turns": [
+    {
+      "turn_id": "investigation-turn:319e201247504e07b009c49f900974fb",
+      "session_id": "investigation-session:b840ea02a92946b996f696c274facec4",
+      "user": "hello",
+      "answer": "你好！我是研判助手，可以帮你配置调查、查询审核规则与黑话库、跟进调查报告。\n\n目前「克拉玛依大火」这个调查里，临时审核规则已经生成好了，但黑话库还没生成成功。需要我继续的话，告诉我你想怎么处理黑话库（重试生成、还是你指定搜索词）就行。",
+      "status": "completed",
+      "actor": "human user, not runner",
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 28086,
+            "output_tokens": 73,
+            "total_tokens": 28159,
+            "latency_seconds": 4.8
+          }
+        ],
+        "llm_call_count": 1,
+        "total_tokens": 28159,
+        "tool_lifecycle_and_exit": [
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=1/12 budget=1/12 tool_turns=5 last_msg_role=assistant response_len=117 session=investigation-session:b840ea02a92946b996f696c274facec4"
+        ]
+      },
+      "model_tool_calls": [],
+      "configure_describe_receipts": []
+    },
+    {
+      "turn_id": "investigation-turn:062df3d7971b41429a93fea44ec8a3c9",
+      "session_id": "investigation-session:b840ea02a92946b996f696c274facec4",
+      "user": "黑话库重新生成",
+      "answer": "黑话库生成成功。以下是本次临时使用的黑话库内容（未保存）。\n\n## 临时黑话库（已生成，未保存）\n\n**《克拉玛依大火舆情讨论候选搜索词》** — 风险标签：公共事件信息真实性与传播\n\n实际搜索词（共 9 个）：\n\n1. 克拉玛依大火\n2. 克拉玛依友谊馆火灾\n3. 友谊馆大火\n4. 94年克拉玛依火灾\n5. 新疆克拉玛依历史\n6. 克拉玛依大火真相\n7. 克拉玛依大火知情人\n8. 克拉玛依大火旧闻\n9. 网传克拉玛依大火\n\n这些词按三个主题主词归类（事件名称与简称、关联地点与地域、信源与传播方式），均启用，搜索时使用上面的变体词。\n\n---\n\n现在规则和黑话库都齐了。需要我**生成调查草案**吗？（不启动采集、不正式保存资源）",
+      "status": "completed",
+      "actor": "human user, not runner",
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 28168,
+            "output_tokens": 176,
+            "total_tokens": 28344,
+            "latency_seconds": 5.0
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 30534,
+            "output_tokens": 214,
+            "total_tokens": 30748,
+            "latency_seconds": 6.2
+          }
+        ],
+        "llm_call_count": 2,
+        "total_tokens": 59092,
+        "tool_lifecycle_and_exit": [
+          "tool create_lexicon_edit completed (17.68s, 5318 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=2/12 budget=2/12 tool_turns=6 last_msg_role=assistant response_len=318 session=investigation-session:b840ea02a92946b996f696c274facec4"
+        ]
+      },
+      "model_tool_calls": [
+        {
+          "name": "create_lexicon_edit"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": []
+    },
+    {
+      "turn_id": "investigation-turn:98f799b5c6224b99909c549e7dec5b0e",
+      "session_id": "investigation-session:b840ea02a92946b996f696c274facec4",
+      "user": "生成草案",
+      "answer": "调查草案已生成。\n\n## 调查草案已创建\n\n**标题**：克拉玛依大火舆情调查\n**平台**：抖音\n**模式**：关键词搜索\n**调查地域**：新疆维吾尔自治区 · 克拉玛依市（当地优先、不足时补充，已解析为「克拉玛依市」）\n\n**审核规则**：克拉玛依大火公共事件舆情讨论审核规则（临时，11 条规则，未保存）\n**黑话库**：克拉玛依大火舆情讨论候选搜索词（临时，9 个搜索词，未保存）\n\n实际搜索词：克拉玛依大火、克拉玛依友谊馆火灾、友谊馆大火、94年克拉玛依火灾、新疆克拉玛依历史、克拉玛依大火真相、克拉玛依大火知情人、克拉玛依大火旧闻、网传克拉玛依大火。\n\n---\n\n当前有两个**阻止启动**的情况，需要留意（不影响草案保存）：\n\n1. **抖音采集服务当前不可用**，暂不能开始采集；\n2. **地域执行能力尚未接通**，目前不能真正限定地域采集。\n\n草案已按你的要求生成，未启动采集、未正式保存规则和词库。后续如果要启动，需要等采集服务恢复。还需要我做什么吗？\n\n临时审核规则 · 完整规则快照\n名称：克拉玛依大火公共事件舆情讨论审核规则\n领域：public_event_opinion\n版本：1\n方案标识：ruleset-proposal:29e502b2f30340f19f2d63d5006ad9fe\n内容指纹：9d3d5244f1781b9931d2322f87cbe53713f6e02635ee25479349c1dfbdb2b03b\n研判目标：识别抖音平台围绕1994年新疆克拉玛依友谊馆火灾这一历史公共安全事件的讨论中，冒充权威信源、将历史旧闻包装为近期新闻、伪造官方通报、通过剪辑或拼接误导受众、捏造关键事实以及煽动民族或地域对立等风险内容。审核仅针对存在明确造假、冒充、误导或煽动对立的表达，不限制正常的纪念、反思、新闻报道、历史研究和对公共安全管理的具体批评意见。\n分类数：5；规则数：11\n通用豁免：\n- 正常纪念与反思表达（ge_normal_commemoration）\n  条件：内容为对遇难者的悼念、默哀、献花、纪念馆参观记录，或个人对事件的历史反思与教训总结，未虚构关键事实、未冒充权威信源、未将旧闻标称为近期新闻，也未对克拉玛依或新疆相关民族、地域群体进行整体攻击或煽动对立。\n- 新闻转载与历史研究（ge_news_and_research）\n  条件：内容为可溯源的媒体历史报道转载、档案资料展示、学术研究、公开出版物引用或纪录片片段，且未篡改原意、未通过剪辑拼接制造虚假因果关系，未伪造时间、地点或伤亡等关键事实，也未附加攻击特定民族或地域群体的倾向性结论。\n- 针对公共安全管理的具体批评（ge_specific_criticism）\n  条件：内容针对事件暴露的消防管理、应急响应、场馆安全、善后处理等具体问题进行基于公开事实的批评或问责讨论，未虚构责任主体、未编造通报或伤亡数据，未将个别责任人问题泛化为对克拉玛依或新疆特定民族、地域群体的整体否定。\n- 亲历者或家属真实回忆（ge_personal_recollection）\n  条件：内容为亲历者、遇难者家属或相关人员的个人真实回忆、口述或纪念表述，未进行明显违背公开记录的关键事实编造，未冒用官方或媒体身份发布，也未借个人叙述煽动民族、地域仇恨。\n\n分类：信源冒充与伪造权威（cat_source_fraud，排序 10）\n说明：冒充官方机构、媒体、亲历者发布克拉玛依大火相关消息、通报或内幕，或伪造权威证据。\n\n规则 1：冒充官方或权威媒体发布事件信息（rule_impersonate_official_media）\n启用：是；排序：110\n命中条件：发布者通过账号昵称、头像、简介、置顶评论、视频包装字幕或口播等方式，冒充克拉玛依或新疆相关政府机构、消防、公安、教育、纪检监察等官方主体，或冒充具有权威性的新闻媒体及其记者，发布关于克拉玛依大火事件经过、伤亡、责任、赔偿、会议记录或后续处置的信息，且无真实授权或可核查的转载来源。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：必要条件为发布者冒用官方或权威媒体身份，并借该身份发布与克拉玛依大火事件相关的信息。命中不以内容是否同时包含攻击性言论为前提；仅凭身份冒用和事件信息发布即可独立成立。账号已认证但冒用他人机构身份仍可命中。本条不用于处罚单纯使用历史影像、正常转载或未冒用身份的普通讨论。\n规则豁免：\n- 明确转载或转述（re_impersonate_official_media_transfer）\n  条件：内容明确标注为转载、转述或引用具体媒体、官方发布来源，未冒充该信源本身，未对外宣称自己是官方或原发布媒体。\n- 显著标识的模拟和演绎（re_impersonate_official_media_parody）\n  条件：内容在画面或文案中持续、显著标注为虚构、情景模拟、历史演绎，未使普通用户产生其确为官方或原媒体发布的认识。\n\n规则 2：冒充亲历者或伪造亲历证据（rule_impersonate_witness_or_material）\n启用：是；排序：120\n命中条件：发布者冒充1994年克拉玛依友谊馆火灾的亲历者、幸存者、遇难者家属或当时参与救援处置的工作人员，或者将影视片段、无关人员口述、AI生成画面和声音包装为真实亲历证言、现场原始影像或独家内幕，且相关内容涉及事件关键细节的虚构。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：必要条件为冒用亲历者、家属或处置人员身份，或将非真实材料包装为真实证据。发布历史资料、真实采访或明确标注的文艺再现不属于伪造。普通用户以个人口吻回忆但无冒名、无虚构关键事实的不命中。\n规则豁免：\n- 显著标注创作或演绎（re_witness_labeled_recreation）\n  条件：内容在标题、画面、字幕和口播中持续明确标注为情景再现、文艺创作或历史演绎，未声称其为真实亲历记录。\n- 可溯源的真实证言（re_witness_verifiable_record）\n  条件：内容为已公开媒体或档案资料中的亲历者采访、回忆录节选，且未对关键事实进行篡改或冒名。\n\n规则 3：伪造官方文件或通报（rule_fabricate_document_notice）\n启用：是；排序：130\n命中条件：内容伪造或变造与克拉玛依大火相关的红头文件、会议纪要、事故调查报告、责任认定材料、赔偿协议、地方志记录或官方通报的图片、视频、文字，或以权威口吻凭空发布并不存在的调查结论、责任名单、赔偿标准或新的处理决定。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, fusion_audit\n裁决说明：必要条件为伪造或变造具有官方效力外观的文件，或虚构官方决定。评价既往通报措辞、依据公开文件进行讨论，不构成伪造。评论中仅凭文字空口编造官方决定可由 comment_audit 处理，图片视频中伪造文件形式由对应证据阶段处理，最终融合时据此作出结论。\n规则豁免：\n- 可核查的档案转载（re_doc_archival_source）\n  条件：内容采用可核查的公开档案、政府公报、法院文书、权威媒体发布或学术出版物原貌转载，未对文件关键内容进行改动。\n- 基于公开资料的引述评析（re_doc_review_quote）\n  条件：内容为对公开发布的通报、报告或档案的引述、解读和评论，未虚构原文、未变造文件形式。\n\n分类：旧闻当新闻与时间误导（cat_time_misleading，排序 20）\n说明：将1994年克拉玛依大火等历史事件包装为近期新发生事件，或混淆事件时间制造恐慌和误判。\n\n规则 4：历史旧闻伪装为近期新闻（rule_old_event_as_new）\n启用：是；排序：210\n命中条件：内容通过标题、口播、字幕、话题标签或视频包装，将1994年克拉玛依友谊馆火灾描述为近日、刚刚、突发、最新发生，或使用与当前日期关联的表述，使普通用户误认为该事件近期再次发生或正在发生，且未明确说明其为历史事件回顾。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：必要条件为把1994年火灾这一历史事件伪装为近期新发生事件。未说明历史背景但只做事实复述的不必然命中；关键看是否使用“突发”“刚刚”“近日”等时态语言，或通过抒情配乐和剪辑制造正在进行感。正常纪念和史料回顾不命中。\n规则豁免：\n- 明确历史回顾（re_old_new_retrospective）\n  条件：内容在标题、字幕、口播或置顶说明中明确标注“历史回顾”“1994年”“纪念”“史料”“当年”等时间信息，未暗示事件为近期发生。\n- 正在报道相关纪念或考古活动（re_old_new_context）\n  条件：内容实际报道的是当前正在进行的纪念活动、遗址保护、档案研究等新近事项，并且没有把这些当前事项误称为火灾正在发生。\n\n规则 5：故意混淆事件时间或主体（rule_deliberate_time_confusion）\n启用：是；排序：220\n命中条件：内容宣称某个并非1994年克拉玛依友谊馆火灾的火灾、事故或处分为同一事件，或将不同年份、不同地点的消防安全事件拼接为克拉玛依大火，以此制造虚假因果或扩大事件规模。\n建议风险：medium\n应用阶段：video_frame_evidence, comment_audit, fusion_audit\n裁决说明：必要条件为把不同事件说成同一事件或故意混淆时间主体。单纯把不同年份案例剪辑在一起而未明确声称同一起消防事故，通常由误导剪辑规则处理；本条针对明确宣称同一性的情况。\n规则豁免：\n- 明确的类比和分析（re_time_confusion_comparison）\n  条件：内容清楚使用“类比”“对比”“类似案例”等说明，未把不同事件说成同一事件。\n- 依据公开资料指出事件关系（re_time_confusion_source_based）\n  条件：内容依据公开史料或媒体报道说明相关联的后续调查、遗址处置或同类消防问题，未虚构二者为同一事故。\n\n分类：误导剪辑与拼接（cat_misleading_editing，排序 30）\n说明：通过画面、音频、时序或文案的剪辑拼接，制造虚假因果关系或歪曲原意。\n\n规则 6：拼接剪辑制造虚假事实（rule_misleading_clip）\n启用：是；排序：310\n命中条件：内容将不同年份、不同地点的火灾画面、救援画面、会议画面、哀悼画面或人物发言进行拼接、替换、倒序或重新配音，使其呈现为完整的克拉玛依大火现场或后续处置经过，且未标注历史资料混合、艺术再现或内容重构。\n建议风险：medium\n应用阶段：video_frame_evidence, fusion_audit\n裁决说明：必要条件为通过剪辑、替换、倒序或重新配音，把不同时空素材组合成貌似连续的克拉玛依大火事实记录，并可能因此误导用户。单纯把多段历史素材并置而未声称其完整真实，或已显著标注混剪，不命中。\n规则豁免：\n- 明确标注资料混剪或演绎（re_clip_labeled_composite）\n  条件：内容在标题、封面、字幕或口播中明确标注“资料混剪”“历史画面整理”“情景再现”“艺术演绎”等，未声称其为同一时空下的真实完整记录。\n- 保留原意且不制造虚假事实（re_clip_context_quote）\n  条件：内容的剪辑仅用于引用、说明或评论，未改变原画面和原声的核心事实，未通过拼接制造虚假因果。\n\n规则 7：虚假因果和曲解原意（rule_false_causality）\n启用：是；排序：320\n命中条件：内容把与克拉玛依大火无直接因果关系的人物言论、行动计划、文件决定或后续事件，通过剪辑衔接和解说，说成是火灾发生的直接原因、应对失职的唯一原因或特定群体预谋结果，或者将公开资料中原本中性或相反含义的影像、录音通过断章取义改变其原意。\n建议风险：medium\n应用阶段：video_frame_evidence, fusion_audit\n裁决说明：必要条件为通过剪辑或解说建立不符合公开事实的因果关系，或改变原始材料原意。正常的史料解读和原因分析不命中，除非存在断章取义、虚构因果或把观点冒充事实。\n规则豁免：\n- 基于证据的分析解读（re_causality_analyze）\n  条件：内容明确为基于公开调查结论、档案或权威报道的原因分析，未断章取义改变原始材料含义，且没有把观点冒充为事实结论。\n- 完整呈现原始语境（re_causality_quote_context）\n  条件：对被引用影像、录音或文字给出了足以判断原意的完整上下文，并明确区分事实与评论。\n\n分类：捏造事实与虚假细节（cat_fact_fabrication，排序 40）\n说明：编造关于事件细节、伤亡、责任、赔偿或后续处理的虚假信息。\n\n规则 8：编造伤亡、责任或赔偿信息（rule_fabricate_casualties_responsibility）\n启用：是；排序：410\n命中条件：内容编造与公开记录明显不符的死亡或受伤人数、遇难者身份、责任人员、责任认定、赔偿金额、签名名单等关键信息，或者编造官方未发布、无法从公开档案查证的所谓解密材料和责任人供述。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：必要条件为编造或严重歪曲事件关键事实。引用公开记录、正常历史讨论或明确标注的推测不命中。对官方数据提出质量疑问但未凭空捏造另一套数据的，一般属于批评意见而非事实编造。\n规则豁免：\n- 依据公开记录的转述（re_casualties_official_data）\n  条件：内容引用的死亡、受伤、责任或处理信息可溯源至公开档案、政府通报或权威媒体报道，未对关键数据进行篡改。\n- 明确标注的个人推测（re_casualties_inference_labeled）\n  条件：内容清楚使用“我的推测”“可能”“据称尚待核实”“未经证实”等表述，且没有把推测包装为已经证实的事实。\n\n规则 9：编造所谓内幕和未公开材料（rule_fabricate_inside_story）\n启用：是；排序：420\n命中条件：内容声称掌握并公开所谓封存档案、未公开会议纪要、内部名单、秘密录音或特殊渠道材料，用于颠覆或补充关于克拉玛依大火事件的既有公开记录，但无法指向任何可核查来源，且将其表述为已经确证的事实。\n建议风险：medium\n应用阶段：comment_audit, fusion_audit\n裁决说明：必要条件为把无法核查来源的材料当作已确证事实发布，以补充或改写事件记录。仅提出档案缺失疑问、呼吁公开资料，而未捏造具体内幕的，不命中。\n规则豁免：\n- 真实可核查的解密或档案材料（re_inside_verifiable_document）\n  条件：内容展示或引用的是能够通过档案机构、法律文书、公开出版或权威媒体来源核查的材料，未虚构材料存在和内容。\n- 对档案缺失的开放性质询（re_inside_labeled_question）\n  条件：内容以提问或讨论方式指出历史资料不完整，未虚构具体文件、数据或责任人。\n\n分类：煽动对立与地域仇恨（cat_incite_conflict，排序 50）\n说明：借克拉玛依大火事件煽动民族对立、地域攻击或对不同意见群体的仇恨。\n\n规则 10：借事件煽动民族或地域对立（rule_incite_ethnic_region_conflict）\n启用：是；排序：510\n命中条件：内容将1994年克拉玛依友谊馆火灾的责任、伤亡或后续处理，刻意归咎于克拉玛依、新疆或中国的某一民族群体、地域群体整体，宣称该群体整体负有原罪、应当被歧视、排斥、驱逐或报复，或号召对新疆、克拉玛依及其居民实施对立、抵制的任一情况。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：必要条件为借火情事件将攻击对象扩大到民族或地域群体整体，并含有原罪化、歧视、排斥、驱逐、报复或对立号召中的任一风险表现。针对具体单位和责任人的批评不命中；只用“新疆”“克拉玛依”作地理说明也不命中。\n规则豁免：\n- 针对具体责任主体的批评（re_ethnic_region_responsibility）\n  条件：内容批评的是具体部门、具体单位或具体责任人，未把责任扩展为对特定民族或地域群体的整体否定，未号召排斥、驱逐或报复。\n- 公共安全与消防管理讨论（re_ethnic_region_public_safety）\n  条件：内容为对当时消防、教育、公共活动管理等领域制度问题的探讨，未把问题归为某一民族或地域群体的固有属性。\n\n规则 11：攻击纪念者或不同意见群体（rule_incite_opinion_hostility）\n启用：是；排序：520\n命中条件：内容在克拉玛依大火相关讨论中，以纪念、反思或追问为话题，对参与纪念的表达者、要求公开信息者、持不同意见者发起侮辱、诅咒、人身攻击，或鼓动网民对其进行网暴、举报、线下滋扰，且攻击与对方就事件发表意见或参与纪念的行为明显相关。\n建议风险：medium\n应用阶段：comment_audit, fusion_audit\n裁决说明：必要条件为攻击对象是因参与事件纪念、讨论或持有不同意见而遭到针对，且存在侮辱、诅咒、人身攻击或网暴号召中的任一情况。普通观点分歧和批评不命中；但如果攻击升级为组织骚扰、曝光隐私或现实威胁，可结合具体行为举报处置。\n规则豁免：\n- 针对具体违规表达的反驳（re_opinion_hostility_specific）\n  条件：内容为针对造谣、羞辱遇难者、煽动仇恨等具体违规表达的驳斥，并主要围绕事实和观点展开，未号召网暴或人身攻击。\n- 正常意见交锋（re_opinion_hostility_discuss）\n  条件：内容为就事件叙事、史料解读或责任认定进行观点交锋，未进行人格侮辱、诅咒或组织围攻。",
+      "status": "completed",
+      "actor": "human user, not runner",
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 30754,
+            "output_tokens": 61,
+            "total_tokens": 30815,
+            "latency_seconds": 4.4
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 32235,
+            "output_tokens": 154,
+            "total_tokens": 32389,
+            "latency_seconds": 5.4
+          },
+          {
+            "number": 3,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 32528,
+            "output_tokens": 98,
+            "total_tokens": 32626,
+            "latency_seconds": 3.8
+          },
+          {
+            "number": 4,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 33676,
+            "output_tokens": 256,
+            "total_tokens": 33932,
+            "latency_seconds": 7.2
+          },
+          {
+            "number": 5,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 34822,
+            "output_tokens": 128,
+            "total_tokens": 34950,
+            "latency_seconds": 4.6
+          },
+          {
+            "number": 6,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 35969,
+            "output_tokens": 74,
+            "total_tokens": 36043,
+            "latency_seconds": 3.7
+          },
+          {
+            "number": 7,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 36338,
+            "output_tokens": 150,
+            "total_tokens": 36488,
+            "latency_seconds": 5.0
+          },
+          {
+            "number": 8,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 36858,
+            "output_tokens": 230,
+            "total_tokens": 37088,
+            "latency_seconds": 6.4
+          },
+          {
+            "number": 9,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 37974,
+            "output_tokens": 169,
+            "total_tokens": 38143,
+            "latency_seconds": 5.2
+          },
+          {
+            "number": 10,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 48640,
+            "output_tokens": 342,
+            "total_tokens": 48982,
+            "latency_seconds": 7.2
+          },
+          {
+            "number": 11,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 63032,
+            "output_tokens": 264,
+            "total_tokens": 63296,
+            "latency_seconds": 7.9
+          }
+        ],
+        "llm_call_count": 11,
+        "total_tokens": 424752,
+        "tool_lifecycle_and_exit": [
+          "tool tool_describe completed (0.01s, 3682 chars)",
+          "tool tool_describe completed (0.00s, 477 chars)",
+          "tool tool_search completed (0.00s, 2570 chars)",
+          "tool tool_search completed (0.00s, 2413 chars)",
+          "tool tool_search completed (0.00s, 2571 chars)",
+          "tool tool_describe completed (0.00s, 705 chars)",
+          "tool tool_describe completed (0.00s, 1010 chars)",
+          "tool tool_search completed (0.00s, 2434 chars)",
+          "tool get_resource_edit completed (0.01s, 24060 chars)",
+          "tool configure_investigation_draft completed (0.04s, 32540 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=11/12 budget=11/12 tool_turns=16 last_msg_role=assistant response_len=438 session=investigation-session:b840ea02a92946b996f696c274facec4"
+        ]
+      },
+      "model_tool_calls": [
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_search"
+        },
+        {
+          "name": "tool_search"
+        },
+        {
+          "name": "tool_search"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_search"
+        },
+        {
+          "name": "get_resource_edit"
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "create",
+            "title": "克拉玛依大火舆情调查",
+            "objective": "在抖音平台调查\"克拉玛依大火\"（1994年新疆克拉玛依友谊馆火灾）相关公共事件的舆情讨论，识别信源冒充、旧闻当新闻、伪造通报、误导剪辑、捏造事实、煽动对立等风险内容。",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:187731bf781747f19922df6cf150a190",
+            "lexicon_ref": "resource-ref:1f029b03ee1046f18f6ea28e1d323f0b",
+            "scope_decision": "apply",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "克拉玛依",
+              "selection_policy": "local_first_with_supplement",
+              "source_quote": "调查克拉玛依大火"
+            }
+          }
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_search"
+        },
+        {
+          "name": "tool_search"
+        },
+        {
+          "name": "tool_search"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_search"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [
+        "{\"name\": \"configure_investigation_draft\", \"description\": \"创建或局部更新调查草案的唯一配置入口。operation 明确为 create 或 update。create 提供标题、目标、平台、ruleset_ref，以及 lexicon_ref（关键词调查）或 creator_url（账号调查）。create 必须明确传 scope_decision：apply 同时传 relevance_scope_change.action=set；none 必须省略 relevance_scope_change。缺失或矛盾会在写入前拒绝。update 提供 draft_id/expected_revision，只传变化字段，省略的内容由后台原样保留；不传 null 或整份 configuration。update 不传 create 专用的 scope_decision；地域沿用省略保留、set 修改、clear 取消。正式和临时规则都填 ruleset_ref，正式和临时词库都填 lexicon_ref；引用从 read_resource/get_resource_edit 取得，不能猜测引用或抄写内容、hash、presentation_id。临时规则仍须先完整展示，等待后续用户明确采用；引用不是同意凭证。多个字段一起校验、一起提交。词库按其主词、变体与启用状态计算搜索词；改词条或启用状态先 update_resource_edit，再取新引用。本工具不修改资源正文、不保存资源、不启动任务；启动仍使用现有确认工具。版本冲突先读草案并核对，不强行替换版本重试。本次调查对象、议题或事件名称包含地域时默认采用该地域，无需用户另说某地的舆情或明确限定。例如调查克拉玛依大火、深圳楼市、新疆棉花争议，分别采用克拉玛依、深圳、新疆；议题与地域分别保存，不能只写入标题、目标或词库。设置或换地域时，relevance_scope_change传action=set、用户原始地名target_text、真实用户原话source_quote和selection_policy。同任务用户最新明确更换、取消或要求全国且不限制地域优先；关注全国网友讨论该事件不等于取消事件地域。资源齐备并获采用授权时，回看同任务真实用户历史中的调查对象和后续变更或取消；本轮只说采用资源不表示放弃此前地域，创建时引用原要求并一并配置，不要求用户重复。明确只要当地、不补充选local_only，其余有地域的调查选local_first_with_supplement，无需为默认策略重复确认。创建前明确取消地域时选scope_decision=none；已有草案取消时只传action=clear和source_quote；只改资源或标题时省略地域变化保留原地域，不能传null。不要从账号背景、资源名称、引用举例、否定、助手建议或仅修改标题推断地域；用户没提地名时不靠事件常识补地点；不填行政代码、身份或来源ID。调查目标支持单一省级地域或地级市（含直辖市）；地域简称直接传原文解析，解析成功直接报告。省市同名简称、下级地域、未知名或指代不明也传原文解析，仅按真实pending回执及候选提示澄清；区县同名不阻断明确城市别名，不自行猜测纠错或扩大范围。已有草案不能只口头澄清而保留可启动状态。条件齐备且用户已明确要求时直接修改草案，成功后报告，无需再问是否应用；资源展示和后续采用授权仍须满足。地域仅保存和展示，执行尚未接通，不能声称已经限定采集或可以启动地域调查。\", \"parameters\": {\"$defs\": {\"Platform\": {\"enum\": [\"xhs\", \"dy\", \"ks\"], \"title\": \"Platform\", \"type\": \"string\"}, \"RelevanceScopeChange\": {\"additionalProperties\": false, \"properties\": {\"action\": {\"enum\": [\"set\", \"clear\"], \"title\": \"Action\", \"type\": \"string\"}, \"source_quote\": {\"maxLength\": 4000, \"minLength\": 1, \"title\": \"Source Quote\", \"type\": \"string\"}, \"target_text\": {\"maxLength\": 300, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Target Text\", \"default\": null}, \"selection_policy\": {\"enum\": [\"local_only\", \"local_first_with_supplement\"], \"type\": \"string\", \"nullable\": true, \"title\": \"Selection Policy\", \"default\": null}}, \"required\": [\"action\", \"source_quote\"], \"title\": \"RelevanceScopeChange\", \"type\": \"object\"}}, \"additionalProperties\": false, \"properties\": {\"operation\": {\"enum\": [\"create\", \"update\"], \"title\": \"Operation\", \"type\": \"string\"}, \"draft_id\": {\"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Draft Id\", \"default\": null}, \"expected_revision\": {\"minimum\": 1, \"type\": \"integer\", \"nullable\": true, \"title\": \"Expected Revision\", \"default\": null}, \"title\": {\"maxLength\": 300, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Title\", \"default\": null}, \"objective\": {\"maxLength\": 4000, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Objective\", \"default\": null}, \"platform\": {\"$ref\": \"#/$defs/Platform\", \"nullable\": true}, \"ruleset_ref\": {\"pattern\": \"^resource-ref:[0-9a-f]{32}$\", \"type\": \"string\", \"nullable\": true, \"title\": \"Ruleset Ref\", \"default\": null}, \"lexicon_ref\": {\"pattern\": \"^resource-ref:[0-9a-f]{32}$\", \"type\": \"string\", \"nullable\": true, \"title\": \"Lexicon Ref\", \"default\": null}, \"creator_url\": {\"maxLength\": 2000, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Creator Url\", \"default\": null}, \"scope_decision\": {\"enum\": [\"apply\", \"none\"], \"type\": \"string\", \"nullable\": true, \"title\": \"Scope Decision\", \"description\": \"仅 create 必填：调查对象/事件名称包含地域选 apply 并传 set；无地域或已明确取消选 none 且不传 change。update 省略。\", \"default\": null}, \"relevance_scope_change\": {\"$ref\": \"#/$defs/RelevanceScopeChange\", \"nullable\": true}}, \"required\": [\"operation\"], \"title\": \"ConfigureDraftInput\", \"type\": \"object\"}}",
+        "{\"query\": \"采用临时规则提案 resource ref 转正式引用 adopt ruleset\", \"total_available\": 19, \"matches\": [{\"name\": \"read_resource\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"查询或读取后台正式规则 ruleset 或词库 lexicon。resource_id 为空时按 query 分页检索；指定真实 ID 时返回完整内容和版本。有已发布版本的正式规则和正式词库返回 resource_ref，分别用于 configure_investigation_draft 的 ruleset_ref/lexicon_ref，引用绑定当前用户读取的精确版本，由后端校验，不需要填写 hash。规则 resource_ref 为空表示当前正文尚无相同的已发布版本，应打开编辑副本并按展示采用流程处理，不能猜引用。引用过期时先重新读取并核对差异，不直接采用新版。只读，不创建编辑副本、任务或保存。任务资源选择仍可用 query_investigation_options。 规则返回 published_versions：各正式版本附可直接传入 open_resource_edit 的\"}, {\"name\": \"configure_investigation_draft\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"创建或局部更新调查草案的唯一配置入口。operation 明确为 create 或 update。create 提供标题、目标、平台、ruleset_ref，以及 lexicon_ref（关键词调查）或 creator_url（账号调查）。create 必须明确传 scope_decision：apply 同时传 relevance_scope_change.action=set；none 必须省略 relevance_scope_change。缺失或矛盾会在写入前拒绝。update 提供 draft_id/expected_revision，只传变化字段，省略的内容由后台原样保留；不传 null 或整份 configuration。update 不传 create 专用的 scope_decision；地域沿用省略保留、set 修改、clear 取消。正式和临时规则都填 ruleset_\"}, {\"name\": \"get_resource_edit\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"【已有会话稿的读取入口】需要查看或继续修改已存在的编辑稿时用本工具读取真实内容和版本；后续局部修改必须用 update_resource_edit，不重新生成。\\n读取当前会话完整编辑内容、版本、来源、保存回执和实际 search_terms。规则和词库均返回绑定当前会话及版本的 resource_ref；把引用值分别传给 configure_investigation_draft 的 ruleset_ref/lexicon_ref，不传整份 recall_plan，不重抄内容或 hash。编辑后必须使用新引用，旧引用不可用；后台检查规则已展示版本。不能把已保存旧版本误说成当前修改已保存。 本工具只返回当前稿；历史版本通过 list_session_resources / read_session_resource 读取，不能由当前稿结果断言历史快照不存在。item_index 按完整内容展\"}, {\"name\": \"save_resource\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"用户明确要求保存时，把 edit_id/expected_version 的精确内容正式保存并发布，一次动作完成。mode=new 保存新生成资源，update 保存回可编辑原资源，copy 另存。operation_id 标识这一次逻辑保存，重试保持同一个值；结果未知先 get_resource_save。规则与词库分别调用，允许同轮保存多个资源。返回正式保存版本的 resource_ref；若用户要求草案换用已保存版本，把该引用传给 configure_investigation_draft。旧编辑稿引用仍指向原编辑版本，不自动改指正式资源。保存不等于采用、绑定 Draft 或启动；任务可以继续使用未保存内容。 用户指定保存名称时传 name，保存与命名原子完成；省略才沿用稿内名称。不会改名原编辑稿或冻结任务。\"}, {\"name\": \"create_lexicon_edit\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"【仅新建独立词库】最佳用途：生成全新的词库或搜索词集合，或原样导入已给定的完整新词库。【不允许用于修改已有词库】给已有词库增删关键词、增加变体、改名、改风险等级或停用，必须用 open_resource_edit/get_resource_edit + update_resource_edit。\\n仅从零创建独立词库；新增/修改已有词条、变体、名称用 update_resource_edit，不用本工具重生成。生成临时搜索词或完整黑话库的统一入口。新生成传 generation_request：objective、platform、requirements，用户明确指定数量才传 requested_count，禁止扩展的原文词表传 exact_terms。keyword_profile 可选主题指导。用户明确点名下列中文类别（包括同义表述）时，优先识别对应模板；未点名类别时，根据完整调查目标\"}]}",
+        "{\"query\": \"临时规则采用 ruleset proposal 转 resource ref 绑定草案\", \"total_available\": 19, \"matches\": [{\"name\": \"read_resource\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"查询或读取后台正式规则 ruleset 或词库 lexicon。resource_id 为空时按 query 分页检索；指定真实 ID 时返回完整内容和版本。有已发布版本的正式规则和正式词库返回 resource_ref，分别用于 configure_investigation_draft 的 ruleset_ref/lexicon_ref，引用绑定当前用户读取的精确版本，由后端校验，不需要填写 hash。规则 resource_ref 为空表示当前正文尚无相同的已发布版本，应打开编辑副本并按展示采用流程处理，不能猜引用。引用过期时先重新读取并核对差异，不直接采用新版。只读，不创建编辑副本、任务或保存。任务资源选择仍可用 query_investigation_options。 规则返回 published_versions：各正式版本附可直接传入 open_resource_edit 的\"}, {\"name\": \"configure_investigation_draft\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"创建或局部更新调查草案的唯一配置入口。operation 明确为 create 或 update。create 提供标题、目标、平台、ruleset_ref，以及 lexicon_ref（关键词调查）或 creator_url（账号调查）。create 必须明确传 scope_decision：apply 同时传 relevance_scope_change.action=set；none 必须省略 relevance_scope_change。缺失或矛盾会在写入前拒绝。update 提供 draft_id/expected_revision，只传变化字段，省略的内容由后台原样保留；不传 null 或整份 configuration。update 不传 create 专用的 scope_decision；地域沿用省略保留、set 修改、clear 取消。正式和临时规则都填 ruleset_\"}, {\"name\": \"get_resource_edit\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"【已有会话稿的读取入口】需要查看或继续修改已存在的编辑稿时用本工具读取真实内容和版本；后续局部修改必须用 update_resource_edit，不重新生成。\\n读取当前会话完整编辑内容、版本、来源、保存回执和实际 search_terms。规则和词库均返回绑定当前会话及版本的 resource_ref；把引用值分别传给 configure_investigation_draft 的 ruleset_ref/lexicon_ref，不传整份 recall_plan，不重抄内容或 hash。编辑后必须使用新引用，旧引用不可用；后台检查规则已展示版本。不能把已保存旧版本误说成当前修改已保存。 本工具只返回当前稿；历史版本通过 list_session_resources / read_session_resource 读取，不能由当前稿结果断言历史快照不存在。item_index 按完整内容展\"}, {\"name\": \"open_resource_edit\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"【正式资源局部修改的首选入口】按用户指定的真实资源及版本建立原样副本，然后必须用 update_resource_edit 只改所需字段。临时修改也走此入口，不调用生成工具。已有会话编辑稿无需再复制，直接 get_resource_edit。\\n仅复制已有资源供局部编辑。完整参数示例 {\\\"kind\\\":\\\"ruleset\\\",\\\"resource_id\\\":\\\"读取到的资源ID\\\",\\\"published_version\\\":2}；也可直接复制 read_resource.published_versions 中目标版本的 open_arguments。不要传 version，不把版本ID放进 resource_id。返回 update_arguments，后续原样使用其 edit_id/expected_version，再加 changes。用户要求编辑已存在后台资源时，按真实 kind/resource_\"}, {\"name\": \"get_ruleset_proposal\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"参数只有 proposal_id，使用工具返回的真实 ID。 Read the full current temporary 审核规则 Proposal in this Session, including its version and canonical content, before inspection or editing. This is read-only.\"}]}",
+        "{\"query\": \"规则提案 proposal 转为 编辑稿 resource ref\", \"total_available\": 19, \"matches\": [{\"name\": \"read_resource\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"查询或读取后台正式规则 ruleset 或词库 lexicon。resource_id 为空时按 query 分页检索；指定真实 ID 时返回完整内容和版本。有已发布版本的正式规则和正式词库返回 resource_ref，分别用于 configure_investigation_draft 的 ruleset_ref/lexicon_ref，引用绑定当前用户读取的精确版本，由后端校验，不需要填写 hash。规则 resource_ref 为空表示当前正文尚无相同的已发布版本，应打开编辑副本并按展示采用流程处理，不能猜引用。引用过期时先重新读取并核对差异，不直接采用新版。只读，不创建编辑副本、任务或保存。任务资源选择仍可用 query_investigation_options。 规则返回 published_versions：各正式版本附可直接传入 open_resource_edit 的\"}, {\"name\": \"get_resource_edit\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"【已有会话稿的读取入口】需要查看或继续修改已存在的编辑稿时用本工具读取真实内容和版本；后续局部修改必须用 update_resource_edit，不重新生成。\\n读取当前会话完整编辑内容、版本、来源、保存回执和实际 search_terms。规则和词库均返回绑定当前会话及版本的 resource_ref；把引用值分别传给 configure_investigation_draft 的 ruleset_ref/lexicon_ref，不传整份 recall_plan，不重抄内容或 hash。编辑后必须使用新引用，旧引用不可用；后台检查规则已展示版本。不能把已保存旧版本误说成当前修改已保存。 本工具只返回当前稿；历史版本通过 list_session_resources / read_session_resource 读取，不能由当前稿结果断言历史快照不存在。item_index 按完整内容展\"}, {\"name\": \"configure_investigation_draft\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"创建或局部更新调查草案的唯一配置入口。operation 明确为 create 或 update。create 提供标题、目标、平台、ruleset_ref，以及 lexicon_ref（关键词调查）或 creator_url（账号调查）。create 必须明确传 scope_decision：apply 同时传 relevance_scope_change.action=set；none 必须省略 relevance_scope_change。缺失或矛盾会在写入前拒绝。update 提供 draft_id/expected_revision，只传变化字段，省略的内容由后台原样保留；不传 null 或整份 configuration。update 不传 create 专用的 scope_decision；地域沿用省略保留、set 修改、clear 取消。正式和临时规则都填 ruleset_\"}, {\"name\": \"open_resource_edit\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"【正式资源局部修改的首选入口】按用户指定的真实资源及版本建立原样副本，然后必须用 update_resource_edit 只改所需字段。临时修改也走此入口，不调用生成工具。已有会话编辑稿无需再复制，直接 get_resource_edit。\\n仅复制已有资源供局部编辑。完整参数示例 {\\\"kind\\\":\\\"ruleset\\\",\\\"resource_id\\\":\\\"读取到的资源ID\\\",\\\"published_version\\\":2}；也可直接复制 read_resource.published_versions 中目标版本的 open_arguments。不要传 version，不把版本ID放进 resource_id。返回 update_arguments，后续原样使用其 edit_id/expected_version，再加 changes。用户要求编辑已存在后台资源时，按真实 kind/resource_\"}, {\"name\": \"save_resource\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"用户明确要求保存时，把 edit_id/expected_version 的精确内容正式保存并发布，一次动作完成。mode=new 保存新生成资源，update 保存回可编辑原资源，copy 另存。operation_id 标识这一次逻辑保存，重试保持同一个值；结果未知先 get_resource_save。规则与词库分别调用，允许同轮保存多个资源。返回正式保存版本的 resource_ref；若用户要求草案换用已保存版本，把该引用传给 configure_investigation_draft。旧编辑稿引用仍指向原编辑版本，不自动改指正式资源。保存不等于采用、绑定 Draft 或启动；任务可以继续使用未保存内容。 用户指定保存名称时传 name，保存与命名原子完成；省略才沿用稿内名称。不会改名原编辑稿或冻结任务。\"}]}",
+        "{\"query\": \"临时规则 proposal 转为 resource ref 引用 采用 ruleset proposal adopt\", \"total_available\": 19, \"matches\": [{\"name\": \"get_ruleset_proposal\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"参数只有 proposal_id，使用工具返回的真实 ID。 Read the full current temporary 审核规则 Proposal in this Session, including its version and canonical content, before inspection or editing. This is read-only.\"}, {\"name\": \"open_resource_edit\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"【正式资源局部修改的首选入口】按用户指定的真实资源及版本建立原样副本，然后必须用 update_resource_edit 只改所需字段。临时修改也走此入口，不调用生成工具。已有会话编辑稿无需再复制，直接 get_resource_edit。\\n仅复制已有资源供局部编辑。完整参数示例 {\\\"kind\\\":\\\"ruleset\\\",\\\"resource_id\\\":\\\"读取到的资源ID\\\",\\\"published_version\\\":2}；也可直接复制 read_resource.published_versions 中目标版本的 open_arguments。不要传 version，不把版本ID放进 resource_id。返回 update_arguments，后续原样使用其 edit_id/expected_version，再加 changes。用户要求编辑已存在后台资源时，按真实 kind/resource_\"}, {\"name\": \"read_resource\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"查询或读取后台正式规则 ruleset 或词库 lexicon。resource_id 为空时按 query 分页检索；指定真实 ID 时返回完整内容和版本。有已发布版本的正式规则和正式词库返回 resource_ref，分别用于 configure_investigation_draft 的 ruleset_ref/lexicon_ref，引用绑定当前用户读取的精确版本，由后端校验，不需要填写 hash。规则 resource_ref 为空表示当前正文尚无相同的已发布版本，应打开编辑副本并按展示采用流程处理，不能猜引用。引用过期时先重新读取并核对差异，不直接采用新版。只读，不创建编辑副本、任务或保存。任务资源选择仍可用 query_investigation_options。 规则返回 published_versions：各正式版本附可直接传入 open_resource_edit 的\"}, {\"name\": \"update_ruleset_proposal\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"【仅用户已提供完整替换正文时使用】【不允许用于局部修改】本工具会提交整套规则；只改某一条、风险等级或豁免时，即使已经打开副本，也必须改用 update_resource_edit。不要自行重写或抄写整份 content。\\n仅用于用户提供完整替换内容；局部修改请用 update_resource_edit（edit_id=proposal_id），不要抄写整套规则。参数为 proposal_id、expected_version、content（完整新内容）。不是局部 patch，也不传 ruleset_id。expected_version 必须逐字取自 get_ruleset_proposal 返回的 version，不可省略或自行加一。只有修改工具返回 status=ok 才能宣称修改完成，版本以返回结果为准；报错时如实说明未完成，不把拟修改文字当作已写入。 Replace a com\"}, {\"name\": \"configure_investigation_draft\", \"source\": \"plugin\", \"source_name\": \"investigation\", \"description\": \"创建或局部更新调查草案的唯一配置入口。operation 明确为 create 或 update。create 提供标题、目标、平台、ruleset_ref，以及 lexicon_ref（关键词调查）或 creator_url（账号调查）。create 必须明确传 scope_decision：apply 同时传 relevance_scope_change.action=set；none 必须省略 relevance_scope_change。缺失或矛盾会在写入前拒绝。update 提供 draft_id/expected_revision，只传变化字段，省略的内容由后台原样保留；不传 null 或整份 configuration。update 不传 create 专用的 scope_decision；地域沿用省略保留、set 修改、clear 取消。正式和临时规则都填 ruleset_\"}]}"
+      ]
+    }
+  ],
+  "snapshot": {
+    "session_id": "investigation-session:b840ea02a92946b996f696c274facec4",
+    "draft": {
+      "id": "investigation-draft:adac86e339c44d52b3e228d4ba9dec99",
+      "current_revision": 1,
+      "title": "克拉玛依大火舆情调查",
+      "objective": "在抖音平台调查\"克拉玛依大火\"（1994年新疆克拉玛依友谊馆火灾）相关公共事件的舆情讨论，识别信源冒充、旧闻当新闻、伪造通报、误导剪辑、捏造事实、煽动对立等风险内容。",
+      "configuration": {
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "lexicon_content": {
+              "description": "围绕1994年新疆克拉玛依友谊馆火灾的历史公共安全事件，生成用于抖音平台内容审核研判的候选搜索词，重点发现旧闻当新闻、伪造通报、剪辑误导、捏造事实等传播行为。搜索词命中本身不构成违规判定。",
+              "entries": [
+                {
+                  "enabled": true,
+                  "id": "generated-main-1",
+                  "kind": "main",
+                  "match_type": "黑话词",
+                  "note": "使用事件正式名称及常见简称，召回围绕该事件历史叙事的直接讨论。正常语境包括历史回顾、纪念活动、新闻报道和辟谣引用。",
+                  "parent_id": "",
+                  "platform": "抖音",
+                  "risk_level": "低",
+                  "term": "事件名称与简称"
+                },
+                {
+                  "enabled": true,
+                  "id": "generated-variant-1-1",
+                  "kind": "variant",
+                  "match_type": "黑话词",
+                  "note": "事件最常用名称，可召回直接讨论。正常语境包括历史回顾、纪念和新闻引用，风险需结合具体内容判断。",
+                  "parent_id": "generated-main-1",
+                  "platform": "抖音",
+                  "risk_level": "低",
+                  "term": "克拉玛依大火"
+                },
+                {
+                  "enabled": true,
+                  "id": "generated-variant-1-2",
+                  "kind": "variant",
+                  "match_type": "黑话词",
+                  "note": "包含具体场馆的正式表述，可精准定位事件讨论。正常语境为历史资料和新闻报道，噪声较小。",
+                  "parent_id": "generated-main-1",
+                  "platform": "抖音",
+                  "risk_level": "低",
+                  "term": "克拉玛依友谊馆火灾"
+                },
+                {
+                  "enabled": true,
+                  "id": "generated-variant-1-3",
+                  "kind": "variant",
+                  "match_type": "黑话词",
+                  "note": "地点简称加事件类型，可能出现在网民叙述中。正常语境为历史讨论，需结合上下文辨别是否有误导性传播。",
+                  "parent_id": "generated-main-1",
+                  "platform": "抖音",
+                  "risk_level": "中",
+                  "term": "友谊馆大火"
+                },
+                {
+                  "enabled": true,
+                  "id": "generated-variant-1-4",
+                  "kind": "variant",
+                  "match_type": "黑话词",
+                  "note": "带年份的检索表达，也可能出现在正常历史回顾中。需要判断是否存在旧闻新发或时间混淆。",
+                  "parent_id": "generated-main-1",
+                  "platform": "抖音",
+                  "risk_level": "中",
+                  "term": "94年克拉玛依火灾"
+                },
+                {
+                  "enabled": true,
+                  "id": "generated-main-2",
+                  "kind": "main",
+                  "match_type": "黑话词",
+                  "note": "通过地域和地点线索召回与事件相关的讨论。正常语境包括当地生活内容、旅游记录和公共议题讨论。",
+                  "parent_id": "",
+                  "platform": "抖音",
+                  "risk_level": "低",
+                  "term": "关联地点与地域"
+                },
+                {
+                  "enabled": true,
+                  "id": "generated-variant-2-1",
+                  "kind": "variant",
+                  "match_type": "黑话词",
+                  "note": "宽泛地域历史查询，可召回涉及该事件影像或叙述的视频。噪声较高，包含城市宣传和其他历史内容。",
+                  "parent_id": "generated-main-2",
+                  "platform": "抖音",
+                  "risk_level": "低",
+                  "term": "新疆克拉玛依历史"
+                },
+                {
+                  "enabled": true,
+                  "id": "generated-main-3",
+                  "kind": "main",
+                  "match_type": "黑话词",
+                  "note": "围绕信源宣称、爆料身份的通用表达，结合事件名称使用以提高召回精度。正常语境包含新闻引用、辟谣和公共讨论。",
+                  "parent_id": "",
+                  "platform": "抖音",
+                  "risk_level": "中",
+                  "term": "信源与传播方式"
+                },
+                {
+                  "enabled": true,
+                  "id": "generated-variant-3-1",
+                  "kind": "variant",
+                  "match_type": "黑话词",
+                  "note": "带真相表述的检索词，可召回声称揭露内情的内容，也可能是正常历史讨论中的标题。风险需结合具体发布者身份和内容判断，未达到违规基准。",
+                  "parent_id": "generated-main-3",
+                  "platform": "抖音",
+                  "risk_level": "中",
+                  "term": "克拉玛依大火真相"
+                },
+                {
+                  "enabled": true,
+                  "id": "generated-variant-3-2",
+                  "kind": "variant",
+                  "match_type": "黑话词",
+                  "note": "身份宣称类表述，可能存在以爆料人设传播未经证实内容。正常语境也可能仅是知情人回忆，需结合具体内容辨别。",
+                  "parent_id": "generated-main-3",
+                  "platform": "抖音",
+                  "risk_level": "中",
+                  "term": "克拉玛依大火知情人"
+                },
+                {
+                  "enabled": true,
+                  "id": "generated-variant-3-3",
+                  "kind": "variant",
+                  "match_type": "黑话词",
+                  "note": "直接指向旧闻新发风险。结合事件名称可精确定位相关传播行为，但正常语境可能只是标注或说明旧闻性质。",
+                  "parent_id": "generated-main-3",
+                  "platform": "抖音",
+                  "risk_level": "中",
+                  "term": "克拉玛依大火旧闻"
+                },
+                {
+                  "enabled": true,
+                  "id": "generated-variant-3-4",
+                  "kind": "variant",
+                  "match_type": "黑话词",
+                  "note": "网传前缀可召回未经证实的传播内容。正常语境可能包含对传闻的澄清或质疑，需结合上下文而非仅凭词面判断。",
+                  "parent_id": "generated-main-3",
+                  "platform": "抖音",
+                  "risk_level": "中",
+                  "term": "网传克拉玛依大火"
+                }
+              ],
+              "risk_label": "公共事件信息真实性与传播",
+              "title": "克拉玛依大火舆情讨论候选搜索词"
+            },
+            "source_edit_ref": "resource-ref:1f029b03ee1046f18f6ea28e1d323f0b",
+            "source_lexicon_ids": [],
+            "strategy": "temporary_terms",
+            "terms": [
+              "克拉玛依大火",
+              "克拉玛依友谊馆火灾",
+              "友谊馆大火",
+              "94年克拉玛依火灾",
+              "新疆克拉玛依历史",
+              "克拉玛依大火真相",
+              "克拉玛依大火知情人",
+              "克拉玛依大火旧闻",
+              "网传克拉玛依大火"
+            ]
+          }
+        },
+        "judgement": {
+          "content": {
+            "audit_goal": "识别抖音平台围绕1994年新疆克拉玛依友谊馆火灾这一历史公共安全事件的讨论中，冒充权威信源、将历史旧闻包装为近期新闻、伪造官方通报、通过剪辑或拼接误导受众、捏造关键事实以及煽动民族或地域对立等风险内容。审核仅针对存在明确造假、冒充、误导或煽动对立的表达，不限制正常的纪念、反思、新闻报道、历史研究和对公共安全管理的具体批评意见。",
+            "categories": [
+              {
+                "category_id": "cat_source_fraud",
+                "description": "冒充官方机构、媒体、亲历者发布克拉玛依大火相关消息、通报或内幕，或伪造权威证据。",
+                "name": "信源冒充与伪造权威",
+                "order": 10,
+                "rules": [
+                  {
+                    "adjudication_notes": "必要条件为发布者冒用官方或权威媒体身份，并借该身份发布与克拉玛依大火事件相关的信息。命中不以内容是否同时包含攻击性言论为前提；仅凭身份冒用和事件信息发布即可独立成立。账号已认证但冒用他人机构身份仍可命中。本条不用于处罚单纯使用历史影像、正常转载或未冒用身份的普通讨论。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "enabled": true,
+                    "hit_condition": "发布者通过账号昵称、头像、简介、置顶评论、视频包装字幕或口播等方式，冒充克拉玛依或新疆相关政府机构、消防、公安、教育、纪检监察等官方主体，或冒充具有权威性的新闻媒体及其记者，发布关于克拉玛依大火事件经过、伤亡、责任、赔偿、会议记录或后续处置的信息，且无真实授权或可核查的转载来源。",
+                    "name": "冒充官方或权威媒体发布事件信息",
+                    "order": 110,
+                    "rule_exemptions": [
+                      {
+                        "condition": "内容明确标注为转载、转述或引用具体媒体、官方发布来源，未冒充该信源本身，未对外宣称自己是官方或原发布媒体。",
+                        "exemption_id": "re_impersonate_official_media_transfer",
+                        "name": "明确转载或转述",
+                        "source_mappings": []
+                      },
+                      {
+                        "condition": "内容在画面或文案中持续、显著标注为虚构、情景模拟、历史演绎，未使普通用户产生其确为官方或原媒体发布的认识。",
+                        "exemption_id": "re_impersonate_official_media_parody",
+                        "name": "显著标识的模拟和演绎",
+                        "source_mappings": []
+                      }
+                    ],
+                    "rule_id": "rule_impersonate_official_media",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  },
+                  {
+                    "adjudication_notes": "必要条件为冒用亲历者、家属或处置人员身份，或将非真实材料包装为真实证据。发布历史资料、真实采访或明确标注的文艺再现不属于伪造。普通用户以个人口吻回忆但无冒名、无虚构关键事实的不命中。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "enabled": true,
+                    "hit_condition": "发布者冒充1994年克拉玛依友谊馆火灾的亲历者、幸存者、遇难者家属或当时参与救援处置的工作人员，或者将影视片段、无关人员口述、AI生成画面和声音包装为真实亲历证言、现场原始影像或独家内幕，且相关内容涉及事件关键细节的虚构。",
+                    "name": "冒充亲历者或伪造亲历证据",
+                    "order": 120,
+                    "rule_exemptions": [
+                      {
+                        "condition": "内容在标题、画面、字幕和口播中持续明确标注为情景再现、文艺创作或历史演绎，未声称其为真实亲历记录。",
+                        "exemption_id": "re_witness_labeled_recreation",
+                        "name": "显著标注创作或演绎",
+                        "source_mappings": []
+                      },
+                      {
+                        "condition": "内容为已公开媒体或档案资料中的亲历者采访、回忆录节选，且未对关键事实进行篡改或冒名。",
+                        "exemption_id": "re_witness_verifiable_record",
+                        "name": "可溯源的真实证言",
+                        "source_mappings": []
+                      }
+                    ],
+                    "rule_id": "rule_impersonate_witness_or_material",
+                    "source_mappings": [],
+                    "suggested_risk_level": "medium"
+                  },
+                  {
+                    "adjudication_notes": "必要条件为伪造或变造具有官方效力外观的文件，或虚构官方决定。评价既往通报措辞、依据公开文件进行讨论，不构成伪造。评论中仅凭文字空口编造官方决定可由 comment_audit 处理，图片视频中伪造文件形式由对应证据阶段处理，最终融合时据此作出结论。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "fusion_audit"
+                    ],
+                    "enabled": true,
+                    "hit_condition": "内容伪造或变造与克拉玛依大火相关的红头文件、会议纪要、事故调查报告、责任认定材料、赔偿协议、地方志记录或官方通报的图片、视频、文字，或以权威口吻凭空发布并不存在的调查结论、责任名单、赔偿标准或新的处理决定。",
+                    "name": "伪造官方文件或通报",
+                    "order": 130,
+                    "rule_exemptions": [
+                      {
+                        "condition": "内容采用可核查的公开档案、政府公报、法院文书、权威媒体发布或学术出版物原貌转载，未对文件关键内容进行改动。",
+                        "exemption_id": "re_doc_archival_source",
+                        "name": "可核查的档案转载",
+                        "source_mappings": []
+                      },
+                      {
+                        "condition": "内容为对公开发布的通报、报告或档案的引述、解读和评论，未虚构原文、未变造文件形式。",
+                        "exemption_id": "re_doc_review_quote",
+                        "name": "基于公开资料的引述评析",
+                        "source_mappings": []
+                      }
+                    ],
+                    "rule_id": "rule_fabricate_document_notice",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  }
+                ]
+              },
+              {
+                "category_id": "cat_time_misleading",
+                "description": "将1994年克拉玛依大火等历史事件包装为近期新发生事件，或混淆事件时间制造恐慌和误判。",
+                "name": "旧闻当新闻与时间误导",
+                "order": 20,
+                "rules": [
+                  {
+                    "adjudication_notes": "必要条件为把1994年火灾这一历史事件伪装为近期新发生事件。未说明历史背景但只做事实复述的不必然命中；关键看是否使用“突发”“刚刚”“近日”等时态语言，或通过抒情配乐和剪辑制造正在进行感。正常纪念和史料回顾不命中。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "enabled": true,
+                    "hit_condition": "内容通过标题、口播、字幕、话题标签或视频包装，将1994年克拉玛依友谊馆火灾描述为近日、刚刚、突发、最新发生，或使用与当前日期关联的表述，使普通用户误认为该事件近期再次发生或正在发生，且未明确说明其为历史事件回顾。",
+                    "name": "历史旧闻伪装为近期新闻",
+                    "order": 210,
+                    "rule_exemptions": [
+                      {
+                        "condition": "内容在标题、字幕、口播或置顶说明中明确标注“历史回顾”“1994年”“纪念”“史料”“当年”等时间信息，未暗示事件为近期发生。",
+                        "exemption_id": "re_old_new_retrospective",
+                        "name": "明确历史回顾",
+                        "source_mappings": []
+                      },
+                      {
+                        "condition": "内容实际报道的是当前正在进行的纪念活动、遗址保护、档案研究等新近事项，并且没有把这些当前事项误称为火灾正在发生。",
+                        "exemption_id": "re_old_new_context",
+                        "name": "正在报道相关纪念或考古活动",
+                        "source_mappings": []
+                      }
+                    ],
+                    "rule_id": "rule_old_event_as_new",
+                    "source_mappings": [],
+                    "suggested_risk_level": "medium"
+                  },
+                  {
+                    "adjudication_notes": "必要条件为把不同事件说成同一事件或故意混淆时间主体。单纯把不同年份案例剪辑在一起而未明确声称同一起消防事故，通常由误导剪辑规则处理；本条针对明确宣称同一性的情况。",
+                    "application_stages": [
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "enabled": true,
+                    "hit_condition": "内容宣称某个并非1994年克拉玛依友谊馆火灾的火灾、事故或处分为同一事件，或将不同年份、不同地点的消防安全事件拼接为克拉玛依大火，以此制造虚假因果或扩大事件规模。",
+                    "name": "故意混淆事件时间或主体",
+                    "order": 220,
+                    "rule_exemptions": [
+                      {
+                        "condition": "内容清楚使用“类比”“对比”“类似案例”等说明，未把不同事件说成同一事件。",
+                        "exemption_id": "re_time_confusion_comparison",
+                        "name": "明确的类比和分析",
+                        "source_mappings": []
+                      },
+                      {
+                        "condition": "内容依据公开史料或媒体报道说明相关联的后续调查、遗址处置或同类消防问题，未虚构二者为同一事故。",
+                        "exemption_id": "re_time_confusion_source_based",
+                        "name": "依据公开资料指出事件关系",
+                        "source_mappings": []
+                      }
+                    ],
+                    "rule_id": "rule_deliberate_time_confusion",
+                    "source_mappings": [],
+                    "suggested_risk_level": "medium"
+                  }
+                ]
+              },
+              {
+                "category_id": "cat_misleading_editing",
+                "description": "通过画面、音频、时序或文案的剪辑拼接，制造虚假因果关系或歪曲原意。",
+                "name": "误导剪辑与拼接",
+                "order": 30,
+                "rules": [
+                  {
+                    "adjudication_notes": "必要条件为通过剪辑、替换、倒序或重新配音，把不同时空素材组合成貌似连续的克拉玛依大火事实记录，并可能因此误导用户。单纯把多段历史素材并置而未声称其完整真实，或已显著标注混剪，不命中。",
+                    "application_stages": [
+                      "video_frame_evidence",
+                      "fusion_audit"
+                    ],
+                    "enabled": true,
+                    "hit_condition": "内容将不同年份、不同地点的火灾画面、救援画面、会议画面、哀悼画面或人物发言进行拼接、替换、倒序或重新配音，使其呈现为完整的克拉玛依大火现场或后续处置经过，且未标注历史资料混合、艺术再现或内容重构。",
+                    "name": "拼接剪辑制造虚假事实",
+                    "order": 310,
+                    "rule_exemptions": [
+                      {
+                        "condition": "内容在标题、封面、字幕或口播中明确标注“资料混剪”“历史画面整理”“情景再现”“艺术演绎”等，未声称其为同一时空下的真实完整记录。",
+                        "exemption_id": "re_clip_labeled_composite",
+                        "name": "明确标注资料混剪或演绎",
+                        "source_mappings": []
+                      },
+                      {
+                        "condition": "内容的剪辑仅用于引用、说明或评论，未改变原画面和原声的核心事实，未通过拼接制造虚假因果。",
+                        "exemption_id": "re_clip_context_quote",
+                        "name": "保留原意且不制造虚假事实",
+                        "source_mappings": []
+                      }
+                    ],
+                    "rule_id": "rule_misleading_clip",
+                    "source_mappings": [],
+                    "suggested_risk_level": "medium"
+                  },
+                  {
+                    "adjudication_notes": "必要条件为通过剪辑或解说建立不符合公开事实的因果关系，或改变原始材料原意。正常的史料解读和原因分析不命中，除非存在断章取义、虚构因果或把观点冒充事实。",
+                    "application_stages": [
+                      "video_frame_evidence",
+                      "fusion_audit"
+                    ],
+                    "enabled": true,
+                    "hit_condition": "内容把与克拉玛依大火无直接因果关系的人物言论、行动计划、文件决定或后续事件，通过剪辑衔接和解说，说成是火灾发生的直接原因、应对失职的唯一原因或特定群体预谋结果，或者将公开资料中原本中性或相反含义的影像、录音通过断章取义改变其原意。",
+                    "name": "虚假因果和曲解原意",
+                    "order": 320,
+                    "rule_exemptions": [
+                      {
+                        "condition": "内容明确为基于公开调查结论、档案或权威报道的原因分析，未断章取义改变原始材料含义，且没有把观点冒充为事实结论。",
+                        "exemption_id": "re_causality_analyze",
+                        "name": "基于证据的分析解读",
+                        "source_mappings": []
+                      },
+                      {
+                        "condition": "对被引用影像、录音或文字给出了足以判断原意的完整上下文，并明确区分事实与评论。",
+                        "exemption_id": "re_causality_quote_context",
+                        "name": "完整呈现原始语境",
+                        "source_mappings": []
+                      }
+                    ],
+                    "rule_id": "rule_false_causality",
+                    "source_mappings": [],
+                    "suggested_risk_level": "medium"
+                  }
+                ]
+              },
+              {
+                "category_id": "cat_fact_fabrication",
+                "description": "编造关于事件细节、伤亡、责任、赔偿或后续处理的虚假信息。",
+                "name": "捏造事实与虚假细节",
+                "order": 40,
+                "rules": [
+                  {
+                    "adjudication_notes": "必要条件为编造或严重歪曲事件关键事实。引用公开记录、正常历史讨论或明确标注的推测不命中。对官方数据提出质量疑问但未凭空捏造另一套数据的，一般属于批评意见而非事实编造。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "enabled": true,
+                    "hit_condition": "内容编造与公开记录明显不符的死亡或受伤人数、遇难者身份、责任人员、责任认定、赔偿金额、签名名单等关键信息，或者编造官方未发布、无法从公开档案查证的所谓解密材料和责任人供述。",
+                    "name": "编造伤亡、责任或赔偿信息",
+                    "order": 410,
+                    "rule_exemptions": [
+                      {
+                        "condition": "内容引用的死亡、受伤、责任或处理信息可溯源至公开档案、政府通报或权威媒体报道，未对关键数据进行篡改。",
+                        "exemption_id": "re_casualties_official_data",
+                        "name": "依据公开记录的转述",
+                        "source_mappings": []
+                      },
+                      {
+                        "condition": "内容清楚使用“我的推测”“可能”“据称尚待核实”“未经证实”等表述，且没有把推测包装为已经证实的事实。",
+                        "exemption_id": "re_casualties_inference_labeled",
+                        "name": "明确标注的个人推测",
+                        "source_mappings": []
+                      }
+                    ],
+                    "rule_id": "rule_fabricate_casualties_responsibility",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  },
+                  {
+                    "adjudication_notes": "必要条件为把无法核查来源的材料当作已确证事实发布，以补充或改写事件记录。仅提出档案缺失疑问、呼吁公开资料，而未捏造具体内幕的，不命中。",
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "enabled": true,
+                    "hit_condition": "内容声称掌握并公开所谓封存档案、未公开会议纪要、内部名单、秘密录音或特殊渠道材料，用于颠覆或补充关于克拉玛依大火事件的既有公开记录，但无法指向任何可核查来源，且将其表述为已经确证的事实。",
+                    "name": "编造所谓内幕和未公开材料",
+                    "order": 420,
+                    "rule_exemptions": [
+                      {
+                        "condition": "内容展示或引用的是能够通过档案机构、法律文书、公开出版或权威媒体来源核查的材料，未虚构材料存在和内容。",
+                        "exemption_id": "re_inside_verifiable_document",
+                        "name": "真实可核查的解密或档案材料",
+                        "source_mappings": []
+                      },
+                      {
+                        "condition": "内容以提问或讨论方式指出历史资料不完整，未虚构具体文件、数据或责任人。",
+                        "exemption_id": "re_inside_labeled_question",
+                        "name": "对档案缺失的开放性质询",
+                        "source_mappings": []
+                      }
+                    ],
+                    "rule_id": "rule_fabricate_inside_story",
+                    "source_mappings": [],
+                    "suggested_risk_level": "medium"
+                  }
+                ]
+              },
+              {
+                "category_id": "cat_incite_conflict",
+                "description": "借克拉玛依大火事件煽动民族对立、地域攻击或对不同意见群体的仇恨。",
+                "name": "煽动对立与地域仇恨",
+                "order": 50,
+                "rules": [
+                  {
+                    "adjudication_notes": "必要条件为借火情事件将攻击对象扩大到民族或地域群体整体，并含有原罪化、歧视、排斥、驱逐、报复或对立号召中的任一风险表现。针对具体单位和责任人的批评不命中；只用“新疆”“克拉玛依”作地理说明也不命中。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "enabled": true,
+                    "hit_condition": "内容将1994年克拉玛依友谊馆火灾的责任、伤亡或后续处理，刻意归咎于克拉玛依、新疆或中国的某一民族群体、地域群体整体，宣称该群体整体负有原罪、应当被歧视、排斥、驱逐或报复，或号召对新疆、克拉玛依及其居民实施对立、抵制的任一情况。",
+                    "name": "借事件煽动民族或地域对立",
+                    "order": 510,
+                    "rule_exemptions": [
+                      {
+                        "condition": "内容批评的是具体部门、具体单位或具体责任人，未把责任扩展为对特定民族或地域群体的整体否定，未号召排斥、驱逐或报复。",
+                        "exemption_id": "re_ethnic_region_responsibility",
+                        "name": "针对具体责任主体的批评",
+                        "source_mappings": []
+                      },
+                      {
+                        "condition": "内容为对当时消防、教育、公共活动管理等领域制度问题的探讨，未把问题归为某一民族或地域群体的固有属性。",
+                        "exemption_id": "re_ethnic_region_public_safety",
+                        "name": "公共安全与消防管理讨论",
+                        "source_mappings": []
+                      }
+                    ],
+                    "rule_id": "rule_incite_ethnic_region_conflict",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  },
+                  {
+                    "adjudication_notes": "必要条件为攻击对象是因参与事件纪念、讨论或持有不同意见而遭到针对，且存在侮辱、诅咒、人身攻击或网暴号召中的任一情况。普通观点分歧和批评不命中；但如果攻击升级为组织骚扰、曝光隐私或现实威胁，可结合具体行为举报处置。",
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "enabled": true,
+                    "hit_condition": "内容在克拉玛依大火相关讨论中，以纪念、反思或追问为话题，对参与纪念的表达者、要求公开信息者、持不同意见者发起侮辱、诅咒、人身攻击，或鼓动网民对其进行网暴、举报、线下滋扰，且攻击与对方就事件发表意见或参与纪念的行为明显相关。",
+                    "name": "攻击纪念者或不同意见群体",
+                    "order": 520,
+                    "rule_exemptions": [
+                      {
+                        "condition": "内容为针对造谣、羞辱遇难者、煽动仇恨等具体违规表达的驳斥，并主要围绕事实和观点展开，未号召网暴或人身攻击。",
+                        "exemption_id": "re_opinion_hostility_specific",
+                        "name": "针对具体违规表达的反驳",
+                        "source_mappings": []
+                      },
+                      {
+                        "condition": "内容为就事件叙事、史料解读或责任认定进行观点交锋，未进行人格侮辱、诅咒或组织围攻。",
+                        "exemption_id": "re_opinion_hostility_discuss",
+                        "name": "正常意见交锋",
+                        "source_mappings": []
+                      }
+                    ],
+                    "rule_id": "rule_incite_opinion_hostility",
+                    "source_mappings": [],
+                    "suggested_risk_level": "medium"
+                  }
+                ]
+              }
+            ],
+            "domain": "public_event_opinion",
+            "general_exemptions": [
+              {
+                "condition": "内容为对遇难者的悼念、默哀、献花、纪念馆参观记录，或个人对事件的历史反思与教训总结，未虚构关键事实、未冒充权威信源、未将旧闻标称为近期新闻，也未对克拉玛依或新疆相关民族、地域群体进行整体攻击或煽动对立。",
+                "exemption_id": "ge_normal_commemoration",
+                "name": "正常纪念与反思表达",
+                "source_mappings": []
+              },
+              {
+                "condition": "内容为可溯源的媒体历史报道转载、档案资料展示、学术研究、公开出版物引用或纪录片片段，且未篡改原意、未通过剪辑拼接制造虚假因果关系，未伪造时间、地点或伤亡等关键事实，也未附加攻击特定民族或地域群体的倾向性结论。",
+                "exemption_id": "ge_news_and_research",
+                "name": "新闻转载与历史研究",
+                "source_mappings": []
+              },
+              {
+                "condition": "内容针对事件暴露的消防管理、应急响应、场馆安全、善后处理等具体问题进行基于公开事实的批评或问责讨论，未虚构责任主体、未编造通报或伤亡数据，未将个别责任人问题泛化为对克拉玛依或新疆特定民族、地域群体的整体否定。",
+                "exemption_id": "ge_specific_criticism",
+                "name": "针对公共安全管理的具体批评",
+                "source_mappings": []
+              },
+              {
+                "condition": "内容为亲历者、遇难者家属或相关人员的个人真实回忆、口述或纪念表述，未进行明显违背公开记录的关键事实编造，未冒用官方或媒体身份发布，也未借个人叙述煽动民族、地域仇恨。",
+                "exemption_id": "ge_personal_recollection",
+                "name": "亲历者或家属真实回忆",
+                "source_mappings": []
+              }
+            ],
+            "name": "克拉玛依大火公共事件舆情讨论审核规则",
+            "schema_version": 0
+          },
+          "content_hash": "9d3d5244f1781b9931d2322f87cbe53713f6e02635ee25479349c1dfbdb2b03b",
+          "proposal_id": "ruleset-proposal:29e502b2f30340f19f2d63d5006ad9fe",
+          "proposal_version": 1,
+          "strategy": "temporary_ruleset"
+        },
+        "platform": "dy",
+        "relevance_scope": {
+          "content_unit": "parent_post_event",
+          "province": {
+            "aliases": [
+              "新疆"
+            ],
+            "name": "新疆维吾尔自治区"
+          },
+          "schema_version": "geo-scope-v1",
+          "selection_policy": "local_first_with_supplement",
+          "target": {
+            "aliases": [
+              "克拉玛依"
+            ],
+            "name": "克拉玛依市"
+          },
+          "topic": null
+        },
+        "relevance_scope_state": {
+          "application_turn_id": "investigation-turn:98f799b5c6224b99909c549e7dec5b0e",
+          "candidates": [
+            {
+              "kind": "地级市",
+              "level": "prefecture",
+              "name": "克拉玛依市",
+              "province_name": "新疆维吾尔自治区"
+            }
+          ],
+          "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+          "copied_from_draft_id": "",
+          "draft_id": "investigation-draft:adac86e339c44d52b3e228d4ba9dec99",
+          "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+          "province": {
+            "aliases": [
+              "新疆"
+            ],
+            "name": "新疆维吾尔自治区"
+          },
+          "province_code": "650000",
+          "reason": "",
+          "selection_policy": "local_first_with_supplement",
+          "session_id": "investigation-session:b840ea02a92946b996f696c274facec4",
+          "source_quote": "调查克拉玛依大火",
+          "source_sequence": 1,
+          "source_turn_id": "investigation-turn:77f3c9fcff874c1f95061231aca8e68e",
+          "source_user_message_id": "investigation-message:f56b007d0c314a5495344cac0fe8e61a",
+          "status": "resolved",
+          "target": {
+            "aliases": [
+              "克拉玛依"
+            ],
+            "name": "克拉玛依市"
+          },
+          "target_code": "650200",
+          "target_level": "prefecture",
+          "target_text": "克拉玛依",
+          "task_anchor_turn_id": "investigation-turn:77f3c9fcff874c1f95061231aca8e68e"
+        },
+        "schema_version": "investigation-draft-config-v4"
+      }
+    },
+    "public_draft": {
+      "id": "investigation-draft:adac86e339c44d52b3e228d4ba9dec99",
+      "status": "DRAFT",
+      "current_revision": 1,
+      "title": "克拉玛依大火舆情调查",
+      "objective": "在抖音平台调查\"克拉玛依大火\"（1994年新疆克拉玛依友谊馆火灾）相关公共事件的舆情讨论，识别信源冒充、旧闻当新闻、伪造通报、误导剪辑、捏造事实、煽动对立等风险内容。",
+      "configuration": {
+        "schema_version": "investigation-draft-config-v4",
+        "platform": "dy",
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "source_edit_ref": "resource-ref:1f029b03ee1046f18f6ea28e1d323f0b",
+            "strategy": "temporary_terms",
+            "terms": [
+              "克拉玛依大火",
+              "克拉玛依友谊馆火灾",
+              "友谊馆大火",
+              "94年克拉玛依火灾",
+              "新疆克拉玛依历史",
+              "克拉玛依大火真相",
+              "克拉玛依大火知情人",
+              "克拉玛依大火旧闻",
+              "网传克拉玛依大火"
+            ],
+            "source_lexicon_ids": [],
+            "lexicon_content": {
+              "title": "克拉玛依大火舆情讨论候选搜索词",
+              "risk_label": "公共事件信息真实性与传播",
+              "description": "围绕1994年新疆克拉玛依友谊馆火灾的历史公共安全事件，生成用于抖音平台内容审核研判的候选搜索词，重点发现旧闻当新闻、伪造通报、剪辑误导、捏造事实等传播行为。搜索词命中本身不构成违规判定。",
+              "entries": [
+                {
+                  "id": "generated-main-1",
+                  "term": "事件名称与简称",
+                  "kind": "main",
+                  "parent_id": "",
+                  "enabled": true,
+                  "platform": "抖音",
+                  "match_type": "黑话词",
+                  "risk_level": "低",
+                  "note": "使用事件正式名称及常见简称，召回围绕该事件历史叙事的直接讨论。正常语境包括历史回顾、纪念活动、新闻报道和辟谣引用。"
+                },
+                {
+                  "id": "generated-variant-1-1",
+                  "term": "克拉玛依大火",
+                  "kind": "variant",
+                  "parent_id": "generated-main-1",
+                  "enabled": true,
+                  "platform": "抖音",
+                  "match_type": "黑话词",
+                  "risk_level": "低",
+                  "note": "事件最常用名称，可召回直接讨论。正常语境包括历史回顾、纪念和新闻引用，风险需结合具体内容判断。"
+                },
+                {
+                  "id": "generated-variant-1-2",
+                  "term": "克拉玛依友谊馆火灾",
+                  "kind": "variant",
+                  "parent_id": "generated-main-1",
+                  "enabled": true,
+                  "platform": "抖音",
+                  "match_type": "黑话词",
+                  "risk_level": "低",
+                  "note": "包含具体场馆的正式表述，可精准定位事件讨论。正常语境为历史资料和新闻报道，噪声较小。"
+                },
+                {
+                  "id": "generated-variant-1-3",
+                  "term": "友谊馆大火",
+                  "kind": "variant",
+                  "parent_id": "generated-main-1",
+                  "enabled": true,
+                  "platform": "抖音",
+                  "match_type": "黑话词",
+                  "risk_level": "中",
+                  "note": "地点简称加事件类型，可能出现在网民叙述中。正常语境为历史讨论，需结合上下文辨别是否有误导性传播。"
+                },
+                {
+                  "id": "generated-variant-1-4",
+                  "term": "94年克拉玛依火灾",
+                  "kind": "variant",
+                  "parent_id": "generated-main-1",
+                  "enabled": true,
+                  "platform": "抖音",
+                  "match_type": "黑话词",
+                  "risk_level": "中",
+                  "note": "带年份的检索表达，也可能出现在正常历史回顾中。需要判断是否存在旧闻新发或时间混淆。"
+                },
+                {
+                  "id": "generated-main-2",
+                  "term": "关联地点与地域",
+                  "kind": "main",
+                  "parent_id": "",
+                  "enabled": true,
+                  "platform": "抖音",
+                  "match_type": "黑话词",
+                  "risk_level": "低",
+                  "note": "通过地域和地点线索召回与事件相关的讨论。正常语境包括当地生活内容、旅游记录和公共议题讨论。"
+                },
+                {
+                  "id": "generated-variant-2-1",
+                  "term": "新疆克拉玛依历史",
+                  "kind": "variant",
+                  "parent_id": "generated-main-2",
+                  "enabled": true,
+                  "platform": "抖音",
+                  "match_type": "黑话词",
+                  "risk_level": "低",
+                  "note": "宽泛地域历史查询，可召回涉及该事件影像或叙述的视频。噪声较高，包含城市宣传和其他历史内容。"
+                },
+                {
+                  "id": "generated-main-3",
+                  "term": "信源与传播方式",
+                  "kind": "main",
+                  "parent_id": "",
+                  "enabled": true,
+                  "platform": "抖音",
+                  "match_type": "黑话词",
+                  "risk_level": "中",
+                  "note": "围绕信源宣称、爆料身份的通用表达，结合事件名称使用以提高召回精度。正常语境包含新闻引用、辟谣和公共讨论。"
+                },
+                {
+                  "id": "generated-variant-3-1",
+                  "term": "克拉玛依大火真相",
+                  "kind": "variant",
+                  "parent_id": "generated-main-3",
+                  "enabled": true,
+                  "platform": "抖音",
+                  "match_type": "黑话词",
+                  "risk_level": "中",
+                  "note": "带真相表述的检索词，可召回声称揭露内情的内容，也可能是正常历史讨论中的标题。风险需结合具体发布者身份和内容判断，未达到违规基准。"
+                },
+                {
+                  "id": "generated-variant-3-2",
+                  "term": "克拉玛依大火知情人",
+                  "kind": "variant",
+                  "parent_id": "generated-main-3",
+                  "enabled": true,
+                  "platform": "抖音",
+                  "match_type": "黑话词",
+                  "risk_level": "中",
+                  "note": "身份宣称类表述，可能存在以爆料人设传播未经证实内容。正常语境也可能仅是知情人回忆，需结合具体内容辨别。"
+                },
+                {
+                  "id": "generated-variant-3-3",
+                  "term": "克拉玛依大火旧闻",
+                  "kind": "variant",
+                  "parent_id": "generated-main-3",
+                  "enabled": true,
+                  "platform": "抖音",
+                  "match_type": "黑话词",
+                  "risk_level": "中",
+                  "note": "直接指向旧闻新发风险。结合事件名称可精确定位相关传播行为，但正常语境可能只是标注或说明旧闻性质。"
+                },
+                {
+                  "id": "generated-variant-3-4",
+                  "term": "网传克拉玛依大火",
+                  "kind": "variant",
+                  "parent_id": "generated-main-3",
+                  "enabled": true,
+                  "platform": "抖音",
+                  "match_type": "黑话词",
+                  "risk_level": "中",
+                  "note": "网传前缀可召回未经证实的传播内容。正常语境可能包含对传闻的澄清或质疑，需结合上下文而非仅凭词面判断。"
+                }
+              ]
+            }
+          }
+        },
+        "judgement": {
+          "strategy": "temporary_ruleset",
+          "proposal_id": "ruleset-proposal:29e502b2f30340f19f2d63d5006ad9fe",
+          "proposal_version": 1,
+          "content_hash": "9d3d5244f1781b9931d2322f87cbe53713f6e02635ee25479349c1dfbdb2b03b",
+          "content": {
+            "schema_version": 0,
+            "name": "克拉玛依大火公共事件舆情讨论审核规则",
+            "domain": "public_event_opinion",
+            "audit_goal": "识别抖音平台围绕1994年新疆克拉玛依友谊馆火灾这一历史公共安全事件的讨论中，冒充权威信源、将历史旧闻包装为近期新闻、伪造官方通报、通过剪辑或拼接误导受众、捏造关键事实以及煽动民族或地域对立等风险内容。审核仅针对存在明确造假、冒充、误导或煽动对立的表达，不限制正常的纪念、反思、新闻报道、历史研究和对公共安全管理的具体批评意见。",
+            "general_exemptions": [
+              {
+                "exemption_id": "ge_normal_commemoration",
+                "name": "正常纪念与反思表达",
+                "condition": "内容为对遇难者的悼念、默哀、献花、纪念馆参观记录，或个人对事件的历史反思与教训总结，未虚构关键事实、未冒充权威信源、未将旧闻标称为近期新闻，也未对克拉玛依或新疆相关民族、地域群体进行整体攻击或煽动对立。",
+                "source_mappings": []
+              },
+              {
+                "exemption_id": "ge_news_and_research",
+                "name": "新闻转载与历史研究",
+                "condition": "内容为可溯源的媒体历史报道转载、档案资料展示、学术研究、公开出版物引用或纪录片片段，且未篡改原意、未通过剪辑拼接制造虚假因果关系，未伪造时间、地点或伤亡等关键事实，也未附加攻击特定民族或地域群体的倾向性结论。",
+                "source_mappings": []
+              },
+              {
+                "exemption_id": "ge_specific_criticism",
+                "name": "针对公共安全管理的具体批评",
+                "condition": "内容针对事件暴露的消防管理、应急响应、场馆安全、善后处理等具体问题进行基于公开事实的批评或问责讨论，未虚构责任主体、未编造通报或伤亡数据，未将个别责任人问题泛化为对克拉玛依或新疆特定民族、地域群体的整体否定。",
+                "source_mappings": []
+              },
+              {
+                "exemption_id": "ge_personal_recollection",
+                "name": "亲历者或家属真实回忆",
+                "condition": "内容为亲历者、遇难者家属或相关人员的个人真实回忆、口述或纪念表述，未进行明显违背公开记录的关键事实编造，未冒用官方或媒体身份发布，也未借个人叙述煽动民族、地域仇恨。",
+                "source_mappings": []
+              }
+            ],
+            "categories": [
+              {
+                "category_id": "cat_source_fraud",
+                "name": "信源冒充与伪造权威",
+                "description": "冒充官方机构、媒体、亲历者发布克拉玛依大火相关消息、通报或内幕，或伪造权威证据。",
+                "order": 10,
+                "rules": [
+                  {
+                    "rule_id": "rule_impersonate_official_media",
+                    "name": "冒充官方或权威媒体发布事件信息",
+                    "hit_condition": "发布者通过账号昵称、头像、简介、置顶评论、视频包装字幕或口播等方式，冒充克拉玛依或新疆相关政府机构、消防、公安、教育、纪检监察等官方主体，或冒充具有权威性的新闻媒体及其记者，发布关于克拉玛依大火事件经过、伤亡、责任、赔偿、会议记录或后续处置的信息，且无真实授权或可核查的转载来源。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "re_impersonate_official_media_transfer",
+                        "name": "明确转载或转述",
+                        "condition": "内容明确标注为转载、转述或引用具体媒体、官方发布来源，未冒充该信源本身，未对外宣称自己是官方或原发布媒体。",
+                        "source_mappings": []
+                      },
+                      {
+                        "exemption_id": "re_impersonate_official_media_parody",
+                        "name": "显著标识的模拟和演绎",
+                        "condition": "内容在画面或文案中持续、显著标注为虚构、情景模拟、历史演绎，未使普通用户产生其确为官方或原媒体发布的认识。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "必要条件为发布者冒用官方或权威媒体身份，并借该身份发布与克拉玛依大火事件相关的信息。命中不以内容是否同时包含攻击性言论为前提；仅凭身份冒用和事件信息发布即可独立成立。账号已认证但冒用他人机构身份仍可命中。本条不用于处罚单纯使用历史影像、正常转载或未冒用身份的普通讨论。",
+                    "enabled": true,
+                    "order": 110,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "rule_impersonate_witness_or_material",
+                    "name": "冒充亲历者或伪造亲历证据",
+                    "hit_condition": "发布者冒充1994年克拉玛依友谊馆火灾的亲历者、幸存者、遇难者家属或当时参与救援处置的工作人员，或者将影视片段、无关人员口述、AI生成画面和声音包装为真实亲历证言、现场原始影像或独家内幕，且相关内容涉及事件关键细节的虚构。",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "re_witness_labeled_recreation",
+                        "name": "显著标注创作或演绎",
+                        "condition": "内容在标题、画面、字幕和口播中持续明确标注为情景再现、文艺创作或历史演绎，未声称其为真实亲历记录。",
+                        "source_mappings": []
+                      },
+                      {
+                        "exemption_id": "re_witness_verifiable_record",
+                        "name": "可溯源的真实证言",
+                        "condition": "内容为已公开媒体或档案资料中的亲历者采访、回忆录节选，且未对关键事实进行篡改或冒名。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "必要条件为冒用亲历者、家属或处置人员身份，或将非真实材料包装为真实证据。发布历史资料、真实采访或明确标注的文艺再现不属于伪造。普通用户以个人口吻回忆但无冒名、无虚构关键事实的不命中。",
+                    "enabled": true,
+                    "order": 120,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "rule_fabricate_document_notice",
+                    "name": "伪造官方文件或通报",
+                    "hit_condition": "内容伪造或变造与克拉玛依大火相关的红头文件、会议纪要、事故调查报告、责任认定材料、赔偿协议、地方志记录或官方通报的图片、视频、文字，或以权威口吻凭空发布并不存在的调查结论、责任名单、赔偿标准或新的处理决定。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "re_doc_archival_source",
+                        "name": "可核查的档案转载",
+                        "condition": "内容采用可核查的公开档案、政府公报、法院文书、权威媒体发布或学术出版物原貌转载，未对文件关键内容进行改动。",
+                        "source_mappings": []
+                      },
+                      {
+                        "exemption_id": "re_doc_review_quote",
+                        "name": "基于公开资料的引述评析",
+                        "condition": "内容为对公开发布的通报、报告或档案的引述、解读和评论，未虚构原文、未变造文件形式。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "必要条件为伪造或变造具有官方效力外观的文件，或虚构官方决定。评价既往通报措辞、依据公开文件进行讨论，不构成伪造。评论中仅凭文字空口编造官方决定可由 comment_audit 处理，图片视频中伪造文件形式由对应证据阶段处理，最终融合时据此作出结论。",
+                    "enabled": true,
+                    "order": 130,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "cat_time_misleading",
+                "name": "旧闻当新闻与时间误导",
+                "description": "将1994年克拉玛依大火等历史事件包装为近期新发生事件，或混淆事件时间制造恐慌和误判。",
+                "order": 20,
+                "rules": [
+                  {
+                    "rule_id": "rule_old_event_as_new",
+                    "name": "历史旧闻伪装为近期新闻",
+                    "hit_condition": "内容通过标题、口播、字幕、话题标签或视频包装，将1994年克拉玛依友谊馆火灾描述为近日、刚刚、突发、最新发生，或使用与当前日期关联的表述，使普通用户误认为该事件近期再次发生或正在发生，且未明确说明其为历史事件回顾。",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "re_old_new_retrospective",
+                        "name": "明确历史回顾",
+                        "condition": "内容在标题、字幕、口播或置顶说明中明确标注“历史回顾”“1994年”“纪念”“史料”“当年”等时间信息，未暗示事件为近期发生。",
+                        "source_mappings": []
+                      },
+                      {
+                        "exemption_id": "re_old_new_context",
+                        "name": "正在报道相关纪念或考古活动",
+                        "condition": "内容实际报道的是当前正在进行的纪念活动、遗址保护、档案研究等新近事项，并且没有把这些当前事项误称为火灾正在发生。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "必要条件为把1994年火灾这一历史事件伪装为近期新发生事件。未说明历史背景但只做事实复述的不必然命中；关键看是否使用“突发”“刚刚”“近日”等时态语言，或通过抒情配乐和剪辑制造正在进行感。正常纪念和史料回顾不命中。",
+                    "enabled": true,
+                    "order": 210,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "rule_deliberate_time_confusion",
+                    "name": "故意混淆事件时间或主体",
+                    "hit_condition": "内容宣称某个并非1994年克拉玛依友谊馆火灾的火灾、事故或处分为同一事件，或将不同年份、不同地点的消防安全事件拼接为克拉玛依大火，以此制造虚假因果或扩大事件规模。",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "re_time_confusion_comparison",
+                        "name": "明确的类比和分析",
+                        "condition": "内容清楚使用“类比”“对比”“类似案例”等说明，未把不同事件说成同一事件。",
+                        "source_mappings": []
+                      },
+                      {
+                        "exemption_id": "re_time_confusion_source_based",
+                        "name": "依据公开资料指出事件关系",
+                        "condition": "内容依据公开史料或媒体报道说明相关联的后续调查、遗址处置或同类消防问题，未虚构二者为同一事故。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "必要条件为把不同事件说成同一事件或故意混淆时间主体。单纯把不同年份案例剪辑在一起而未明确声称同一起消防事故，通常由误导剪辑规则处理；本条针对明确宣称同一性的情况。",
+                    "enabled": true,
+                    "order": 220,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "cat_misleading_editing",
+                "name": "误导剪辑与拼接",
+                "description": "通过画面、音频、时序或文案的剪辑拼接，制造虚假因果关系或歪曲原意。",
+                "order": 30,
+                "rules": [
+                  {
+                    "rule_id": "rule_misleading_clip",
+                    "name": "拼接剪辑制造虚假事实",
+                    "hit_condition": "内容将不同年份、不同地点的火灾画面、救援画面、会议画面、哀悼画面或人物发言进行拼接、替换、倒序或重新配音，使其呈现为完整的克拉玛依大火现场或后续处置经过，且未标注历史资料混合、艺术再现或内容重构。",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "re_clip_labeled_composite",
+                        "name": "明确标注资料混剪或演绎",
+                        "condition": "内容在标题、封面、字幕或口播中明确标注“资料混剪”“历史画面整理”“情景再现”“艺术演绎”等，未声称其为同一时空下的真实完整记录。",
+                        "source_mappings": []
+                      },
+                      {
+                        "exemption_id": "re_clip_context_quote",
+                        "name": "保留原意且不制造虚假事实",
+                        "condition": "内容的剪辑仅用于引用、说明或评论，未改变原画面和原声的核心事实，未通过拼接制造虚假因果。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "video_frame_evidence",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "必要条件为通过剪辑、替换、倒序或重新配音，把不同时空素材组合成貌似连续的克拉玛依大火事实记录，并可能因此误导用户。单纯把多段历史素材并置而未声称其完整真实，或已显著标注混剪，不命中。",
+                    "enabled": true,
+                    "order": 310,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "rule_false_causality",
+                    "name": "虚假因果和曲解原意",
+                    "hit_condition": "内容把与克拉玛依大火无直接因果关系的人物言论、行动计划、文件决定或后续事件，通过剪辑衔接和解说，说成是火灾发生的直接原因、应对失职的唯一原因或特定群体预谋结果，或者将公开资料中原本中性或相反含义的影像、录音通过断章取义改变其原意。",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "re_causality_analyze",
+                        "name": "基于证据的分析解读",
+                        "condition": "内容明确为基于公开调查结论、档案或权威报道的原因分析，未断章取义改变原始材料含义，且没有把观点冒充为事实结论。",
+                        "source_mappings": []
+                      },
+                      {
+                        "exemption_id": "re_causality_quote_context",
+                        "name": "完整呈现原始语境",
+                        "condition": "对被引用影像、录音或文字给出了足以判断原意的完整上下文，并明确区分事实与评论。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "video_frame_evidence",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "必要条件为通过剪辑或解说建立不符合公开事实的因果关系，或改变原始材料原意。正常的史料解读和原因分析不命中，除非存在断章取义、虚构因果或把观点冒充事实。",
+                    "enabled": true,
+                    "order": 320,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "cat_fact_fabrication",
+                "name": "捏造事实与虚假细节",
+                "description": "编造关于事件细节、伤亡、责任、赔偿或后续处理的虚假信息。",
+                "order": 40,
+                "rules": [
+                  {
+                    "rule_id": "rule_fabricate_casualties_responsibility",
+                    "name": "编造伤亡、责任或赔偿信息",
+                    "hit_condition": "内容编造与公开记录明显不符的死亡或受伤人数、遇难者身份、责任人员、责任认定、赔偿金额、签名名单等关键信息，或者编造官方未发布、无法从公开档案查证的所谓解密材料和责任人供述。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "re_casualties_official_data",
+                        "name": "依据公开记录的转述",
+                        "condition": "内容引用的死亡、受伤、责任或处理信息可溯源至公开档案、政府通报或权威媒体报道，未对关键数据进行篡改。",
+                        "source_mappings": []
+                      },
+                      {
+                        "exemption_id": "re_casualties_inference_labeled",
+                        "name": "明确标注的个人推测",
+                        "condition": "内容清楚使用“我的推测”“可能”“据称尚待核实”“未经证实”等表述，且没有把推测包装为已经证实的事实。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "必要条件为编造或严重歪曲事件关键事实。引用公开记录、正常历史讨论或明确标注的推测不命中。对官方数据提出质量疑问但未凭空捏造另一套数据的，一般属于批评意见而非事实编造。",
+                    "enabled": true,
+                    "order": 410,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "rule_fabricate_inside_story",
+                    "name": "编造所谓内幕和未公开材料",
+                    "hit_condition": "内容声称掌握并公开所谓封存档案、未公开会议纪要、内部名单、秘密录音或特殊渠道材料，用于颠覆或补充关于克拉玛依大火事件的既有公开记录，但无法指向任何可核查来源，且将其表述为已经确证的事实。",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "re_inside_verifiable_document",
+                        "name": "真实可核查的解密或档案材料",
+                        "condition": "内容展示或引用的是能够通过档案机构、法律文书、公开出版或权威媒体来源核查的材料，未虚构材料存在和内容。",
+                        "source_mappings": []
+                      },
+                      {
+                        "exemption_id": "re_inside_labeled_question",
+                        "name": "对档案缺失的开放性质询",
+                        "condition": "内容以提问或讨论方式指出历史资料不完整，未虚构具体文件、数据或责任人。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "必要条件为把无法核查来源的材料当作已确证事实发布，以补充或改写事件记录。仅提出档案缺失疑问、呼吁公开资料，而未捏造具体内幕的，不命中。",
+                    "enabled": true,
+                    "order": 420,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "cat_incite_conflict",
+                "name": "煽动对立与地域仇恨",
+                "description": "借克拉玛依大火事件煽动民族对立、地域攻击或对不同意见群体的仇恨。",
+                "order": 50,
+                "rules": [
+                  {
+                    "rule_id": "rule_incite_ethnic_region_conflict",
+                    "name": "借事件煽动民族或地域对立",
+                    "hit_condition": "内容将1994年克拉玛依友谊馆火灾的责任、伤亡或后续处理，刻意归咎于克拉玛依、新疆或中国的某一民族群体、地域群体整体，宣称该群体整体负有原罪、应当被歧视、排斥、驱逐或报复，或号召对新疆、克拉玛依及其居民实施对立、抵制的任一情况。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "re_ethnic_region_responsibility",
+                        "name": "针对具体责任主体的批评",
+                        "condition": "内容批评的是具体部门、具体单位或具体责任人，未把责任扩展为对特定民族或地域群体的整体否定，未号召排斥、驱逐或报复。",
+                        "source_mappings": []
+                      },
+                      {
+                        "exemption_id": "re_ethnic_region_public_safety",
+                        "name": "公共安全与消防管理讨论",
+                        "condition": "内容为对当时消防、教育、公共活动管理等领域制度问题的探讨，未把问题归为某一民族或地域群体的固有属性。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "必要条件为借火情事件将攻击对象扩大到民族或地域群体整体，并含有原罪化、歧视、排斥、驱逐、报复或对立号召中的任一风险表现。针对具体单位和责任人的批评不命中；只用“新疆”“克拉玛依”作地理说明也不命中。",
+                    "enabled": true,
+                    "order": 510,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "rule_incite_opinion_hostility",
+                    "name": "攻击纪念者或不同意见群体",
+                    "hit_condition": "内容在克拉玛依大火相关讨论中，以纪念、反思或追问为话题，对参与纪念的表达者、要求公开信息者、持不同意见者发起侮辱、诅咒、人身攻击，或鼓动网民对其进行网暴、举报、线下滋扰，且攻击与对方就事件发表意见或参与纪念的行为明显相关。",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "re_opinion_hostility_specific",
+                        "name": "针对具体违规表达的反驳",
+                        "condition": "内容为针对造谣、羞辱遇难者、煽动仇恨等具体违规表达的驳斥，并主要围绕事实和观点展开，未号召网暴或人身攻击。",
+                        "source_mappings": []
+                      },
+                      {
+                        "exemption_id": "re_opinion_hostility_discuss",
+                        "name": "正常意见交锋",
+                        "condition": "内容为就事件叙事、史料解读或责任认定进行观点交锋，未进行人格侮辱、诅咒或组织围攻。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "必要条件为攻击对象是因参与事件纪念、讨论或持有不同意见而遭到针对，且存在侮辱、诅咒、人身攻击或网暴号召中的任一情况。普通观点分歧和批评不命中；但如果攻击升级为组织骚扰、曝光隐私或现实威胁，可结合具体行为举报处置。",
+                    "enabled": true,
+                    "order": 520,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "relevance_scope": {
+          "schema_version": "geo-scope-v1",
+          "target": {
+            "name": "克拉玛依市",
+            "aliases": [
+              "克拉玛依"
+            ]
+          },
+          "province": {
+            "name": "新疆维吾尔自治区",
+            "aliases": [
+              "新疆"
+            ]
+          },
+          "topic": null,
+          "selection_policy": "local_first_with_supplement",
+          "content_unit": "parent_post_event"
+        },
+        "relevance_scope_state": {
+          "status": "resolved",
+          "target_text": "克拉玛依",
+          "selection_policy": "local_first_with_supplement",
+          "reason": "",
+          "candidates": [
+            {
+              "name": "克拉玛依市",
+              "level": "prefecture",
+              "kind": "地级市",
+              "province_name": "新疆维吾尔自治区"
+            }
+          ],
+          "target": {
+            "name": "克拉玛依市",
+            "aliases": [
+              "克拉玛依"
+            ]
+          },
+          "province": {
+            "name": "新疆维吾尔自治区",
+            "aliases": [
+              "新疆"
+            ]
+          }
+        }
+      },
+      "created_at": "2026-10-15T08:56:15.250834+00:00",
+      "updated_at": "2026-10-15T08:56:15.250834+00:00",
+      "confirmed_revision": null,
+      "confirmed_at": ""
+    },
+    "preview": {
+      "relevance_scope": {
+        "schema_version": "geo-scope-v1",
+        "target": {
+          "name": "克拉玛依市",
+          "aliases": [
+            "克拉玛依"
+          ]
+        },
+        "province": {
+          "name": "新疆维吾尔自治区",
+          "aliases": [
+            "新疆"
+          ]
+        },
+        "topic": null,
+        "selection_policy": "local_first_with_supplement",
+        "content_unit": "parent_post_event"
+      },
+      "relevance_scope_state": {
+        "status": "resolved",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement",
+        "reason": "",
+        "candidates": [
+          {
+            "name": "克拉玛依市",
+            "level": "prefecture",
+            "kind": "地级市",
+            "province_name": "新疆维吾尔自治区"
+          }
+        ],
+        "target": {
+          "name": "克拉玛依市",
+          "aliases": [
+            "克拉玛依"
+          ]
+        },
+        "province": {
+          "name": "新疆维吾尔自治区",
+          "aliases": [
+            "新疆"
+          ]
+        }
+      },
+      "max_post_limit": 10,
+      "task_settings_revision": 0,
+      "requested_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 1,
+        "analysis_batch_size": 5
+      },
+      "effective_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 10,
+        "analysis_batch_size": 5
+      },
+      "estimated_max_contents": 9,
+      "draft_id": "investigation-draft:adac86e339c44d52b3e228d4ba9dec99",
+      "draft_revision": 1,
+      "title": "克拉玛依大火舆情调查",
+      "objective": "在抖音平台调查\"克拉玛依大火\"（1994年新疆克拉玛依友谊馆火灾）相关公共事件的舆情讨论，识别信源冒充、旧闻当新闻、伪造通报、误导剪辑、捏造事实、煽动对立等风险内容。",
+      "mode": "search",
+      "platform": "dy",
+      "resolved_search_terms": [
+        "友谊馆大火",
+        "94年克拉玛依火灾",
+        "克拉玛依大火真相",
+        "克拉玛依大火知情人",
+        "克拉玛依大火旧闻",
+        "网传克拉玛依大火",
+        "克拉玛依大火",
+        "克拉玛依友谊馆火灾",
+        "新疆克拉玛依历史"
+      ],
+      "unused_search_terms": [],
+      "search_terms_notice": "",
+      "creator_url": "",
+      "recall_plan": {
+        "strategy": "temporary_terms",
+        "lexicon_id": "",
+        "lexicon_title": "",
+        "runtime_content_hash": "",
+        "enabled_main_term_count": 0,
+        "enabled_main_terms": [],
+        "temporary_terms": [
+          "友谊馆大火",
+          "94年克拉玛依火灾",
+          "克拉玛依大火真相",
+          "克拉玛依大火知情人",
+          "克拉玛依大火旧闻",
+          "网传克拉玛依大火",
+          "克拉玛依大火",
+          "克拉玛依友谊馆火灾",
+          "新疆克拉玛依历史"
+        ],
+        "source_lexicon_ids": [],
+        "lexicon_content": {
+          "title": "克拉玛依大火舆情讨论候选搜索词",
+          "risk_label": "公共事件信息真实性与传播",
+          "description": "围绕1994年新疆克拉玛依友谊馆火灾的历史公共安全事件，生成用于抖音平台内容审核研判的候选搜索词，重点发现旧闻当新闻、伪造通报、剪辑误导、捏造事实等传播行为。搜索词命中本身不构成违规判定。",
+          "entries": [
+            {
+              "id": "generated-main-1",
+              "term": "事件名称与简称",
+              "kind": "main",
+              "parent_id": "",
+              "enabled": true,
+              "platform": "抖音",
+              "match_type": "黑话词",
+              "risk_level": "低",
+              "note": "使用事件正式名称及常见简称，召回围绕该事件历史叙事的直接讨论。正常语境包括历史回顾、纪念活动、新闻报道和辟谣引用。"
+            },
+            {
+              "id": "generated-variant-1-1",
+              "term": "克拉玛依大火",
+              "kind": "variant",
+              "parent_id": "generated-main-1",
+              "enabled": true,
+              "platform": "抖音",
+              "match_type": "黑话词",
+              "risk_level": "低",
+              "note": "事件最常用名称，可召回直接讨论。正常语境包括历史回顾、纪念和新闻引用，风险需结合具体内容判断。"
+            },
+            {
+              "id": "generated-variant-1-2",
+              "term": "克拉玛依友谊馆火灾",
+              "kind": "variant",
+              "parent_id": "generated-main-1",
+              "enabled": true,
+              "platform": "抖音",
+              "match_type": "黑话词",
+              "risk_level": "低",
+              "note": "包含具体场馆的正式表述，可精准定位事件讨论。正常语境为历史资料和新闻报道，噪声较小。"
+            },
+            {
+              "id": "generated-variant-1-3",
+              "term": "友谊馆大火",
+              "kind": "variant",
+              "parent_id": "generated-main-1",
+              "enabled": true,
+              "platform": "抖音",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": "地点简称加事件类型，可能出现在网民叙述中。正常语境为历史讨论，需结合上下文辨别是否有误导性传播。"
+            },
+            {
+              "id": "generated-variant-1-4",
+              "term": "94年克拉玛依火灾",
+              "kind": "variant",
+              "parent_id": "generated-main-1",
+              "enabled": true,
+              "platform": "抖音",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": "带年份的检索表达，也可能出现在正常历史回顾中。需要判断是否存在旧闻新发或时间混淆。"
+            },
+            {
+              "id": "generated-main-2",
+              "term": "关联地点与地域",
+              "kind": "main",
+              "parent_id": "",
+              "enabled": true,
+              "platform": "抖音",
+              "match_type": "黑话词",
+              "risk_level": "低",
+              "note": "通过地域和地点线索召回与事件相关的讨论。正常语境包括当地生活内容、旅游记录和公共议题讨论。"
+            },
+            {
+              "id": "generated-variant-2-1",
+              "term": "新疆克拉玛依历史",
+              "kind": "variant",
+              "parent_id": "generated-main-2",
+              "enabled": true,
+              "platform": "抖音",
+              "match_type": "黑话词",
+              "risk_level": "低",
+              "note": "宽泛地域历史查询，可召回涉及该事件影像或叙述的视频。噪声较高，包含城市宣传和其他历史内容。"
+            },
+            {
+              "id": "generated-main-3",
+              "term": "信源与传播方式",
+              "kind": "main",
+              "parent_id": "",
+              "enabled": true,
+              "platform": "抖音",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": "围绕信源宣称、爆料身份的通用表达，结合事件名称使用以提高召回精度。正常语境包含新闻引用、辟谣和公共讨论。"
+            },
+            {
+              "id": "generated-variant-3-1",
+              "term": "克拉玛依大火真相",
+              "kind": "variant",
+              "parent_id": "generated-main-3",
+              "enabled": true,
+              "platform": "抖音",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": "带真相表述的检索词，可召回声称揭露内情的内容，也可能是正常历史讨论中的标题。风险需结合具体发布者身份和内容判断，未达到违规基准。"
+            },
+            {
+              "id": "generated-variant-3-2",
+              "term": "克拉玛依大火知情人",
+              "kind": "variant",
+              "parent_id": "generated-main-3",
+              "enabled": true,
+              "platform": "抖音",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": "身份宣称类表述，可能存在以爆料人设传播未经证实内容。正常语境也可能仅是知情人回忆，需结合具体内容辨别。"
+            },
+            {
+              "id": "generated-variant-3-3",
+              "term": "克拉玛依大火旧闻",
+              "kind": "variant",
+              "parent_id": "generated-main-3",
+              "enabled": true,
+              "platform": "抖音",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": "直接指向旧闻新发风险。结合事件名称可精确定位相关传播行为，但正常语境可能只是标注或说明旧闻性质。"
+            },
+            {
+              "id": "generated-variant-3-4",
+              "term": "网传克拉玛依大火",
+              "kind": "variant",
+              "parent_id": "generated-main-3",
+              "enabled": true,
+              "platform": "抖音",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": "网传前缀可召回未经证实的传播内容。正常语境可能包含对传闻的澄清或质疑，需结合上下文而非仅凭词面判断。"
+            }
+          ]
+        }
+      },
+      "ruleset_revision": null,
+      "temporary_ruleset": {
+        "strategy": "temporary_ruleset",
+        "proposal_id": "ruleset-proposal:29e502b2f30340f19f2d63d5006ad9fe",
+        "proposal_version": 1,
+        "content_hash": "9d3d5244f1781b9931d2322f87cbe53713f6e02635ee25479349c1dfbdb2b03b",
+        "content": {
+          "schema_version": 0,
+          "name": "克拉玛依大火公共事件舆情讨论审核规则",
+          "domain": "public_event_opinion",
+          "audit_goal": "识别抖音平台围绕1994年新疆克拉玛依友谊馆火灾这一历史公共安全事件的讨论中，冒充权威信源、将历史旧闻包装为近期新闻、伪造官方通报、通过剪辑或拼接误导受众、捏造关键事实以及煽动民族或地域对立等风险内容。审核仅针对存在明确造假、冒充、误导或煽动对立的表达，不限制正常的纪念、反思、新闻报道、历史研究和对公共安全管理的具体批评意见。",
+          "general_exemptions": [
+            {
+              "exemption_id": "ge_normal_commemoration",
+              "name": "正常纪念与反思表达",
+              "condition": "内容为对遇难者的悼念、默哀、献花、纪念馆参观记录，或个人对事件的历史反思与教训总结，未虚构关键事实、未冒充权威信源、未将旧闻标称为近期新闻，也未对克拉玛依或新疆相关民族、地域群体进行整体攻击或煽动对立。",
+              "source_mappings": []
+            },
+            {
+              "exemption_id": "ge_news_and_research",
+              "name": "新闻转载与历史研究",
+              "condition": "内容为可溯源的媒体历史报道转载、档案资料展示、学术研究、公开出版物引用或纪录片片段，且未篡改原意、未通过剪辑拼接制造虚假因果关系，未伪造时间、地点或伤亡等关键事实，也未附加攻击特定民族或地域群体的倾向性结论。",
+              "source_mappings": []
+            },
+            {
+              "exemption_id": "ge_specific_criticism",
+              "name": "针对公共安全管理的具体批评",
+              "condition": "内容针对事件暴露的消防管理、应急响应、场馆安全、善后处理等具体问题进行基于公开事实的批评或问责讨论，未虚构责任主体、未编造通报或伤亡数据，未将个别责任人问题泛化为对克拉玛依或新疆特定民族、地域群体的整体否定。",
+              "source_mappings": []
+            },
+            {
+              "exemption_id": "ge_personal_recollection",
+              "name": "亲历者或家属真实回忆",
+              "condition": "内容为亲历者、遇难者家属或相关人员的个人真实回忆、口述或纪念表述，未进行明显违背公开记录的关键事实编造，未冒用官方或媒体身份发布，也未借个人叙述煽动民族、地域仇恨。",
+              "source_mappings": []
+            }
+          ],
+          "categories": [
+            {
+              "category_id": "cat_source_fraud",
+              "name": "信源冒充与伪造权威",
+              "description": "冒充官方机构、媒体、亲历者发布克拉玛依大火相关消息、通报或内幕，或伪造权威证据。",
+              "order": 10,
+              "rules": [
+                {
+                  "rule_id": "rule_impersonate_official_media",
+                  "name": "冒充官方或权威媒体发布事件信息",
+                  "hit_condition": "发布者通过账号昵称、头像、简介、置顶评论、视频包装字幕或口播等方式，冒充克拉玛依或新疆相关政府机构、消防、公安、教育、纪检监察等官方主体，或冒充具有权威性的新闻媒体及其记者，发布关于克拉玛依大火事件经过、伤亡、责任、赔偿、会议记录或后续处置的信息，且无真实授权或可核查的转载来源。",
+                  "suggested_risk_level": "high",
+                  "rule_exemptions": [
+                    {
+                      "exemption_id": "re_impersonate_official_media_transfer",
+                      "name": "明确转载或转述",
+                      "condition": "内容明确标注为转载、转述或引用具体媒体、官方发布来源，未冒充该信源本身，未对外宣称自己是官方或原发布媒体。",
+                      "source_mappings": []
+                    },
+                    {
+                      "exemption_id": "re_impersonate_official_media_parody",
+                      "name": "显著标识的模拟和演绎",
+                      "condition": "内容在画面或文案中持续、显著标注为虚构、情景模拟、历史演绎，未使普通用户产生其确为官方或原媒体发布的认识。",
+                      "source_mappings": []
+                    }
+                  ],
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "adjudication_notes": "必要条件为发布者冒用官方或权威媒体身份，并借该身份发布与克拉玛依大火事件相关的信息。命中不以内容是否同时包含攻击性言论为前提；仅凭身份冒用和事件信息发布即可独立成立。账号已认证但冒用他人机构身份仍可命中。本条不用于处罚单纯使用历史影像、正常转载或未冒用身份的普通讨论。",
+                  "enabled": true,
+                  "order": 110,
+                  "source_mappings": []
+                },
+                {
+                  "rule_id": "rule_impersonate_witness_or_material",
+                  "name": "冒充亲历者或伪造亲历证据",
+                  "hit_condition": "发布者冒充1994年克拉玛依友谊馆火灾的亲历者、幸存者、遇难者家属或当时参与救援处置的工作人员，或者将影视片段、无关人员口述、AI生成画面和声音包装为真实亲历证言、现场原始影像或独家内幕，且相关内容涉及事件关键细节的虚构。",
+                  "suggested_risk_level": "medium",
+                  "rule_exemptions": [
+                    {
+                      "exemption_id": "re_witness_labeled_recreation",
+                      "name": "显著标注创作或演绎",
+                      "condition": "内容在标题、画面、字幕和口播中持续明确标注为情景再现、文艺创作或历史演绎，未声称其为真实亲历记录。",
+                      "source_mappings": []
+                    },
+                    {
+                      "exemption_id": "re_witness_verifiable_record",
+                      "name": "可溯源的真实证言",
+                      "condition": "内容为已公开媒体或档案资料中的亲历者采访、回忆录节选，且未对关键事实进行篡改或冒名。",
+                      "source_mappings": []
+                    }
+                  ],
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "adjudication_notes": "必要条件为冒用亲历者、家属或处置人员身份，或将非真实材料包装为真实证据。发布历史资料、真实采访或明确标注的文艺再现不属于伪造。普通用户以个人口吻回忆但无冒名、无虚构关键事实的不命中。",
+                  "enabled": true,
+                  "order": 120,
+                  "source_mappings": []
+                },
+                {
+                  "rule_id": "rule_fabricate_document_notice",
+                  "name": "伪造官方文件或通报",
+                  "hit_condition": "内容伪造或变造与克拉玛依大火相关的红头文件、会议纪要、事故调查报告、责任认定材料、赔偿协议、地方志记录或官方通报的图片、视频、文字，或以权威口吻凭空发布并不存在的调查结论、责任名单、赔偿标准或新的处理决定。",
+                  "suggested_risk_level": "high",
+                  "rule_exemptions": [
+                    {
+                      "exemption_id": "re_doc_archival_source",
+                      "name": "可核查的档案转载",
+                      "condition": "内容采用可核查的公开档案、政府公报、法院文书、权威媒体发布或学术出版物原貌转载，未对文件关键内容进行改动。",
+                      "source_mappings": []
+                    },
+                    {
+                      "exemption_id": "re_doc_review_quote",
+                      "name": "基于公开资料的引述评析",
+                      "condition": "内容为对公开发布的通报、报告或档案的引述、解读和评论，未虚构原文、未变造文件形式。",
+                      "source_mappings": []
+                    }
+                  ],
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "fusion_audit"
+                  ],
+                  "adjudication_notes": "必要条件为伪造或变造具有官方效力外观的文件，或虚构官方决定。评价既往通报措辞、依据公开文件进行讨论，不构成伪造。评论中仅凭文字空口编造官方决定可由 comment_audit 处理，图片视频中伪造文件形式由对应证据阶段处理，最终融合时据此作出结论。",
+                  "enabled": true,
+                  "order": 130,
+                  "source_mappings": []
+                }
+              ]
+            },
+            {
+              "category_id": "cat_time_misleading",
+              "name": "旧闻当新闻与时间误导",
+              "description": "将1994年克拉玛依大火等历史事件包装为近期新发生事件，或混淆事件时间制造恐慌和误判。",
+              "order": 20,
+              "rules": [
+                {
+                  "rule_id": "rule_old_event_as_new",
+                  "name": "历史旧闻伪装为近期新闻",
+                  "hit_condition": "内容通过标题、口播、字幕、话题标签或视频包装，将1994年克拉玛依友谊馆火灾描述为近日、刚刚、突发、最新发生，或使用与当前日期关联的表述，使普通用户误认为该事件近期再次发生或正在发生，且未明确说明其为历史事件回顾。",
+                  "suggested_risk_level": "medium",
+                  "rule_exemptions": [
+                    {
+                      "exemption_id": "re_old_new_retrospective",
+                      "name": "明确历史回顾",
+                      "condition": "内容在标题、字幕、口播或置顶说明中明确标注“历史回顾”“1994年”“纪念”“史料”“当年”等时间信息，未暗示事件为近期发生。",
+                      "source_mappings": []
+                    },
+                    {
+                      "exemption_id": "re_old_new_context",
+                      "name": "正在报道相关纪念或考古活动",
+                      "condition": "内容实际报道的是当前正在进行的纪念活动、遗址保护、档案研究等新近事项，并且没有把这些当前事项误称为火灾正在发生。",
+                      "source_mappings": []
+                    }
+                  ],
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "adjudication_notes": "必要条件为把1994年火灾这一历史事件伪装为近期新发生事件。未说明历史背景但只做事实复述的不必然命中；关键看是否使用“突发”“刚刚”“近日”等时态语言，或通过抒情配乐和剪辑制造正在进行感。正常纪念和史料回顾不命中。",
+                  "enabled": true,
+                  "order": 210,
+                  "source_mappings": []
+                },
+                {
+                  "rule_id": "rule_deliberate_time_confusion",
+                  "name": "故意混淆事件时间或主体",
+                  "hit_condition": "内容宣称某个并非1994年克拉玛依友谊馆火灾的火灾、事故或处分为同一事件，或将不同年份、不同地点的消防安全事件拼接为克拉玛依大火，以此制造虚假因果或扩大事件规模。",
+                  "suggested_risk_level": "medium",
+                  "rule_exemptions": [
+                    {
+                      "exemption_id": "re_time_confusion_comparison",
+                      "name": "明确的类比和分析",
+                      "condition": "内容清楚使用“类比”“对比”“类似案例”等说明，未把不同事件说成同一事件。",
+                      "source_mappings": []
+                    },
+                    {
+                      "exemption_id": "re_time_confusion_source_based",
+                      "name": "依据公开资料指出事件关系",
+                      "condition": "内容依据公开史料或媒体报道说明相关联的后续调查、遗址处置或同类消防问题，未虚构二者为同一事故。",
+                      "source_mappings": []
+                    }
+                  ],
+                  "application_stages": [
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "adjudication_notes": "必要条件为把不同事件说成同一事件或故意混淆时间主体。单纯把不同年份案例剪辑在一起而未明确声称同一起消防事故，通常由误导剪辑规则处理；本条针对明确宣称同一性的情况。",
+                  "enabled": true,
+                  "order": 220,
+                  "source_mappings": []
+                }
+              ]
+            },
+            {
+              "category_id": "cat_misleading_editing",
+              "name": "误导剪辑与拼接",
+              "description": "通过画面、音频、时序或文案的剪辑拼接，制造虚假因果关系或歪曲原意。",
+              "order": 30,
+              "rules": [
+                {
+                  "rule_id": "rule_misleading_clip",
+                  "name": "拼接剪辑制造虚假事实",
+                  "hit_condition": "内容将不同年份、不同地点的火灾画面、救援画面、会议画面、哀悼画面或人物发言进行拼接、替换、倒序或重新配音，使其呈现为完整的克拉玛依大火现场或后续处置经过，且未标注历史资料混合、艺术再现或内容重构。",
+                  "suggested_risk_level": "medium",
+                  "rule_exemptions": [
+                    {
+                      "exemption_id": "re_clip_labeled_composite",
+                      "name": "明确标注资料混剪或演绎",
+                      "condition": "内容在标题、封面、字幕或口播中明确标注“资料混剪”“历史画面整理”“情景再现”“艺术演绎”等，未声称其为同一时空下的真实完整记录。",
+                      "source_mappings": []
+                    },
+                    {
+                      "exemption_id": "re_clip_context_quote",
+                      "name": "保留原意且不制造虚假事实",
+                      "condition": "内容的剪辑仅用于引用、说明或评论，未改变原画面和原声的核心事实，未通过拼接制造虚假因果。",
+                      "source_mappings": []
+                    }
+                  ],
+                  "application_stages": [
+                    "video_frame_evidence",
+                    "fusion_audit"
+                  ],
+                  "adjudication_notes": "必要条件为通过剪辑、替换、倒序或重新配音，把不同时空素材组合成貌似连续的克拉玛依大火事实记录，并可能因此误导用户。单纯把多段历史素材并置而未声称其完整真实，或已显著标注混剪，不命中。",
+                  "enabled": true,
+                  "order": 310,
+                  "source_mappings": []
+                },
+                {
+                  "rule_id": "rule_false_causality",
+                  "name": "虚假因果和曲解原意",
+                  "hit_condition": "内容把与克拉玛依大火无直接因果关系的人物言论、行动计划、文件决定或后续事件，通过剪辑衔接和解说，说成是火灾发生的直接原因、应对失职的唯一原因或特定群体预谋结果，或者将公开资料中原本中性或相反含义的影像、录音通过断章取义改变其原意。",
+                  "suggested_risk_level": "medium",
+                  "rule_exemptions": [
+                    {
+                      "exemption_id": "re_causality_analyze",
+                      "name": "基于证据的分析解读",
+                      "condition": "内容明确为基于公开调查结论、档案或权威报道的原因分析，未断章取义改变原始材料含义，且没有把观点冒充为事实结论。",
+                      "source_mappings": []
+                    },
+                    {
+                      "exemption_id": "re_causality_quote_context",
+                      "name": "完整呈现原始语境",
+                      "condition": "对被引用影像、录音或文字给出了足以判断原意的完整上下文，并明确区分事实与评论。",
+                      "source_mappings": []
+                    }
+                  ],
+                  "application_stages": [
+                    "video_frame_evidence",
+                    "fusion_audit"
+                  ],
+                  "adjudication_notes": "必要条件为通过剪辑或解说建立不符合公开事实的因果关系，或改变原始材料原意。正常的史料解读和原因分析不命中，除非存在断章取义、虚构因果或把观点冒充事实。",
+                  "enabled": true,
+                  "order": 320,
+                  "source_mappings": []
+                }
+              ]
+            },
+            {
+              "category_id": "cat_fact_fabrication",
+              "name": "捏造事实与虚假细节",
+              "description": "编造关于事件细节、伤亡、责任、赔偿或后续处理的虚假信息。",
+              "order": 40,
+              "rules": [
+                {
+                  "rule_id": "rule_fabricate_casualties_responsibility",
+                  "name": "编造伤亡、责任或赔偿信息",
+                  "hit_condition": "内容编造与公开记录明显不符的死亡或受伤人数、遇难者身份、责任人员、责任认定、赔偿金额、签名名单等关键信息，或者编造官方未发布、无法从公开档案查证的所谓解密材料和责任人供述。",
+                  "suggested_risk_level": "high",
+                  "rule_exemptions": [
+                    {
+                      "exemption_id": "re_casualties_official_data",
+                      "name": "依据公开记录的转述",
+                      "condition": "内容引用的死亡、受伤、责任或处理信息可溯源至公开档案、政府通报或权威媒体报道，未对关键数据进行篡改。",
+                      "source_mappings": []
+                    },
+                    {
+                      "exemption_id": "re_casualties_inference_labeled",
+                      "name": "明确标注的个人推测",
+                      "condition": "内容清楚使用“我的推测”“可能”“据称尚待核实”“未经证实”等表述，且没有把推测包装为已经证实的事实。",
+                      "source_mappings": []
+                    }
+                  ],
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "adjudication_notes": "必要条件为编造或严重歪曲事件关键事实。引用公开记录、正常历史讨论或明确标注的推测不命中。对官方数据提出质量疑问但未凭空捏造另一套数据的，一般属于批评意见而非事实编造。",
+                  "enabled": true,
+                  "order": 410,
+                  "source_mappings": []
+                },
+                {
+                  "rule_id": "rule_fabricate_inside_story",
+                  "name": "编造所谓内幕和未公开材料",
+                  "hit_condition": "内容声称掌握并公开所谓封存档案、未公开会议纪要、内部名单、秘密录音或特殊渠道材料，用于颠覆或补充关于克拉玛依大火事件的既有公开记录，但无法指向任何可核查来源，且将其表述为已经确证的事实。",
+                  "suggested_risk_level": "medium",
+                  "rule_exemptions": [
+                    {
+                      "exemption_id": "re_inside_verifiable_document",
+                      "name": "真实可核查的解密或档案材料",
+                      "condition": "内容展示或引用的是能够通过档案机构、法律文书、公开出版或权威媒体来源核查的材料，未虚构材料存在和内容。",
+                      "source_mappings": []
+                    },
+                    {
+                      "exemption_id": "re_inside_labeled_question",
+                      "name": "对档案缺失的开放性质询",
+                      "condition": "内容以提问或讨论方式指出历史资料不完整，未虚构具体文件、数据或责任人。",
+                      "source_mappings": []
+                    }
+                  ],
+                  "application_stages": [
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "adjudication_notes": "必要条件为把无法核查来源的材料当作已确证事实发布，以补充或改写事件记录。仅提出档案缺失疑问、呼吁公开资料，而未捏造具体内幕的，不命中。",
+                  "enabled": true,
+                  "order": 420,
+                  "source_mappings": []
+                }
+              ]
+            },
+            {
+              "category_id": "cat_incite_conflict",
+              "name": "煽动对立与地域仇恨",
+              "description": "借克拉玛依大火事件煽动民族对立、地域攻击或对不同意见群体的仇恨。",
+              "order": 50,
+              "rules": [
+                {
+                  "rule_id": "rule_incite_ethnic_region_conflict",
+                  "name": "借事件煽动民族或地域对立",
+                  "hit_condition": "内容将1994年克拉玛依友谊馆火灾的责任、伤亡或后续处理，刻意归咎于克拉玛依、新疆或中国的某一民族群体、地域群体整体，宣称该群体整体负有原罪、应当被歧视、排斥、驱逐或报复，或号召对新疆、克拉玛依及其居民实施对立、抵制的任一情况。",
+                  "suggested_risk_level": "high",
+                  "rule_exemptions": [
+                    {
+                      "exemption_id": "re_ethnic_region_responsibility",
+                      "name": "针对具体责任主体的批评",
+                      "condition": "内容批评的是具体部门、具体单位或具体责任人，未把责任扩展为对特定民族或地域群体的整体否定，未号召排斥、驱逐或报复。",
+                      "source_mappings": []
+                    },
+                    {
+                      "exemption_id": "re_ethnic_region_public_safety",
+                      "name": "公共安全与消防管理讨论",
+                      "condition": "内容为对当时消防、教育、公共活动管理等领域制度问题的探讨，未把问题归为某一民族或地域群体的固有属性。",
+                      "source_mappings": []
+                    }
+                  ],
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "adjudication_notes": "必要条件为借火情事件将攻击对象扩大到民族或地域群体整体，并含有原罪化、歧视、排斥、驱逐、报复或对立号召中的任一风险表现。针对具体单位和责任人的批评不命中；只用“新疆”“克拉玛依”作地理说明也不命中。",
+                  "enabled": true,
+                  "order": 510,
+                  "source_mappings": []
+                },
+                {
+                  "rule_id": "rule_incite_opinion_hostility",
+                  "name": "攻击纪念者或不同意见群体",
+                  "hit_condition": "内容在克拉玛依大火相关讨论中，以纪念、反思或追问为话题，对参与纪念的表达者、要求公开信息者、持不同意见者发起侮辱、诅咒、人身攻击，或鼓动网民对其进行网暴、举报、线下滋扰，且攻击与对方就事件发表意见或参与纪念的行为明显相关。",
+                  "suggested_risk_level": "medium",
+                  "rule_exemptions": [
+                    {
+                      "exemption_id": "re_opinion_hostility_specific",
+                      "name": "针对具体违规表达的反驳",
+                      "condition": "内容为针对造谣、羞辱遇难者、煽动仇恨等具体违规表达的驳斥，并主要围绕事实和观点展开，未号召网暴或人身攻击。",
+                      "source_mappings": []
+                    },
+                    {
+                      "exemption_id": "re_opinion_hostility_discuss",
+                      "name": "正常意见交锋",
+                      "condition": "内容为就事件叙事、史料解读或责任认定进行观点交锋，未进行人格侮辱、诅咒或组织围攻。",
+                      "source_mappings": []
+                    }
+                  ],
+                  "application_stages": [
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "adjudication_notes": "必要条件为攻击对象是因参与事件纪念、讨论或持有不同意见而遭到针对，且存在侮辱、诅咒、人身攻击或网暴号召中的任一情况。普通观点分歧和批评不命中；但如果攻击升级为组织骚扰、曝光隐私或现实威胁，可结合具体行为举报处置。",
+                  "enabled": true,
+                  "order": 520,
+                  "source_mappings": []
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "max_notes": 9,
+      "max_posts_per_keyword": 1,
+      "max_comments_per_post": 300,
+      "get_sub_comment": false,
+      "blockers": [
+        {
+          "code": "collection_service_unavailable",
+          "message": "抖音采集服务当前不可用，请稍后重试。",
+          "resource_type": "",
+          "resource_id": "",
+          "latest_safe_summary": {},
+          "management_url": ""
+        },
+        {
+          "code": "RELEVANCE_SCOPE_EXECUTION_UNAVAILABLE",
+          "message": "地域执行能力尚未接通，当前不能启动。",
+          "resource_type": "",
+          "resource_id": "",
+          "latest_safe_summary": {},
+          "management_url": ""
+        }
+      ],
+      "can_confirm": false
+    },
+    "receipts": [
+      {
+        "tool_name": "create_ruleset_proposal",
+        "status": "SUCCEEDED",
+        "is_mutation": 1,
+        "turn_id": "investigation-session:b840ea02a92946b996f696c274facec4:investigation-turn:5347dea709254a599b963413a4c361ae:ee9dc280"
+      },
+      {
+        "tool_name": "create_lexicon_edit",
+        "status": "FAILED",
+        "is_mutation": 1,
+        "turn_id": "investigation-session:b840ea02a92946b996f696c274facec4:investigation-turn:5347dea709254a599b963413a4c361ae:ee9dc280"
+      },
+      {
+        "tool_name": "create_lexicon_edit",
+        "status": "FAILED",
+        "is_mutation": 1,
+        "turn_id": "investigation-session:b840ea02a92946b996f696c274facec4:investigation-turn:5347dea709254a599b963413a4c361ae:ee9dc280"
+      },
+      {
+        "tool_name": "get_ruleset_proposal",
+        "status": "SUCCEEDED",
+        "is_mutation": 0,
+        "turn_id": "investigation-session:b840ea02a92946b996f696c274facec4:investigation-turn:43e7f090fbfc40dea57b1f131199cbb6:cde2f2e1"
+      },
+      {
+        "tool_name": "create_lexicon_edit",
+        "status": "SUCCEEDED",
+        "is_mutation": 1,
+        "turn_id": "investigation-session:b840ea02a92946b996f696c274facec4:investigation-turn:062df3d7971b41429a93fea44ec8a3c9:796037da"
+      },
+      {
+        "tool_name": "get_resource_edit",
+        "status": "SUCCEEDED",
+        "is_mutation": 0,
+        "turn_id": "investigation-session:b840ea02a92946b996f696c274facec4:investigation-turn:98f799b5c6224b99909c549e7dec5b0e:1cbeecca"
+      },
+      {
+        "tool_name": "configure_investigation_draft",
+        "status": "SUCCEEDED",
+        "is_mutation": 1,
+        "turn_id": "investigation-session:b840ea02a92946b996f696c274facec4:investigation-turn:98f799b5c6224b99909c549e7dec5b0e:1cbeecca"
+      }
+    ]
+  },
+  "tool_receipts_for_human_turns": [],
+  "checks": {
+    "target_is_karamay": true,
+    "source_quote_is_original_requirement": true,
+    "db_public_scope_equal": true,
+    "browser_card": "parent observed read-only via CUA, reported 11 temporary rules + 9 terms + 克拉玛依市; screenshot owned by parent"
+  }
+}

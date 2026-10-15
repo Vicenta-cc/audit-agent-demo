@@ -1,0 +1,52 @@
+{
+  "version": "geo-intent-p0-contrast-v1",
+  "frozen_files_checked": 31,
+  "historical_frozen_files_unchanged": 21,
+  "business_source_and_snapshot_match": true,
+  "initial_requests_matched": 54,
+  "unique_cases": 18,
+  "case_runs": 54,
+  "http_requests": 119,
+  "http_responses": 119,
+  "http_errors": 0,
+  "returned_models": [
+    "deepseek-v4-pro-ga-260813"
+  ],
+  "journal_and_traces_identical": true,
+  "all_call_limits_respected": true,
+  "tool_requests": 104,
+  "all_receipts_simulated_no_mutation": true,
+  "privacy_scanned_files": 23,
+  "secret_value_hits": 0,
+  "authorization_header_objects": 0,
+  "preserved_other_files": 6,
+  "new_model_calls_during_audit": 0,
+  "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "branch": "codex/geographic-relevance-p0",
+  "raw_sha256": {
+    "outputs/geographic-scope-intent/contrast-v1/bridge.json": "8387a70495d348e897db9d4bf43ccee2563ab690a4d57512e7dfd36202200738",
+    "outputs/geographic-scope-intent/contrast-v1/simple.json": "a665c070f7ce230e6af249263ce291e1501ec63a562c2bfcb61f04f3291b3ce2",
+    "outputs/geographic-scope-intent/contrast-v1/prepared.json": "db84ae91643fc7c31210de0eff73f4a7235912772169ba4cb357166d095d86a8",
+    "outputs/geographic-scope-intent/contrast-v1/run-status.json": "a955f6995cbfb3fd7a050a52b7630f5ac114e6550c806e45197d0ace46252d3d",
+    "outputs/geographic-scope-intent/contrast-v1/progress.txt": "93d6cb9fe01cebae129979d0bbb84050b5db4d004b4bfe92b5cd179da0923332",
+    "outputs/geographic-scope-intent/contrast-v1/full.json": "cf2d52ce1ae594f742fee408ba69ed592fd01b67a827553424d6808a36b740e5",
+    "outputs/geographic-scope-intent/contrast-v1/http-ledger.jsonl": "a0b9a5026de762bbbd9beebfbae785f45d6fabedd4c4b739784b058b1c2da3c9"
+  },
+  "finalized_at_utc": "2026-10-14T11:04:15.509204+00:00",
+  "privacy_check_note": "authorization许可描述为普通评测metadata，不是Authorization请求头；检查嵌套headers及Bearer/Basic认证值。",
+  "reviewed_trace_digests_matched": 54,
+  "final_document_whitespace_passed": true,
+  "other_changes_hashes_matched": 6,
+  "document_sha256": {
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/REPORT.md": "221cde3f40bf1391c51e45163af5afc085ab2dbdaa638c34d691a541a7c26dcf",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/README.md": "932c8662e0f735e8601dd8f23cbf4ce7f43fc2dd0cc2fc9b77a849ce8a074a7f",
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.omx/plans/geographic-relevance-p0-handoff.md": "b4239fe9eb1d93f7d9186864c838c2024314a7563d1f74b6b92b4e64a34f3141",
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.omx/plans/geographic-relevance-implementation.md": "b6867bc9540bd1799c41e8fe0da1e3794c21b234a89a9d2801660fcc67be45a9"
+  },
+  "offline_review_sha256": {
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/evidence/contrast-v1-review.json": "18084dca7c96192a2e8317bd4d646cd46684fe4453b4d41e1def21b5eea9fb7d",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/evidence/contrast-v1-summary.json": "49aa63cba7c56dbc3d85afdee4409f4ee4dd8a81e42602ca0737629ad1559935",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/evidence/contrast-full-review.json": "b011281854808474ec0368f4474114a34cdf66459738836f48e224977fc287b4",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/evidence/contrast-bridge-simple-review.json": "d67c6054bf82c4e5df3dd233c55d6e18e7c134167c9e69a212f6b211b503c97a"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "kind": "original_bridge_restoration_final_audit",
+  "status": "原B代码恢复完成、待原会话验收；P0未整体通过",
+  "verified_at": "2026-10-14T20:07:34.427378+08:00",
+  "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "branch": "codex/geographic-relevance-p0",
+  "active_version": "geo-intent-p0-contrast-v1",
+  "active_entry": "experiments.geographic_scope_intent.contrast_runner.run_arm(case, provider, bridge)",
+  "original_frozen_files_verified": 31,
+  "original_first_requests_verified": 54,
+  "offline_historical_cases": 18,
+  "offline_historical_responses": 53,
+  "offline_replay_is_not_new_model_effect": true,
+  "archived_files": {
+    "experiments/geographic_scope_intent/BRIDGE_HANDOFF_PLAN.md": "bf7033b8cdd13aae92223767d6818da8acefd366561e004d5591da1bd3f7eed1",
+    "experiments/geographic_scope_intent/BRIDGE_REAL_EVAL_PLAN.md": "ff1a0bd8f3a50415a3399c1f625c2f5ae50d35844ec1d523b4e54623e48a1661",
+    "experiments/geographic_scope_intent/bridge_handoff.py": "839de920e490becc1cc32e13d639410a2ef62435293336292026b07f24fd4638",
+    "experiments/geographic_scope_intent/bridge_handoff_guidance.txt": "8e1d9c75bb1b99f1159fecc1969ce60fb7ffd1d0b162d226a8a1f26720941dad",
+    "experiments/geographic_scope_intent/bridge_handoff_verify.py": "db63da38e388f78ee057360e636a06e342039f9a92612fd868c8437404a009bc",
+    "experiments/geographic_scope_intent/bridge_real_eval.py": "b5c3e0ee362b2420e081686e774895eacfbfbaacfce0b25d84f5838b34868413",
+    "experiments/geographic_scope_intent/bridge_real_scoring.py": "92dcb8f4d0e35547950af5f7dc0df4f882760782620e7bc74c090e28e951fc99",
+    "tests/test_geographic_scope_bridge_handoff.py": "603f65982e61ab517a3c6540b4f279aaa698d22078a6800bf83fe6de0332d4c8",
+    "tests/test_geographic_scope_bridge_real_eval.py": "5ecfb3ee7fc908d0c0e388234094ad8654369849647dcb83d42b042c96ca4b9a",
+    "tests/test_geographic_scope_bridge_real_scoring.py": "ae86f4def8b74ed3848dfb185fa070828128efb276886f6d043ffafd7f382cce"
+  },
+  "archive_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/archived-code/bridge-repair-v1-before-original-restore.zip",
+  "archive_sha256": "19e22e8265411777ebad9fcd47b48568e377c312a6aa49d08e27893a07732deb",
+  "repaired_modules_importable": false,
+  "historical_evidence_files_unchanged": 90,
+  "other_files_unchanged_by_workspace": {
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo": 96,
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo": 242,
+    "/Users/ext.wanghongtao6/.codex/worktrees/unified-report-query-phase1/xhs-audit-agent-demo": 11
+  },
+  "python_files_compiled": 18,
+  "tests": {
+    "targeted_passed": 390,
+    "regression_passed": 25,
+    "regression_existing_warnings": 1
+  },
+  "updated_docs_sha256": {
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/README.md": "92873a9b66bcc176b31bea60ad6be33ec8d135abc4e6cf4452835d0bde01ca8f",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/REPORT.md": "47031af437dccde0ab9aafcc18a3c00791bbf9fbd29b16fae17e4af5a5d68f3c",
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.omx/plans/geographic-relevance-p0-handoff.md": "42bd18951f449cfb8c76848917bd5f03649ac63bda8b92716c17433e56cf0d2f",
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.omx/plans/geographic-relevance-implementation.md": "757f10d61b75f1d4f006163faf6688f1ad0b770edb05541b0133b32ef6e89bd9"
+  },
+  "new_real_model_requests": 0,
+  "formal_business_tracked_diff": false,
+  "commit_push_deploy": false,
+  "entered_p1": false
+}

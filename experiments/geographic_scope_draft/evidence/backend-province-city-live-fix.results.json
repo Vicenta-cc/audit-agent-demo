@@ -1,0 +1,31 @@
+{
+  "summary": "4 failed, 384 passed, 5 warnings, 23 subtests passed in 59.09s",
+  "file_count": 13,
+  "failed_ids": [
+    "tests/test_creation_prompt_isolation.py::test_guidance_is_available_through_native_deferred_describe",
+    "tests/test_creation_prompt_isolation.py::test_global_prompt_keeps_authority_but_not_authoring_payloads",
+    "tests/test_creation_prompt_isolation.py::test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes",
+    "tests/test_creation_prompt_isolation.py::test_original_prompt_lines_are_preserved_or_explicitly_accounted_for"
+  ],
+  "baseline_failure_ids_identical": true,
+  "previous_province_city_failure_ids_identical": true,
+  "new_failures": [],
+  "change_scope": [
+    "backend/investigation_creation/configure.py DESCRIPTION",
+    "backend/investigation_creation/conversation.py CREATION_SYSTEM_PROMPT local geography guidance"
+  ],
+  "validation_limit": "programmatic regression; live natural-language model/UI validation owned by parent",
+  "model_requests": 0,
+  "collection_requests": 0,
+  "production_database_writes": 0,
+  "artifacts": {
+    "service-flow-province-city-live-fix.json": {
+      "bytes": 534396,
+      "sha256": "48a4cd9441baf796624d325c607fbed3c97928279dff78e17766d015286eabc2"
+    },
+    "service-flow-national-province-city-live-fix.json": {
+      "bytes": 536469,
+      "sha256": "22f9563b97e3119a1c8083d3795c80fd165d36c1c361e47d3176319a8bfa6b9c"
+    }
+  }
+}

@@ -1,0 +1,240 @@
+{
+  "version": "event-place-live-v1",
+  "frozen_expectations": true,
+  "cases": [
+    {
+      "id": "E01",
+      "input": "调查克拉玛依大火",
+      "expected": {
+        "decision": "apply",
+        "status": "resolved",
+        "target": "克拉玛依市"
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E02",
+      "input": "帮我查1994年克拉玛依友谊馆火灾",
+      "expected": {
+        "decision": "apply",
+        "status": "resolved",
+        "target": "克拉玛依市"
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E03",
+      "input": "调查深圳楼市",
+      "expected": {
+        "decision": "apply",
+        "status": "resolved",
+        "target": "深圳市"
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E04",
+      "input": "调查新疆棉花争议",
+      "expected": {
+        "decision": "apply",
+        "status": "resolved",
+        "target": "新疆维吾尔自治区"
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E05",
+      "input": "调查广东食品安全问题",
+      "expected": {
+        "decision": "apply",
+        "status": "resolved",
+        "target": "广东省"
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E06",
+      "input": "调查北京暴雨",
+      "expected": {
+        "decision": "apply",
+        "status": "resolved",
+        "target": "北京市"
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E07",
+      "input": "调查吉林市火灾",
+      "expected": {
+        "decision": "apply",
+        "status": "resolved",
+        "target": "吉林市"
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E08",
+      "input": "调查吉林省消费投诉",
+      "expected": {
+        "decision": "apply",
+        "status": "resolved",
+        "target": "吉林省"
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E09",
+      "input": "调查吉林火灾",
+      "expected": {
+        "decision": "apply",
+        "status": "pending",
+        "target": null
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E10",
+      "input": "调查朝阳区火灾",
+      "expected": {
+        "decision": "apply",
+        "status": "pending",
+        "target": null
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E11",
+      "input": "调查深训的诈骗问题",
+      "expected": {
+        "decision": "apply",
+        "status": "pending",
+        "target": null
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E12",
+      "input": "调查深圳和宁波住房问题",
+      "expected": {
+        "decision": "apply",
+        "status": "pending",
+        "target": null
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E13",
+      "input": "用“深圳招聘”词库调查全国招聘风险",
+      "expected": {
+        "decision": "none",
+        "status": "absent",
+        "target": null
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E14",
+      "input": "这个账号在深圳，查它是否发布违规招聘",
+      "expected": {
+        "decision": "none",
+        "status": "absent",
+        "target": null
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E15",
+      "input": "比如北京，这只是例子；本次调查不限定地域",
+      "expected": {
+        "decision": "none",
+        "status": "absent",
+        "target": null
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E16",
+      "input": "调查某学校火灾",
+      "expected": {
+        "decision": "none",
+        "status": "absent",
+        "target": null
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E17",
+      "input": "调查克拉玛依大火；本次取消地域限制",
+      "expected": {
+        "decision": "none",
+        "status": "absent",
+        "target": null
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E18",
+      "input": "调查克拉玛依大火，关注全国网友对这件事的讨论",
+      "expected": {
+        "decision": "apply",
+        "status": "resolved",
+        "target": "克拉玛依市"
+      },
+      "resource_setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references"
+    },
+    {
+      "id": "E19",
+      "description": "existing 克拉玛依 draft; change title only to 深圳招聘复核",
+      "expected": {
+        "status": "resolved",
+        "target": "克拉玛依市"
+      },
+      "resource_setup": "real session preparation and model calls; E21 twice clean, temporary resources not precreated"
+    },
+    {
+      "id": "E20",
+      "description": "existing 克拉玛依 draft; change investigation to 深圳楼市",
+      "expected": {
+        "status": "resolved",
+        "target": "深圳市"
+      },
+      "resource_setup": "real session preparation and model calls; E21 twice clean, temporary resources not precreated"
+    },
+    {
+      "id": "E21",
+      "description": "克拉玛依大火 → real generate/show/adopt temporary resources",
+      "expected": {
+        "status": "resolved",
+        "target": "克拉玛依市"
+      },
+      "resource_setup": "real session preparation and model calls; E21 twice clean, temporary resources not precreated"
+    },
+    {
+      "id": "E22",
+      "description": "same as E21; replace objective with 宁波住房问题 before adoption",
+      "expected": {
+        "status": "resolved",
+        "target": "宁波市"
+      },
+      "resource_setup": "real session preparation and model calls; E21 twice clean, temporary resources not precreated"
+    },
+    {
+      "id": "E23",
+      "description": "same as E21; cancel geographic restriction before adoption",
+      "expected": {
+        "status": "absent",
+        "target": null
+      },
+      "resource_setup": "real session preparation and model calls; E21 twice clean, temporary resources not precreated"
+    },
+    {
+      "id": "E24",
+      "description": "existing geographic draft; new independent workspace",
+      "expected": {
+        "status": "absent",
+        "target": null
+      },
+      "resource_setup": "real session preparation and model calls; E21 twice clean, temporary resources not precreated"
+    }
+  ]
+}

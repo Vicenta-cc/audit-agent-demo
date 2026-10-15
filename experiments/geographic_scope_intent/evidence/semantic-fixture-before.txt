@@ -1,0 +1,96 @@
+FFFF.FF                                                                  [100%]
+=================================== FAILURES ===================================
+___ test_memory_draft_read_supports_actual_configuration_loop[change-daqing] ___
+
+identity = 'change-daqing'
+
+    @pytest.mark.parametrize('identity', ['change-daqing','clear-unlimited','keep-title'])
+    def test_memory_draft_read_supports_actual_configuration_loop(identity):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='get_investigation_draft',arguments={'draft_id':c['current_draft']['draft_id']}),
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c),call_id='call-2'),
+            response('模拟草案已准备，尚未启动真实调查。')]))
+        receipt = trace['calls'][0]['receipt']
+>       assert receipt['ok'] and receipt['simulated']
+E       assert (False)
+
+tests/test_geographic_scope_runner.py:177: AssertionError
+__ test_memory_draft_read_supports_actual_configuration_loop[clear-unlimited] __
+
+identity = 'clear-unlimited'
+
+    @pytest.mark.parametrize('identity', ['change-daqing','clear-unlimited','keep-title'])
+    def test_memory_draft_read_supports_actual_configuration_loop(identity):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='get_investigation_draft',arguments={'draft_id':c['current_draft']['draft_id']}),
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c),call_id='call-2'),
+            response('模拟草案已准备，尚未启动真实调查。')]))
+        receipt = trace['calls'][0]['receipt']
+>       assert receipt['ok'] and receipt['simulated']
+E       assert (False)
+
+tests/test_geographic_scope_runner.py:177: AssertionError
+____ test_memory_draft_read_supports_actual_configuration_loop[keep-title] _____
+
+identity = 'keep-title'
+
+    @pytest.mark.parametrize('identity', ['change-daqing','clear-unlimited','keep-title'])
+    def test_memory_draft_read_supports_actual_configuration_loop(identity):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='get_investigation_draft',arguments={'draft_id':c['current_draft']['draft_id']}),
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c),call_id='call-2'),
+            response('模拟草案已准备，尚未启动真实调查。')]))
+        receipt = trace['calls'][0]['receipt']
+>       assert receipt['ok'] and receipt['simulated']
+E       assert (False)
+
+tests/test_geographic_scope_runner.py:177: AssertionError
+_ test_memory_draft_read_never_guesses_unknown_identity[keep-title-FIXTURE_ARGUMENT_MISMATCH] _
+
+identity = 'keep-title', code = 'FIXTURE_ARGUMENT_MISMATCH'
+
+    @pytest.mark.parametrize('identity,code', [
+        ('keep-title','FIXTURE_ARGUMENT_MISMATCH'), ('city-kelamayi','FIXTURE_MISSING')])
+    def test_memory_draft_read_never_guesses_unknown_identity(identity,code):
+        d = FixtureDispatcher(case(identity))
+        before = deepcopy(d.draft)
+        receipt = d.dispatch('get_investigation_draft',{'draft_id':'unknown-draft'})
+>       assert not receipt['ok'] and receipt['code'] == code
+E       AssertionError: assert (not False and 'FIXTURE_MISSING' == 'FIXTURE_ARGUMENT_MISMATCH'
+E         
+E         - FIXTURE_ARGUMENT_MISMATCH
+E         + FIXTURE_MISSING)
+
+tests/test_geographic_scope_runner.py:189: AssertionError
+___________ test_memory_draft_read_reflects_simulated_revision_only ____________
+
+    def test_memory_draft_read_reflects_simulated_revision_only():
+        c = case('change-daqing')
+        d = FixtureDispatcher(c)
+        assert d.dispatch('configure_investigation_draft',annotated_configuration(c))['ok']
+        receipt = d.dispatch('get_investigation_draft',{'draft_id':c['current_draft']['draft_id']})
+>       assert receipt['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:198: AssertionError
+__________ test_current_round_read_only_returns_known_synthetic_state __________
+
+    def test_current_round_read_only_returns_known_synthetic_state():
+        c = case('new-round-national')
+        d = FixtureDispatcher(c)
+        receipt = d.dispatch('list_investigation_rounds',{})
+>       assert receipt['ok'] and receipt['simulated']
+E       assert (False)
+
+tests/test_geographic_scope_runner.py:209: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_geographic_scope_runner.py::test_memory_draft_read_supports_actual_configuration_loop[change-daqing]
+FAILED tests/test_geographic_scope_runner.py::test_memory_draft_read_supports_actual_configuration_loop[clear-unlimited]
+FAILED tests/test_geographic_scope_runner.py::test_memory_draft_read_supports_actual_configuration_loop[keep-title]
+FAILED tests/test_geographic_scope_runner.py::test_memory_draft_read_never_guesses_unknown_identity[keep-title-FIXTURE_ARGUMENT_MISMATCH]
+FAILED tests/test_geographic_scope_runner.py::test_memory_draft_read_reflects_simulated_revision_only
+FAILED tests/test_geographic_scope_runner.py::test_current_round_read_only_returns_known_synthetic_state
+6 failed, 1 passed, 104 deselected in 0.14s

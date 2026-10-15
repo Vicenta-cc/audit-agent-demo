@@ -1,0 +1,394 @@
+FFFFFFFFFFFFFFF............                                              [100%]
+=================================== FAILURES ===================================
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已创建，尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'city-kelamayi', 'label': 'set', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-clear-unlimited] _
+
+identity = 'clear-unlimited', text = '模拟草案已创建，尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'clear-unlimited', 'label': 'clear', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-keep-title] _
+
+identity = 'keep-title', text = '模拟草案已创建，尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'keep-title', 'label': 'keep', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u5df2\u521b\u5efa\u6a21\u62df\u8349\u6848\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u4efb\u52a1\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '已创建模拟草案，尚未启动真实任务。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'city-kelamayi', 'label': 'set', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u5df2\u521b\u5efa\u6a21\u62df\u8349\u6848\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u4efb\u52a1\u3002-clear-unlimited] _
+
+identity = 'clear-unlimited', text = '已创建模拟草案，尚未启动真实任务。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'clear-unlimited', 'label': 'clear', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u5df2\u521b\u5efa\u6a21\u62df\u8349\u6848\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u4efb\u52a1\u3002-keep-title] _
+
+identity = 'keep-title', text = '已创建模拟草案，尚未启动真实任务。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'keep-title', 'label': 'keep', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u5f53\u524d\u6ca1\u6709\u6b63\u5728\u91c7\u96c6\uff0c\u4e5f\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '当前没有正在采集，也未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'city-kelamayi', 'label': 'set', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u5f53\u524d\u6ca1\u6709\u6b63\u5728\u91c7\u96c6\uff0c\u4e5f\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-clear-unlimited] _
+
+identity = 'clear-unlimited', text = '当前没有正在采集，也未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'clear-unlimited', 'label': 'clear', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u5f53\u524d\u6ca1\u6709\u6b63\u5728\u91c7\u96c6\uff0c\u4e5f\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-keep-title] _
+
+identity = 'keep-title', text = '当前没有正在采集，也未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'keep-title', 'label': 'keep', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa,\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已创建,尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'city-kelamayi', 'label': 'set', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa,\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-clear-unlimited] _
+
+identity = 'clear-unlimited', text = '模拟草案已创建,尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'clear-unlimited', 'label': 'clear', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa,\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-keep-title] _
+
+identity = 'keep-title', text = '模拟草案已创建,尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'keep-title', 'label': 'keep', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff1b\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已创建；尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'city-kelamayi', 'label': 'set', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff1b\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-clear-unlimited] _
+
+identity = 'clear-unlimited', text = '模拟草案已创建；尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'clear-unlimited', 'label': 'clear', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff1b\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-keep-title] _
+
+identity = 'keep-title', text = '模拟草案已创建；尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'keep-title', 'label': 'keep', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:137: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-clear-unlimited]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-keep-title]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u5df2\u521b\u5efa\u6a21\u62df\u8349\u6848\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u4efb\u52a1\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u5df2\u521b\u5efa\u6a21\u62df\u8349\u6848\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u4efb\u52a1\u3002-clear-unlimited]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u5df2\u521b\u5efa\u6a21\u62df\u8349\u6848\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u4efb\u52a1\u3002-keep-title]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u5f53\u524d\u6ca1\u6709\u6b63\u5728\u91c7\u96c6\uff0c\u4e5f\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u5f53\u524d\u6ca1\u6709\u6b63\u5728\u91c7\u96c6\uff0c\u4e5f\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-clear-unlimited]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u5f53\u524d\u6ca1\u6709\u6b63\u5728\u91c7\u96c6\uff0c\u4e5f\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-keep-title]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa,\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa,\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-clear-unlimited]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa,\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-keep-title]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff1b\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff1b\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-clear-unlimited]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff1b\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-keep-title]
+15 failed, 12 passed, 77 deselected in 0.55s

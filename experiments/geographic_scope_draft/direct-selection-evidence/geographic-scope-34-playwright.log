@@ -1,0 +1,49 @@
+
+> xhs-audit-agent-frontend-v2@0.1.0 test
+> playwright test tests/geographicScopeDisplay.spec.ts
+
+[WebServer] (node:17669) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 34 tests using 1 worker
+
+(node:17673) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/34] tests/geographicScopeDisplay.spec.ts:74:1 › scope display handles canonical province, city, municipality, policies and omitted legacy fields
+[2/34] tests/geographicScopeDisplay.spec.ts:96:1 › pending latest requirement hides previously resolved target and server blockers remain readable
+[3/34] tests/geographicScopeDisplay.spec.ts:115:1 › workspace recovery retains pending and resolved projections without freezing blocked draft or polluting old snapshots
+[4/34] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render resolved scope read-only
+[5/34] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render province scope read-only
+[6/34] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render pending scope read-only
+[7/34] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render ambiguous scope read-only
+[8/34] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render local_only scope read-only
+[9/34] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render legacy scope read-only
+[10/34] tests/geographicScopeDisplay.spec.ts:215:3 › real service fixture resolved workspace restores into original card and drawer
+[11/34] tests/geographicScopeDisplay.spec.ts:215:3 › real service fixture pending workspace restores into original card and drawer
+[12/34] tests/geographicScopeDisplay.spec.ts:215:3 › real service national resolved workspace restores into original card and drawer
+[13/34] tests/geographicScopeDisplay.spec.ts:215:3 › real service national pending workspace restores into original card and drawer
+[14/34] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: resolved geography
+[15/34] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: pending geography
+[16/34] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: unsupported geographic mode
+[17/34] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: missing rule resource
+[18/34] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: missing recall resource
+[19/34] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: missing crawler account
+[20/34] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: unknown blocker
+[21/34] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: geographic code without geographic state
+[22/34] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: historical read-only card
+[23/34] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: missing platform
+[24/34] tests/geographicScopeDisplay.spec.ts:339:3 › suggestion card retains resolved geography when collection service blocks confirmation
+[25/34] tests/geographicScopeDisplay.spec.ts:339:3 › suggestion card retains pending geography when collection service blocks confirmation
+[26/34] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: choose
+[27/34] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: manual
+[28/34] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: invalid
+[29/34] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: retry
+[30/34] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: conflict
+[31/34] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: busy
+[32/34] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: history
+[33/34] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: duplicate
+[34/34] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: resolved-edit
+  34 passed (16.4s)

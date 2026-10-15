@@ -1,0 +1,41 @@
+{
+  "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo",
+  "isolated_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg",
+  "environment": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHON_DOTENV_DISABLED": "1",
+    "HERMES_HOME": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/hermes",
+    "XHS_AUDIT_DATA_DIR": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/data",
+    "XHS_AUDIT_OUTPUTS_DIR": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/outputs",
+    "APP_AUTH_DB": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/data/auth.sqlite3",
+    "TASK_RESOURCE_LOCK_DIR": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/locks",
+    "REQUEST_SCHEDULER_DB": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/data/scheduler.sqlite3",
+    "CRAWLER_AUTH_KEY_FILE": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/data/crawler_auth.key",
+    "CRAWLER_BROWSER_PROFILE_ROOT": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/browser-profiles",
+    "PYTHONPATH": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo:/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/hermes_m0:/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/external/hermes-agent"
+  },
+  "argv": [
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_unified_draft_configuration.py",
+    "tests/test_ruleset_proposal_approval.py",
+    "tests/test_investigation_creation_m3.py",
+    "tests/test_investigation_creation_conversation.py",
+    "tests/test_creation_history_recovery.py",
+    "tests/test_draft_creation_recovery.py",
+    "tests/test_shared_draft_creation_recovery.py",
+    "tests/test_creation_prompt_isolation.py",
+    "tests/test_geographic_scope_intent.py",
+    "tests/test_geographic_draft_configuration.py",
+    "tests/test_geographic_scope_catalog.py",
+    "tests/test_cn_division_catalog_import.py",
+    "tests/test_geographic_national_catalog.py",
+    "--tb=short"
+  ],
+  "shell_command": "env PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 HERMES_HOME=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/hermes XHS_AUDIT_DATA_DIR=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/data XHS_AUDIT_OUTPUTS_DIR=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/outputs APP_AUTH_DB=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/data/auth.sqlite3 TASK_RESOURCE_LOCK_DIR=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/locks REQUEST_SCHEDULER_DB=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/data/scheduler.sqlite3 CRAWLER_AUTH_KEY_FILE=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/data/crawler_auth.key CRAWLER_BROWSER_PROFILE_ROOT=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-city-final.64hm04lg/browser-profiles PYTHONPATH=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo:/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/hermes_m0:/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/external/hermes-agent /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.venv/bin/python -m pytest -q tests/test_unified_draft_configuration.py tests/test_ruleset_proposal_approval.py tests/test_investigation_creation_m3.py tests/test_investigation_creation_conversation.py tests/test_creation_history_recovery.py tests/test_draft_creation_recovery.py tests/test_shared_draft_creation_recovery.py tests/test_creation_prompt_isolation.py tests/test_geographic_scope_intent.py tests/test_geographic_draft_configuration.py tests/test_geographic_scope_catalog.py tests/test_cn_division_catalog_import.py tests/test_geographic_national_catalog.py --tb=short",
+  "model_requests": 0,
+  "collection_requests": 0,
+  "production_database_writes": 0
+}

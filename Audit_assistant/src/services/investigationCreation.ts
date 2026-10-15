@@ -272,3 +272,17 @@ export function resumeInvestigationWorkspaceReportTurn(
     { method: "POST" }
   );
 }
+
+/** A verified UI choice; this does not create a conversation turn. */
+export function updateInvestigationRelevanceScope(
+  workspaceSessionId: string,
+  draftId: string,
+  request: { expectedRevision: number; operationId: string; targetText: string; clarificationTargetText?: string }
+) {
+  return apiRequest<PublicInvestigationDraft>(
+    `/api/investigation-workspaces/${encodeURIComponent(workspaceSessionId)}/drafts/${encodeURIComponent(draftId)}/relevance-scope`,
+    { method: "POST", body: JSON.stringify({ expected_revision: request.expectedRevision,
+      operation_id: request.operationId, target_text: request.targetText,
+      ...(request.clarificationTargetText ? { clarification_target_text: request.clarificationTargetText } : {}) }) }
+  );
+}

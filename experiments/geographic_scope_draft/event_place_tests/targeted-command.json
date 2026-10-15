@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_unified_draft_configuration.py",
+    "tests/test_geographic_draft_configuration.py",
+    "tests/test_geographic_national_catalog.py",
+    "--tb=short"
+  ],
+  "isolated_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p1-event-tests.kttznrkw"
+}

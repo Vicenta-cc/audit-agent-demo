@@ -1,0 +1,122 @@
+{
+  "city-kelamayi": [
+    {
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": null,
+            "tool_calls": [
+              {
+                "id": "scripted-call-1",
+                "type": "function",
+                "function": {
+                  "name": "configure_investigation_draft",
+                  "arguments": "{\"operation\": \"create\", \"title\": \"克拉玛依劳动争议调查\", \"objective\": \"调查负面舆情\", \"platform\": \"dy\", \"ruleset_ref\": \"resource-ref:11111111111111111111111111111111\", \"lexicon_ref\": \"resource-ref:22222222222222222222222222222222\", \"relevance_scope_change\": {\"action\": \"set\", \"target_text\": \"克拉玛依\", \"selection_policy\": \"local_first_with_supplement\", \"source_quote\": \"调查克拉玛依最近的负面舆情\"}}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": "已准备模拟方案，确认前不启动。"
+          }
+        }
+      ]
+    }
+  ],
+  "clear-unlimited": [
+    {
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": null,
+            "tool_calls": [
+              {
+                "id": "scripted-call-1",
+                "type": "function",
+                "function": {
+                  "name": "configure_investigation_draft",
+                  "arguments": "{\"operation\": \"update\", \"draft_id\": \"fixture-draft\", \"expected_revision\": 2, \"relevance_scope_change\": {\"action\": \"clear\", \"source_quote\": \"不限制地区了\"}}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": "模拟草案取消地域限制，其他配置保留。"
+          }
+        }
+      ]
+    }
+  ],
+  "keep-title": [
+    {
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": null,
+            "tool_calls": [
+              {
+                "id": "scripted-call-1",
+                "type": "function",
+                "function": {
+                  "name": "configure_investigation_draft",
+                  "arguments": "{\"operation\": \"update\", \"draft_id\": \"fixture-draft\", \"expected_revision\": 2, \"title\": \"十月欠薪专项\"}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": "模拟草案仅修改标题，地域保留。"
+          }
+        }
+      ]
+    }
+  ],
+  "ambiguous-chaoyang": [
+    {
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": "您说的朝阳是哪个地区？请说明省市。"
+          }
+        }
+      ]
+    }
+  ],
+  "defer-missing-all": [
+    {
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": "先准备规则和词库，资源尚未就绪，暂不创建调查草案。"
+          }
+        }
+      ]
+    }
+  ]
+}

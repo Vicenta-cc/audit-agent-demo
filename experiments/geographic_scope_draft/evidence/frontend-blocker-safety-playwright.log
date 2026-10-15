@@ -1,0 +1,44 @@
+
+> xhs-audit-agent-frontend-v2@0.1.0 test
+> playwright test --config=playwright.config.ts tests/investigationPresentation.spec.ts tests/geographicScopeDisplay.spec.ts
+
+[WebServer] (node:3220) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 29 tests using 1 worker
+
+(node:3222) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/29] tests/geographicScopeDisplay.spec.ts:74:1 › scope display handles canonical province, city, municipality, policies and omitted legacy fields
+[2/29] tests/geographicScopeDisplay.spec.ts:96:1 › pending latest requirement hides previously resolved target and server blockers remain readable
+[3/29] tests/geographicScopeDisplay.spec.ts:115:1 › workspace recovery retains pending and resolved projections without freezing blocked draft or polluting old snapshots
+[4/29] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render resolved scope read-only
+[5/29] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render province scope read-only
+[6/29] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render pending scope read-only
+[7/29] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render ambiguous scope read-only
+[8/29] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render local_only scope read-only
+[9/29] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render legacy scope read-only
+[10/29] tests/geographicScopeDisplay.spec.ts:215:3 › real service fixture resolved workspace restores into original card and drawer
+[11/29] tests/geographicScopeDisplay.spec.ts:215:3 › real service fixture pending workspace restores into original card and drawer
+[12/29] tests/geographicScopeDisplay.spec.ts:215:3 › real service national resolved workspace restores into original card and drawer
+[13/29] tests/geographicScopeDisplay.spec.ts:215:3 › real service national pending workspace restores into original card and drawer
+[14/29] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: resolved geography
+[15/29] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: pending geography
+[16/29] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: unsupported geographic mode
+[17/29] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: missing rule resource
+[18/29] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: missing recall resource
+[19/29] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: missing crawler account
+[20/29] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: unknown blocker
+[21/29] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: geographic code without geographic state
+[22/29] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: historical read-only card
+[23/29] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: missing platform
+[24/29] tests/investigationPresentation.spec.ts:43:1 › media download interruption explains recovery without blaming account login
+[25/29] tests/investigationPresentation.spec.ts:50:1 › creation presentation hides internal diagnostics and keeps real management navigation
+[26/29] tests/investigationPresentation.spec.ts:68:1 › run presentation exposes curated counts and sanitizes provider failures
+[27/29] tests/investigationPresentation.spec.ts:91:1 › M3 source provenance exposes the stored original post without accepting unsafe links
+[28/29] tests/investigationPresentation.spec.ts:116:1 › failed posts are separate from queued posts, including old payloads
+[29/29] tests/investigationPresentation.spec.ts:125:1 › browser initialization failure keeps the keyword pending without blaming login
+  29 passed (9.2s)

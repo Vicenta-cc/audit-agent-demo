@@ -1,0 +1,151 @@
+..............FFF.F                                                      [100%]
+=================================== FAILURES ===================================
+_ test_malformed_provider_response_is_preserved_and_fails_without_scoring_crash[bad_response0] _
+
+bad_response = {'choices': 7}
+
+    @pytest.mark.parametrize('bad_response', [
+        {'choices': 7}, {'choices': 'invalid'},
+        {'choices': [{'message': {'role': 'assistant', 'tool_calls': 7}}]},
+        {'choices': [{'message': {'role': 'assistant', 'tool_calls': {'name': 'x'}}}]},
+        {'choices': [{'message': {'role': 'assistant', 'tool_calls': [
+            {'function': {'name': {'invalid': 'name'}}}]}}]},
+    ])
+    def test_malformed_provider_response_is_preserved_and_fails_without_scoring_crash(bad_response):
+        c, t = landed()
+        t['responses'].append(deepcopy(bad_response))
+        before = deepcopy(t)
+>       row = score_bridge(c, t, load_labels()[c['case_id']])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_geographic_scope_bridge_real_scoring.py:135: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+experiments/geographic_scope_intent/bridge_real_scoring.py:76: in score_bridge
+    boundary = _boundary(trace, raw)
+               ^^^^^^^^^^^^^^^^^^^^^
+experiments/geographic_scope_intent/bridge_real_scoring.py:32: in _boundary
+    messages = _generated_messages(trace)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+trace = {'version': 'geo-intent-p0-bridge-handoff-v1', 'case_id': 'city-kelamayi', 'mode': 'scripted', 'requests': [{'messages...各正式版本附可直接传入 open_resource_edit 的 open_arguments；顶层 open_arguments 读取当前内容，不代表历史版本。', 'parameters': {...}}}, ...]}], ...}
+
+    def _generated_messages(trace):
+        messages = []
+        for response in trace.get('responses', []):
+            if not isinstance(response, dict):
+                continue
+>           for choice in response.get('choices', []) or []:
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: 'int' object is not iterable
+
+experiments/geographic_scope_intent/bridge_real_scoring.py:24: TypeError
+_ test_malformed_provider_response_is_preserved_and_fails_without_scoring_crash[bad_response1] _
+
+bad_response = {'choices': 'invalid'}
+
+    @pytest.mark.parametrize('bad_response', [
+        {'choices': 7}, {'choices': 'invalid'},
+        {'choices': [{'message': {'role': 'assistant', 'tool_calls': 7}}]},
+        {'choices': [{'message': {'role': 'assistant', 'tool_calls': {'name': 'x'}}}]},
+        {'choices': [{'message': {'role': 'assistant', 'tool_calls': [
+            {'function': {'name': {'invalid': 'name'}}}]}}]},
+    ])
+    def test_malformed_provider_response_is_preserved_and_fails_without_scoring_crash(bad_response):
+        c, t = landed()
+        t['responses'].append(deepcopy(bad_response))
+        before = deepcopy(t)
+        row = score_bridge(c, t, load_labels()[c['case_id']])
+>       assert not row['boundary']['pass']
+E       assert not True
+
+tests/test_geographic_scope_bridge_real_scoring.py:136: AssertionError
+_ test_malformed_provider_response_is_preserved_and_fails_without_scoring_crash[bad_response2] _
+
+bad_response = {'choices': [{'message': {'role': 'assistant', 'tool_calls': 7}}]}
+
+    @pytest.mark.parametrize('bad_response', [
+        {'choices': 7}, {'choices': 'invalid'},
+        {'choices': [{'message': {'role': 'assistant', 'tool_calls': 7}}]},
+        {'choices': [{'message': {'role': 'assistant', 'tool_calls': {'name': 'x'}}}]},
+        {'choices': [{'message': {'role': 'assistant', 'tool_calls': [
+            {'function': {'name': {'invalid': 'name'}}}]}}]},
+    ])
+    def test_malformed_provider_response_is_preserved_and_fails_without_scoring_crash(bad_response):
+        c, t = landed()
+        t['responses'].append(deepcopy(bad_response))
+        before = deepcopy(t)
+>       row = score_bridge(c, t, load_labels()[c['case_id']])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_geographic_scope_bridge_real_scoring.py:135: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+experiments/geographic_scope_intent/bridge_real_scoring.py:76: in score_bridge
+    boundary = _boundary(trace, raw)
+               ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+trace = {'version': 'geo-intent-p0-bridge-handoff-v1', 'case_id': 'city-kelamayi', 'mode': 'scripted', 'requests': [{'messages...各正式版本附可直接传入 open_resource_edit 的 open_arguments；顶层 open_arguments 读取当前内容，不代表历史版本。', 'parameters': {...}}}, ...]}], ...}
+raw = {'case_id': 'city-kelamayi', 'arm': 'bridge', 'label': 'set', 'intent': {'action': True, 'target': True, 'policy': True, 'source': True, ...}, ...}
+
+    def _boundary(trace, raw):
+        errors = list(raw['boundary']['errors'])
+        messages = _generated_messages(trace)
+        generated_names = []
+        for index, message in enumerate(messages):
+>           for call in message.get('tool_calls', []) or []:
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: 'int' object is not iterable
+
+experiments/geographic_scope_intent/bridge_real_scoring.py:35: TypeError
+_ test_malformed_provider_response_is_preserved_and_fails_without_scoring_crash[bad_response4] _
+
+bad_response = {'choices': [{'message': {'role': 'assistant', 'tool_calls': [{'function': {...}}]}}]}
+
+    @pytest.mark.parametrize('bad_response', [
+        {'choices': 7}, {'choices': 'invalid'},
+        {'choices': [{'message': {'role': 'assistant', 'tool_calls': 7}}]},
+        {'choices': [{'message': {'role': 'assistant', 'tool_calls': {'name': 'x'}}}]},
+        {'choices': [{'message': {'role': 'assistant', 'tool_calls': [
+            {'function': {'name': {'invalid': 'name'}}}]}}]},
+    ])
+    def test_malformed_provider_response_is_preserved_and_fails_without_scoring_crash(bad_response):
+        c, t = landed()
+        t['responses'].append(deepcopy(bad_response))
+        before = deepcopy(t)
+>       row = score_bridge(c, t, load_labels()[c['case_id']])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_geographic_scope_bridge_real_scoring.py:135: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+experiments/geographic_scope_intent/bridge_real_scoring.py:76: in score_bridge
+    boundary = _boundary(trace, raw)
+               ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+trace = {'version': 'geo-intent-p0-bridge-handoff-v1', 'case_id': 'city-kelamayi', 'mode': 'scripted', 'requests': [{'messages...各正式版本附可直接传入 open_resource_edit 的 open_arguments；顶层 open_arguments 读取当前内容，不代表历史版本。', 'parameters': {...}}}, ...]}], ...}
+raw = {'case_id': 'city-kelamayi', 'arm': 'bridge', 'label': 'set', 'intent': {'action': True, 'target': True, 'policy': True, 'source': True, ...}, ...}
+
+    def _boundary(trace, raw):
+        errors = list(raw['boundary']['errors'])
+        messages = _generated_messages(trace)
+        generated_names = []
+        for index, message in enumerate(messages):
+            for call in message.get('tool_calls', []) or []:
+                if not isinstance(call, dict):
+                    errors.append('invalid_generated_tool_call')
+                    continue
+                function = call.get('function')
+                name = function.get('name') if isinstance(function, dict) else None
+                generated_names.append(name)
+>               if name in FORBIDDEN_EXECUTION:
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               TypeError: unhashable type: 'dict'
+
+experiments/geographic_scope_intent/bridge_real_scoring.py:42: TypeError
+=========================== short test summary info ============================
+FAILED tests/test_geographic_scope_bridge_real_scoring.py::test_malformed_provider_response_is_preserved_and_fails_without_scoring_crash[bad_response0]
+FAILED tests/test_geographic_scope_bridge_real_scoring.py::test_malformed_provider_response_is_preserved_and_fails_without_scoring_crash[bad_response1]
+FAILED tests/test_geographic_scope_bridge_real_scoring.py::test_malformed_provider_response_is_preserved_and_fails_without_scoring_crash[bad_response2]
+FAILED tests/test_geographic_scope_bridge_real_scoring.py::test_malformed_provider_response_is_preserved_and_fails_without_scoring_crash[bad_response4]
+4 failed, 15 passed in 0.33s

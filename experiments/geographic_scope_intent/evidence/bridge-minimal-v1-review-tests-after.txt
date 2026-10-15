@@ -1,0 +1,23 @@
+.....................F.......................                            [100%]
+=================================== FAILURES ===================================
+_____ test_scope_none_without_explicit_clear_does_not_prove_clear_handoff ______
+
+    def test_scope_none_without_explicit_clear_does_not_prove_clear_handoff():
+        c = case('assistant-city')
+        args = {'action': 'clear', 'source_quote': c['current_user']['content']}
+        t = run_candidate(c, ScriptedProvider([
+            response(1, ('record_geographic_intent', args),
+                     ('configure_investigation_draft', configure(c))),
+            response(2, text='模拟全国草案。'),
+        ]))
+        assert t['progress']['draft_configured']
+>       assert t['progress']['handoff_status'] == 'mismatch'
+E       AssertionError: assert 'not_applied' == 'mismatch'
+E         
+E         - mismatch
+E         + not_applied
+
+tests/test_geographic_scope_bridge_minimal.py:278: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_geographic_scope_bridge_minimal.py::test_scope_none_without_explicit_clear_does_not_prove_clear_handoff
+1 failed, 44 passed in 0.45s

@@ -1,0 +1,76 @@
+
+> xhs-audit-agent-frontend-v2@0.1.0 test
+> playwright test --config=playwright.config.ts tests/investigationCreation.spec.tsx tests/taskConfirmationCardLimits.spec.ts tests/taskSuggestionKeywordEditing.spec.ts tests/geographicScopeDisplay.spec.ts
+
+[WebServer] (node:47115) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 61 tests using 1 worker
+
+(node:47121) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/61] tests/geographicScopeDisplay.spec.ts:67:1 › scope display handles canonical city, municipality, policies and omitted legacy fields
+[2/61] tests/geographicScopeDisplay.spec.ts:79:1 › pending latest requirement hides previously resolved target and server blockers remain readable
+[3/61] tests/geographicScopeDisplay.spec.ts:93:1 › workspace recovery retains pending and resolved projections without freezing blocked draft or polluting old snapshots
+[4/61] tests/geographicScopeDisplay.spec.ts:114:3 › original card and drawer render resolved scope read-only
+[5/61] tests/geographicScopeDisplay.spec.ts:114:3 › original card and drawer render pending scope read-only
+[6/61] tests/geographicScopeDisplay.spec.ts:114:3 › original card and drawer render local_only scope read-only
+[7/61] tests/geographicScopeDisplay.spec.ts:114:3 › original card and drawer render legacy scope read-only
+[8/61] tests/investigationCreation.spec.tsx:160:1 › temporary approval survives recovery and blocks execution
+[9/61] tests/investigationCreation.spec.tsx:177:1 › authoritative Proposal survives conversation recovery without prose sanitization
+[10/61] tests/investigationCreation.spec.tsx:196:3 › mixed Proposal preserves suggestion message identity and Draft behavior
+[11/61] tests/investigationCreation.spec.tsx:196:3 › mixed Proposal preserves confirmation message identity and Draft behavior
+[12/61] tests/investigationCreation.spec.tsx:312:1 › renders real Draft and ConfirmationPreview fields
+[13/61] tests/investigationCreation.spec.tsx:327:1 › reads the durable creation workspace and public messages
+[14/61] tests/investigationCreation.spec.tsx:364:1 › new investigation uses the backend workspace identity as the route identity
+[15/61] tests/investigationCreation.spec.tsx:382:1 › restores the real suggestion card from structured artifact without parsing assistant text
+[16/61] tests/investigationCreation.spec.tsx:405:1 › binds a recovered current public artifact to the last assistant message
+[17/61] tests/investigationCreation.spec.tsx:423:1 › replaces a legacy suggestion-null message artifact with the current projection
+[18/61] tests/investigationCreation.spec.tsx:450:1 › real analysis-plan drawer projects public resources without mock rule details
+[19/61] tests/investigationCreation.spec.tsx:463:1 › restores the final confirmation card and selected platform after refresh
+[20/61] tests/investigationCreation.spec.tsx:499:1 › restores both recovered suggestion and persisted confirmation artifacts
+[21/61] tests/investigationCreation.spec.tsx:540:1 › suggestion platform buttons are single-select and contain no Weibo candidate
+[22/61] tests/investigationCreation.spec.tsx:547:1 › restores a pending Turn without inventing a Draft or a replacement Turn
+[23/61] tests/investigationCreation.spec.tsx:579:1 › restores the same confirmed Run and published report version in one workspace
+[24/61] tests/investigationCreation.spec.tsx:595:1 › restores an audit-completed Run without claiming a generated report
+[25/61] tests/investigationCreation.spec.tsx:611:1 › restores report messages and a pending report Turn in the same workspace
+[26/61] tests/investigationCreation.spec.tsx:660:1 › restores only the latest running creation answer draft
+[27/61] tests/investigationCreation.spec.tsx:690:1 › workspace state API failures stay explicit and never produce a demo fallback
+[28/61] tests/investigationCreation.spec.tsx:705:1 › blockers disable confirmation and expose the management URL
+[29/61] tests/investigationCreation.spec.tsx:740:1 › creation diagnostics fail closed into user-facing copy
+[30/61] tests/investigationCreation.spec.tsx:754:1 › creator workspace recovery preserves the homepage URL and carries no search terms
+[31/61] tests/investigationCreation.spec.tsx:817:1 › Draft edits use expected_revision and preserve structured 409 errors
+[32/61] tests/investigationCreation.spec.tsx:839:1 › generate task configuration persists a real workspace confirmation-preview Turn
+[33/61] tests/investigationCreation.spec.tsx:881:1 › confirmation is explicit and reuses the caller's idempotency key
+[34/61] tests/investigationCreation.spec.tsx:900:1 › maps only real Run projection states, including parallel crawl and analysis
+[35/61] tests/investigationCreation.spec.tsx:938:1 › maps one real report post and its five-category Evidence without invented task output ids
+[36/61] tests/investigationCreation.spec.tsx:994:1 › analysis progress counts come only from Run task statistics
+[37/61] tests/investigationCreation.spec.tsx:1007:1 › analysis progress uses the planned post count until collection finishes
+[38/61] tests/investigationCreation.spec.tsx:1031:1 › analysis progress keeps the planned denominator while collection can still resume
+[39/61] tests/investigationCreation.spec.tsx:1066:1 › analysis progress on a cancelled run counts ingested posts but is never complete
+[40/61] tests/investigationCreation.spec.tsx:1074:1 › analysis progress shows the planned count before the job exists
+[41/61] tests/investigationCreation.spec.tsx:1081:1 › streamed audit results keep the planned denominator while collection runs
+[42/61] tests/investigationCreation.spec.tsx:1101:1 › run progress exposes only curated business counts and sanitizes provider failures
+[43/61] tests/investigationCreation.spec.tsx:1123:1 › empty crawl stays failed on workspace recovery and explains that no audit or report ran
+[44/61] tests/investigationCreation.spec.tsx:1134:1 › RUNNING records come directly from the current Job projection
+[45/61] tests/investigationCreation.spec.tsx:1134:1 › AUDIT_COMPLETED records come directly from the current Job projection
+[46/61] tests/investigationCreation.spec.tsx:1134:1 › INTERRUPTED records come directly from the current Job projection
+[47/61] tests/investigationCreation.spec.tsx:1181:1 › published M3 records fail closed when the ReportVersion has no structured report
+[48/61] tests/investigationCreation.spec.tsx:1196:1 › authoritative M3 progress is server-backed and reduced motion remains static
+[49/61] tests/investigationCreation.spec.tsx:1218:1 › published report questions use the workspace/run handoff without report_session_id
+[50/61] tests/investigationCreation.spec.tsx:1245:1 › published M3 report detail uses the Principal-scoped workspace/run route
+[51/61] tests/investigationCreation.spec.tsx:1278:1 › continuous workspace restores post-report resource turns after the report
+[52/61] tests/investigationCreation.spec.tsx:1294:3 › published workspace sends chat through report-only endpoint
+[53/61] tests/investigationCreation.spec.tsx:1294:3 › published workspace sends chat through continuous endpoint
+[54/61] tests/investigationCreation.spec.tsx:1328:1 › multi-round recovery keeps both runs, report targets and frozen draft cards in chronology
+[55/61] tests/investigationCreation.spec.tsx:1359:1 › new round run updates preserve older cards and an unsubmitted later draft
+[56/61] tests/taskConfirmationCardLimits.spec.ts:5:3 › confirmation card limit wording for search tasks
+[57/61] tests/taskConfirmationCardLimits.spec.ts:5:3 › confirmation card limit wording for creator tasks
+[58/61] tests/taskSuggestionKeywordEditing.spec.ts:3:1 › suggestion Draft opens the structured keyword drawer instead of editing inline
+[59/61] tests/taskSuggestionKeywordEditing.spec.ts:65:1 › started task explains that its search terms are frozen
+[60/61] tests/taskSuggestionKeywordEditing.spec.ts:121:1 › final Draft delegates keyword editing to the structured drawer
+[61/61] tests/taskSuggestionKeywordEditing.spec.ts:184:1 › structured keyword drawer prefers enabled variants and falls back to enabled main
+  61 passed (7.9s)

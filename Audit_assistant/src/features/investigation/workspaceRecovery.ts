@@ -1,3 +1,4 @@
+import { restoreRegionSelectionHistory } from "./regionSelectionHistory";
 import type {
   ChatMessage,
   InvestigationSession,
@@ -331,7 +332,7 @@ export function restoreInvestigationWorkspace(
     updatedAt: formatSessionTimestamp(updatedAtIso),
     updatedAtIso,
     draft,
-    messages,
+    messages: restoreRegionSelectionHistory(messages, state.messages, state.region_selection_history),
     executionPhase: runView?.phase || "idle",
     executionProgress: run?.status === "PUBLISHED"
       ? 100

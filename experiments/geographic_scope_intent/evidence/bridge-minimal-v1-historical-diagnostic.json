@@ -1,0 +1,276 @@
+{
+  "kind": "offline_historical_receipt_diagnostic_not_new_model_score",
+  "new_real_calls": 0,
+  "rows": [
+    {
+      "case_id": "city-kelamayi",
+      "progress": {
+        "record_status": "captured",
+        "successful_record_count": 1,
+        "draft_configured": true,
+        "successful_configuration_count": 1,
+        "handoff_status": "applied",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": false,
+        "pending_final_reply": true,
+        "original_termination": "loop_limit",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "only-kelamayi",
+      "progress": {
+        "record_status": "captured",
+        "successful_record_count": 1,
+        "draft_configured": true,
+        "successful_configuration_count": 1,
+        "handoff_status": "applied",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "keep-denial-clear",
+      "progress": {
+        "record_status": "captured",
+        "successful_record_count": 1,
+        "draft_configured": true,
+        "successful_configuration_count": 1,
+        "handoff_status": "preserved",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "change-daqing",
+      "progress": {
+        "record_status": "captured",
+        "successful_record_count": 1,
+        "draft_configured": true,
+        "successful_configuration_count": 1,
+        "handoff_status": "applied",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "progress": {
+        "record_status": "captured",
+        "successful_record_count": 1,
+        "draft_configured": true,
+        "successful_configuration_count": 1,
+        "handoff_status": "applied",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "province-xinjiang",
+      "progress": {
+        "record_status": "captured",
+        "successful_record_count": 1,
+        "draft_configured": true,
+        "successful_configuration_count": 1,
+        "handoff_status": "applied",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": false,
+        "pending_final_reply": true,
+        "original_termination": "loop_limit",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "keep-rules",
+      "progress": {
+        "record_status": "missing",
+        "successful_record_count": 0,
+        "draft_configured": false,
+        "successful_configuration_count": 0,
+        "handoff_status": "not_observable",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "defer-missing-all",
+      "progress": {
+        "record_status": "missing",
+        "successful_record_count": 0,
+        "draft_configured": false,
+        "successful_configuration_count": 0,
+        "handoff_status": "not_observable",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "adoption-temp-first",
+      "progress": {
+        "record_status": "missing",
+        "successful_record_count": 0,
+        "draft_configured": false,
+        "successful_configuration_count": 0,
+        "handoff_status": "not_observable",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": false,
+        "pending_final_reply": false,
+        "original_termination": "timeout",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "ambiguous-chaoyang",
+      "progress": {
+        "record_status": "captured",
+        "successful_record_count": 1,
+        "draft_configured": false,
+        "successful_configuration_count": 0,
+        "handoff_status": "not_applicable",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "new-round-national",
+      "progress": {
+        "record_status": "missing",
+        "successful_record_count": 0,
+        "draft_configured": false,
+        "successful_configuration_count": 0,
+        "handoff_status": "not_observable",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": false,
+        "pending_final_reply": false,
+        "original_termination": "timeout",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "named-resource",
+      "progress": {
+        "record_status": "missing",
+        "successful_record_count": 0,
+        "draft_configured": false,
+        "successful_configuration_count": 0,
+        "handoff_status": "not_observable",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "pasted-post",
+      "progress": {
+        "record_status": "captured",
+        "successful_record_count": 1,
+        "draft_configured": false,
+        "successful_configuration_count": 0,
+        "handoff_status": "not_applicable",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "creator-kelamayi",
+      "progress": {
+        "record_status": "missing",
+        "successful_record_count": 0,
+        "draft_configured": false,
+        "successful_configuration_count": 0,
+        "handoff_status": "not_observable",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "denied-city",
+      "progress": {
+        "record_status": "captured",
+        "successful_record_count": 1,
+        "draft_configured": false,
+        "successful_configuration_count": 0,
+        "handoff_status": "preserved",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "clear-unlimited",
+      "progress": {
+        "record_status": "captured",
+        "successful_record_count": 1,
+        "draft_configured": false,
+        "successful_configuration_count": 0,
+        "handoff_status": "not_applied",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "keep-title",
+      "progress": {
+        "record_status": "captured",
+        "successful_record_count": 1,
+        "draft_configured": true,
+        "successful_configuration_count": 1,
+        "handoff_status": "preserved",
+        "clear_without_existing_scope": false,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    },
+    {
+      "case_id": "assistant-city",
+      "progress": {
+        "record_status": "captured",
+        "successful_record_count": 1,
+        "draft_configured": true,
+        "successful_configuration_count": 1,
+        "handoff_status": "not_applied",
+        "clear_without_existing_scope": true,
+        "final_reply_complete": true,
+        "pending_final_reply": false,
+        "original_termination": "final",
+        "semantic_correctness": "not_assessed_by_progress_diagnostic"
+      }
+    }
+  ]
+}

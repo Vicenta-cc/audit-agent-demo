@@ -1,0 +1,27 @@
+{
+  "version": "geo-intent-p0-bridge-handoff-v1",
+  "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "branch": "codex/geographic-relevance-p0",
+  "prior_contrast_freeze_sha256": "441824f4ab5a6452123d3df568309e65035cd1785abe65e09c05d847232b6ae7",
+  "prior_frozen_files_checked": 31,
+  "prior_raw_results_sha256": {
+    "outputs/geographic-scope-intent/contrast-v1/bridge.json": "8387a70495d348e897db9d4bf43ccee2563ab690a4d57512e7dfd36202200738",
+    "outputs/geographic-scope-intent/contrast-v1/simple.json": "a665c070f7ce230e6af249263ce291e1501ec63a562c2bfcb61f04f3291b3ce2",
+    "outputs/geographic-scope-intent/contrast-v1/prepared.json": "db84ae91643fc7c31210de0eff73f4a7235912772169ba4cb357166d095d86a8",
+    "outputs/geographic-scope-intent/contrast-v1/run-status.json": "a955f6995cbfb3fd7a050a52b7630f5ac114e6550c806e45197d0ace46252d3d",
+    "outputs/geographic-scope-intent/contrast-v1/progress.txt": "93d6cb9fe01cebae129979d0bbb84050b5db4d004b4bfe92b5cd179da0923332",
+    "outputs/geographic-scope-intent/contrast-v1/full.json": "cf2d52ce1ae594f742fee408ba69ed592fd01b67a827553424d6808a36b740e5",
+    "outputs/geographic-scope-intent/contrast-v1/http-ledger.jsonl": "a0b9a5026de762bbbd9beebfbae785f45d6fabedd4c4b739784b058b1c2da3c9"
+  },
+  "other_files_sha256": {
+    "backend/report_collection/analysis.py": "a681522b75d8ac1274b0695b9fc282ac3388ad480383956f4483fad8372a983e",
+    "backend/report_collection/expression.py": "7e1d065f0817b98ea73532198805ef1b09b099666e069c774fd92c0ecefe14e4",
+    "backend/report_collection/tools.py": "ab949de304faf398a040a18c8416add8aa64b1edfcb797087512f297ccfca163",
+    "tests/test_report_collection_expression.py": "b0aacfebad781c1c20aa707cab5e9ee270f1d4214dffa31752de2d3065fa6ffe",
+    "tests/test_report_query_complete_distributions.py": "8e5153484c5639def6514a2183a98b7d31aa2edbfb5c8a38cff4c483af843d20",
+    "tests/test_report_query_read_contract.py": "a3b1abaf43c623a466ab66a687b3a6395fe82f789e868f9dfcc9ac8586e50b32"
+  },
+  "other_worktree": "/Users/ext.wanghongtao6/.codex/worktrees/unified-report-query-phase1/xhs-audit-agent-demo",
+  "new_real_model_requests": 0,
+  "scope": "local mandatory record, bounded workflow, deterministic simulated geographic handoff only"
+}

@@ -102,7 +102,7 @@ RESOURCE_PROMPT = """
 
 编辑操作、参数、冲突与删除范围要求见 open_resource_edit / update_resource_edit 的完整说明，调用前读取。版本冲突先读取并核对，不强行写入；明确保留的内容不为消除冲突而改动。
 用户要任务使用资源时，沿用展示采用、Draft 预览、明确启动流程。规则采用须遵循上文的后续回合确认；保存不代表采用。已确认 Draft 不修改，按新调查流程准备新 Draft，不修改既有任务。
-规则和词库通过 configure_investigation_draft 使用统一版本引用：ruleset_ref/lexicon_ref。引用从 get_resource_edit/read_resource 获取，正式保存后可用 save_resource/get_resource_save 返回的 resource_ref，不自行组装哈希、补入主题主词或标签。新建临时词库 source_lexicon_ids=[]，edit_id 不能当正式词库 ID。查询选定资源后读取其真实引用。词库配置错误不通过重新生成已采用规则绕过。
+规则和词库通过 configure_investigation_draft 使用统一版本引用：ruleset_ref/lexicon_ref。优先直接复用生成、读取或编辑成功回执中的 resource_ref；旧临时稿缺引用才用 get_resource_edit，正式资源用 read_resource。正式保存后可用 save_resource/get_resource_save 返回的 resource_ref，不自行组装哈希、补入主题主词或标签。新建临时词库 source_lexicon_ids=[]，edit_id 不能当正式词库 ID。查询选定资源后读取其真实引用。词库配置错误不通过重新生成已采用规则绕过。
 保存当前 Draft 词库遵循上文 save_draft_lexicon 约束。一次回合可处理多个资源，每个保存用独立 operation_id 和真实回执。保存刚才的资源依据回执定位 edit_id/expected_version，有歧义才澄清。
 参数错误最多纠正一次且不改变用户意图；业务冲突需用户选择。写入结果未知查询原回执，保存用原 operation_id 查询 get_resource_save。没有成功回执不能宣称完成。
 生成拦截、截断或失败时，本轮不换说法、content 或模型重试。保留已成功步骤，仅继续未完成且获授权的部分。
@@ -113,6 +113,7 @@ RESOURCE_PROMPT = """
 RESOURCE_DESCRIPTIONS['save_resource'] += ' 用户指定保存名称时传 name，保存与命名原子完成；省略才沿用稿内名称。不会改名原编辑稿或冻结任务。'
 RESOURCE_DESCRIPTIONS['open_resource_edit'] += ' 编辑或另存某轮实际使用的版本，可选 read_session_resource 返回的 open_arguments（kind/session_resource_key）；按冻结正文复制，不读取最新版替代。仅查看请直接读取，不必打开副本。'
 RESOURCE_DESCRIPTIONS['get_resource_edit'] += ' 本工具只返回当前稿；历史版本通过 list_session_resources / read_session_resource 读取，不能由当前稿结果断言历史快照不存在。item_index 按完整内容展示顺序给出一基 position 与 target_id 对应关系；按当前目标版本定位，不从相邻资源沿用条目 ID。'
+RESOURCE_DESCRIPTIONS['get_resource_edit'] += ' 旧临时规则未返回引用时，直接传 edit_id=真实 proposal_id 即可取得 resource_ref，无需先转换、复制或正式保存。'
 RESOURCE_DESCRIPTIONS['update_resource_edit'] += ' 回执 applied_diff 是实际持久化前后差异，解释操作时以它及返回的目标资源为准。'
 
 
