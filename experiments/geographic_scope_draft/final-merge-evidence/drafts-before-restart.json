@@ -1,0 +1,14 @@
+{
+  "investigation_drafts": {
+    "count": 23,
+    "sha256": "6424db31c9b89c13f908ba404323da73b23a25045db516c51bc14071e3f3b61a"
+  },
+  "investigation_draft_revisions": {
+    "count": 29,
+    "sha256": "e3c8eea5958ebeb5b1efab640f58b4921d87fcec7541c700423c4a1090ffc8fd"
+  },
+  "investigation_region_selections": {
+    "count": 6,
+    "sha256": "b5b72977455f07c2cf0502cd8459a510e751b0e5df563efc7f250d363e67ae82"
+  }
+}

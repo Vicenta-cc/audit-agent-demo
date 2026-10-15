@@ -1,0 +1,7 @@
+{
+  "backup_directory": "/Users/ext.wanghongtao6/Documents/Codex/runtime/geographic-p1-event-place-20261015/p0p1-final-before-nt771nh1",
+  "schema_smoke": "passed on isolated online database copy",
+  "existing_tables_unchanged": 27,
+  "resource_success_index": true,
+  "region_history_migration": true
+}

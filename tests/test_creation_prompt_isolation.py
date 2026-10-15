@@ -10,7 +10,7 @@ import pytest
 from backend.hermes_runtime.adapter import HermesRuntimeBinding
 from backend.hermes_runtime.creation_prompt import CREATION_IDENTITY, install_creation_prompt
 from backend.investigation_creation.conversation import CREATION_SYSTEM_PROMPT
-from backend.investigation_creation.tools import HERMES_M3_TOOL_SCHEMAS
+from backend.investigation_creation.tools import HERMES_M3_TOOL_SCHEMAS, creation_tool_schemas
 from backend.resource_management.authoring_guidance import (
     LEXICON_DOMAIN_GUIDANCE, RESOURCE_EDIT_GUIDANCE, RULESET_AUTHORING_GUIDANCE,
 )
@@ -66,7 +66,21 @@ def test_guidance_is_available_through_native_deferred_describe(tmp_path):
             enabled_toolsets=["investigation"], product_mode="creation",
         )
         wire_schemas = {item["function"]["name"]: item["function"] for item in definitions}
-        for schema in HERMES_M3_TOOL_SCHEMAS:
+        active_schemas = creation_tool_schemas()
+        active_names = {schema["name"] for schema in active_schemas}
+        hidden_names = {schema["name"] for schema in HERMES_M3_TOOL_SCHEMAS} - active_names
+        assert hidden_names == {
+            "create_investigation_draft", "update_investigation_draft", "use_ruleset_proposal",
+        }
+        # Native read-only help/report discovery is registered alongside the
+        # product catalog; it must not expose legacy mutation entry points.
+        assert set(wire_schemas) == active_names | {"list_completed_reports", "read_user_manual"}
+        for name in hidden_names:
+            result = json.loads(dispatch_tool_describe(
+                {"name": name}, current_tool_defs=definitions,
+            ))
+            assert "error" in result and "parameters" not in result
+        for schema in active_schemas:
             name = schema["name"]
             result = json.loads(dispatch_tool_describe(
                 {"name": name}, current_tool_defs=definitions,
@@ -79,7 +93,9 @@ def test_guidance_is_available_through_native_deferred_describe(tmp_path):
             assert result["parameters"].get("required", []) == schema["parameters"].get("required", [])
             assert result["description"] == schema["description"]
             described[name] = result["description"]
-    assert len(described) == 19
+    assert len(described) == 18
+    assert "configure_investigation_draft" in described
+    assert "import_resource" in described
     assert 'save_draft_lexicon' in described
     assert "generation_request" in described["create_lexicon_edit"]
     assert "generation_request" in described["create_ruleset_proposal"]
@@ -105,8 +121,10 @@ def test_global_prompt_keeps_authority_but_not_authoring_payloads():
     assert RECALL_GENERATION_PROMPT not in product
     for boundary in (
         "do not repeat their generation",
-        "Only use_ruleset_proposal",
-        "presentation_id",
+        "Use configure_investigation_draft for both create and update",
+        "First show the complete actual rule version, then wait for a LATER user message explicitly adopting it.",
+        "A reference does not grant consent.",
+        "if changed, do not silently adopt the new version.",
         "confirm_and_queue_investigation after an explicit",
         "get_resource_save",
         "保存不等于采用或启动",
@@ -123,13 +141,13 @@ def test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes():
     assert "expected_runtime_content_hash" not in product
     assert "Save existing_lexicon with its ID" not in product
     for instruction in (
-        "reuse the resource_ref recall_plan",
-        "returned by read_resource or save_resource unchanged",
+        "pass its resource_ref as lexicon_ref to configure_investigation_draft",
+        "Copy exact returned references.",
         "read the selected resource first",
         "The backend binds and validates the exact resource version",
         "runtime fingerprint, access permissions, and actual search-term snapshot",
         "rather than silently adopting a newer version",
-        "update_investigation_draft with its latest",
+        "configure_investigation_draft(operation=update) with its latest",
         "Never flatten a structured Drawer edit",
     ):
         assert instruction in CREATION_SYSTEM_PROMPT
@@ -232,6 +250,44 @@ READABILITY_CHANGED_RANGES["RESOURCE_PROMPT"] += [
 ]
 
 
+# 2026-10-15 merge audit: these stale baseline assertions already fail on
+# a4997d3 (4 failures / 6 passes). Preserve the immutable fixture and account
+# for each changed line with an asserted replacement behavior, not a blanket waiver.
+CONFIGURATION_CONTRACT_CHANGED_LINES = {
+    38: ('Unified configuration entry point replaces legacy create name; read-only final replies still need no canonical JSON.', 'configure_investigation_draft. A final assistant answer does not need canonical decision JSON.'),
+    78: ('Creator URL validation retained; tool accepts creator_url directly.', 'URL, never a post URL, post ID, or arbitrary webpage. Pass creator_url to configure_investigation_draft to select creator mode.'),
+    79: ('Backend now assembles creator mode configuration from creator_url.', 'Creator mode\nmust not carry search terms, source 黑话库, or recall plans, and must resolve to crawl_mode=creator.'),
+    110: ('Generation-turn adoption ban uses the current configuration tool.', 'Do not call configure_investigation_draft in that\ngeneration turn.'),
+    112: ('Later adoption binds exact resource references through configuration.', 'LATER explicit adoption; then configure_investigation_draft creates the Draft with the selected resource references.'),
+    131: ('Session-candidate lifecycle wording condensed; no generation-time publishing.', 'Temporary rules are session candidates, not published resources.'),
+    132: ('Generation/editing cannot adopt; presentation precedes later consent.', 'Generation/editing never adopt them.'),
+    133: ('Unified configuration resolves the exact previously displayed version.', 'The backend resolves temporary rules to a completed public presentation of that exact version and'),
+    134: ('Inline content is replaced by exact returned references.', 'Do not send null, rule content, hashes or complete configuration.'),
+    135: ('User-intent interpretation and backend provenance responsibilities retained.', "You interpret the CURRENT user's adoption intent; Application validates provenance, not user language."),
+    136: ('Negative and ambiguous utterance guard condensed.', 'Questions, edits, negation, hesitation, saving and ambiguous choices are not adoption.'),
+    137: ('Choice example replaced by the general ambiguous-choice guard.', 'Questions, edits, negation, hesitation, saving and ambiguous choices are not adoption. Clarify only real ambiguity.'),
+    138: ('Question/save example replaced by the general non-adoption guard.', 'Questions, edits, negation, hesitation, saving and ambiguous choices are not adoption.'),
+    139: ('Multiple-candidate example replaced by the same ambiguity requirement.', 'Clarify only real ambiguity.'),
+    140: ('Model passes resource_ref; backend resolves presentation metadata.', 'Read the selected rules through read_resource or get_resource_edit to obtain ruleset_ref = resource_ref;'),
+    141: ('Presentation lookup moved behind resource_ref resolution.', 'The backend resolves temporary rules to a completed public presentation of that exact version and'),
+    142: ('Completed exact-version public presentation and later adoption still required.', 'First show the complete actual rule version, then wait for a LATER user message explicitly adopting it.'),
+    143: ('Untrusted identity substitution prohibited by reference contract.', 'Do not use a proposal ID,\npresentation ID, edit ID or library ID as a resource_ref. Copy exact returned references.'),
+    144: ('Exact copying retained for backend-returned resource references.', 'Copy exact returned references.'),
+    145: ('No internal identities in public answer retained.', 'Do not expose internal references in the answer.'),
+    146: ('Reference and presentation do not constitute user consent.', 'A reference does not grant consent.'),
+    147: ('Missing presentation requires display then later adoption.', 'If not presented, show the\nactual current rules and wait for later adoption;'),
+    148: ('Exact-version checks replace model-side presentation ID repair.', 'if changed, do not silently adopt the new version.'),
+    149: ('Create/update arguments moved to unified configuration schema.', 'Update uses operation=update with draft_id/expected_revision and ONLY changed fields; omitted fields\nremain unchanged.'),
+    150: ('Partial updates preserve established configuration.', 'ONLY changed fields; omitted fields\nremain unchanged.'),
+    151: ('No placeholders or unrelated substitutes retained.', 'Never create placeholder drafts or substitute an\nunrelated resource.'),
+    152: ('Existing complete identities may be reused instead of unnecessary discovery.', 'Complete resource identities already\npresent in the conversation context may be reused; Application will reread and authoritatively\nvalidate them during creation.'),
+    153: ('Ambiguity and changed-version adoption guards retained.', 'if changed, do not silently adopt the new version.'),
+    154: ('Later adoption remains mandatory after displaying current rules.', 'If not presented, show the\nactual current rules and wait for later adoption;'),
+    155: ('Revision conflict still requires reread and assessment before retry.', 'On revision conflict read and assess changes before deciding whether to retry.'),
+    161: ('Viewing is read-only instead of no-op update/re-presentation.', 'For viewing or re-presentation, read the requested resource version. Do not open or modify an edit merely to answer a read request.'),
+}
+
+
 def _current_fallback_wording(text):
     for old, new in SEARCH_FALLBACK_WORDING.items():
         text = text.replace(old, new)
@@ -255,9 +311,18 @@ def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
         for source, ranges in READABILITY_CHANGED_RANGES.items()
         for indexes, reason in ranges for index in indexes
     ]
+    configuration_changes = []
+    for index, (reason, replacement) in CONFIGURATION_CONTRACT_CHANGED_LINES.items():
+        assert normalize(replacement) in current, (index, reason, replacement)
+        configuration_changes.append({
+            "source": "CREATION_SYSTEM_PROMPT", "line": index,
+            "text": baseline["prompts"]["CREATION_SYSTEM_PROMPT"].splitlines()[index],
+            "reason": reason,
+        })
     changes = {(item["source"], item["line"]): item
                for item in baseline["changed_lines"] + SEARCH_TERMS_CAP_CHANGED_LINES
-               + TASK_SETTINGS_ONLY_CHANGED_LINES + PRECISE_EDIT_CHANGED_LINES + readability_changes}
+               + TASK_SETTINGS_ONLY_CHANGED_LINES + PRECISE_EDIT_CHANGED_LINES
+               + readability_changes + configuration_changes}
     for name, original in baseline["prompts"].items():
         for index, line in enumerate(original.splitlines()):
             if not line.strip():
