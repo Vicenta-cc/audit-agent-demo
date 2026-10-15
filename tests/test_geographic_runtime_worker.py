@@ -1,8 +1,58 @@
 """Offline real application workflow; only external crawler/model responses fixed."""
 from pathlib import Path
+import pytest
 from test_geographic_runtime_pipeline import confirmed, Crawler, Model
 from test_investigation_creation_conversation import creation_stack
 from test_ruleset_proposal_presentation import content
+from test_geographic_execution_plan import make_authority
+from test_geographic_runtime_freeze import _adapter, _command
+from test_unified_draft_configuration import P
+
+
+@pytest.fixture
+def confirmed_with_admission(creation_stack, content, monkeypatch, tmp_path):
+    import sqlite3
+    from backend.application_auth.store import AuthStore
+    from backend.audit_agent.config import settings
+    from backend.investigation_creation.geographic_runtime import IsolatedGeographicCapability
+    from backend.task_admission.store import AdmissionStore
+
+    creation = creation_stack['creation_store']
+    resource_db = creation_stack['resource_db']
+    monkeypatch.setattr(settings, 'triage_mode', 'select')
+    monkeypatch.setattr(settings, 'app_auth_mode', 'required')
+    monkeypatch.setattr(settings, 'app_auth_db', creation.db_path)
+
+    auth = AuthStore(creation.db_path, activation_mode='created_at')
+    user = auth.create_user(
+        username='geographic-admission-fixture',
+        password='Geographic-Admission-Fixture-1',
+        role='admin',
+        activation_mode='created_at',
+    )
+    with sqlite3.connect(creation.db_path) as db:
+        db.execute("UPDATE app_users SET id=? WHERE id=?", (P.id, user['id']))
+
+    account = next(
+        row for row in creation_stack['app_service'].resource_service.crawler_account_store.list()
+        if row['platform'] == 'dy'
+    )
+    auth.register_crawler_account(account['id'], P.id)
+    creation.admission = AdmissionStore(
+        creation.db_path,
+        auth_db=creation.db_path,
+        account_db=resource_db,
+        enabled=True,
+    )
+
+    authority = make_authority(creation_stack, content)
+    app = creation_stack['app_service']
+    IsolatedGeographicCapability(tmp_path).install(app)
+    run = app.confirm_and_queue(_command(authority['identity']), principal=P)
+    adapter = _adapter(creation_stack)
+    adapter.creation_store = creation
+    adapter.ensure_job(run)
+    return adapter, adapter.verify_run_job(run)
 
 
 class AuditModel(Model):
@@ -31,7 +81,12 @@ class AuthoredCrawler(Crawler):
         return output
 
 
-def test_real_worker_pipeline_audit_and_native_report(confirmed,creation_stack,tmp_path,monkeypatch):
+@pytest.mark.parametrize(('confirmed_fixture','auth_mode'), [
+    ('confirmed', 'disabled'),
+    ('confirmed_with_admission', 'required'),
+])
+def test_real_worker_pipeline_audit_and_native_report(
+        confirmed_fixture,auth_mode,request,creation_stack,tmp_path,monkeypatch):
     import backend.audit_agent.pipeline as pipeline_module
     from backend.audit_agent.auth_state_cipher import AuthStateCipher
     from backend.investigation_creation.worker import InvestigationWorker
@@ -41,11 +96,11 @@ def test_real_worker_pipeline_audit_and_native_report(confirmed,creation_stack,t
     from backend.investigation.report_query import ReportQueryFacade
     from backend.domain.query_service import DomainQueryService
     from backend.domain.repository import DomainRepository
-    adapter,config=confirmed
+    adapter,config=request.getfixturevalue(confirmed_fixture)
     settings=pipeline_module.settings
     for name,value in {'data_dir':tmp_path/'data','outputs_dir':tmp_path/'outputs',
             'task_resource_lock_dir':tmp_path/'locks','crawler_browser_profile_root':tmp_path/'profiles',
-            'stream_crawl_analysis':True,'ocr_enabled':False,'app_auth_mode':'disabled'}.items():
+            'stream_crawl_analysis':True,'ocr_enabled':False,'app_auth_mode':auth_mode}.items():
         monkeypatch.setattr(settings,name,value)
     model=AuditModel();events=[]
     crawler=AuthoredCrawler(events,change=True)

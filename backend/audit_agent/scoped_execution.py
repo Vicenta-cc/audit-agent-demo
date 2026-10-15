@@ -34,77 +34,83 @@ class ScopedExecution:
     def _query(self, query_id):
         return next(q for q in self.plan['queries'] if q['query_id'] == query_id)
 
+    def _capture_query(self, query):
+        qid = query['query_id']
+        saved = self.snapshot()['queries'][qid]
+        if saved['status'] == 'evaluated':
+            return None
+        if self.stop():
+            if saved['status'] in {'pending', 'captured'}:
+                self.store.record_query(self.execution_id, qid, 'paused', [], 'pause:' + uuid4().hex,
+                                        error={'stage': 'capture_or_evaluation', 'type': 'Stopped'})
+            return 'paused'
+        if saved['status'] in {'capturing', 'failed'}:
+            return 'capture_requires_reconciliation' if saved['status'] == 'capturing' else 'query_failed'
+        if saved['status'] == 'paused' and saved['capture'] is not None:
+            self.store.record_query(self.execution_id, qid, 'captured', [], 'resume:' + uuid4().hex)
+            saved = self.snapshot()['queries'][qid]
+        if saved['status'] in {'pending', 'paused'}:
+            # A claim uses a fresh operation ID; replayed idempotent transitions are never external-call claims.
+            self.store.record_query(self.execution_id, qid, 'capturing', [], 'capture-start:' + uuid4().hex)
+            try:
+                captured = self.capture(deepcopy(self.plan), deepcopy(query))
+                if (not isinstance(captured, dict) or not isinstance(captured.get('occurrences'), list)
+                        or not isinstance(captured.get('account_id'), str) or not captured['account_id']):
+                    raise ValueError('complete capture with account identity required')
+                self.store.record_query(self.execution_id, qid, 'captured', [], 'capture-end:' + qid,
+                                        capture=captured, capture_account=captured['account_id'])
+            except Exception as exc:
+                # A failed/incomplete capture is never a successful zero-candidate result.
+                self.store.record_query(self.execution_id, qid, 'failed', [], 'capture-failed:' + qid,
+                                        error={'type': type(exc).__name__, 'stage': 'capture'})
+                raise
+            self.checkpoint('after_capture', {'query_id': qid})
+            saved = self.snapshot()['queries'][qid]
+        occurrences = []
+        for raw in saved['capture']['occurrences']:
+            if self.stop():
+                return 'paused'
+            occurrence = deepcopy(raw)
+            oid = occurrence['occurrence_id']
+            for part, evaluate in (('risk', self.risk), ('geo', self.geo)):
+                cache = self.snapshot()['queries'][qid]['evaluations'].get(oid, {})
+                if part in cache:
+                    occurrence[part] = deepcopy(cache[part])
+                else:
+                    try:
+                        value = evaluate(deepcopy(self.plan), deepcopy(query), deepcopy(occurrence))
+                        if part == 'geo':
+                            self.validate_geo(self.plan, occurrence['candidate'], value)
+                        self.store.record_evaluation(self.execution_id, qid, oid, part, value,
+                                                     part + ':' + oid)
+                    except Exception as exc:
+                        self.store.record_query(self.execution_id, qid, 'failed', [], 'evaluation-failed:' + qid,
+                                                error={'type': type(exc).__name__, 'stage': part})
+                        raise
+                    occurrence[part] = deepcopy(value)
+                    self.checkpoint('after_' + part, {'occurrence_id': oid})
+            try:
+                eligible_tier(self.plan, occurrence)  # legitimate exclusions are still completed judgments
+            except Exception as exc:
+                self.store.record_query(self.execution_id, qid, 'failed', [], 'contract-failed:' + qid,
+                                        error={'type': type(exc).__name__, 'stage': 'evaluation_contract'})
+                raise
+            occurrences.append(occurrence)
+        # Use exactly the original engine's order, preserving original rank and every score field.
+        ordered_scores = rank_candidates([CandidateScore(**o['risk']['score']) for o in occurrences])
+        # CandidateScore objects carry no occurrence ID; content/rank identify a per-query occurrence.
+        indexed = {(o['content_key'], o['rank']): o for o in occurrences}
+        if len(indexed) != len(occurrences):
+            raise ValueError('duplicate per-query content/rank occurrence')
+        ranked = [indexed[(s.content_key, s.rank)] for s in ordered_scores]
+        self.store.record_query(self.execution_id, qid, 'evaluated', ranked, 'evaluated:' + qid)
+        return None
+
     def _capture_all(self):
         for query in self.plan['queries']:
-            qid = query['query_id']
-            saved = self.snapshot()['queries'][qid]
-            if saved['status'] == 'evaluated':
-                continue
-            if self.stop():
-                if saved['status'] in {'pending', 'captured'}:
-                    self.store.record_query(self.execution_id, qid, 'paused', [], 'pause:' + uuid4().hex,
-                                            error={'stage': 'capture_or_evaluation', 'type': 'Stopped'})
-                return 'paused'
-            if saved['status'] in {'capturing', 'failed'}:
-                return 'capture_requires_reconciliation' if saved['status'] == 'capturing' else 'query_failed'
-            if saved['status'] == 'paused' and saved['capture'] is not None:
-                self.store.record_query(self.execution_id, qid, 'captured', [], 'resume:' + uuid4().hex)
-                saved = self.snapshot()['queries'][qid]
-            if saved['status'] in {'pending', 'paused'}:
-                # A claim uses a fresh operation ID; replayed idempotent transitions are never external-call claims.
-                self.store.record_query(self.execution_id, qid, 'capturing', [], 'capture-start:' + uuid4().hex)
-                try:
-                    captured = self.capture(deepcopy(self.plan), deepcopy(query))
-                    if (not isinstance(captured, dict) or not isinstance(captured.get('occurrences'), list)
-                            or not isinstance(captured.get('account_id'), str) or not captured['account_id']):
-                        raise ValueError('complete capture with account identity required')
-                    self.store.record_query(self.execution_id, qid, 'captured', [], 'capture-end:' + qid,
-                                            capture=captured, capture_account=captured['account_id'])
-                except Exception as exc:
-                    # A failed/incomplete capture is never a successful zero-candidate result.
-                    self.store.record_query(self.execution_id, qid, 'failed', [], 'capture-failed:' + qid,
-                                            error={'type': type(exc).__name__, 'stage': 'capture'})
-                    raise
-                self.checkpoint('after_capture', {'query_id': qid})
-                saved = self.snapshot()['queries'][qid]
-            occurrences = []
-            for raw in saved['capture']['occurrences']:
-                if self.stop():
-                    return 'paused'
-                occurrence = deepcopy(raw)
-                oid = occurrence['occurrence_id']
-                for part, evaluate in (('risk', self.risk), ('geo', self.geo)):
-                    cache = self.snapshot()['queries'][qid]['evaluations'].get(oid, {})
-                    if part in cache:
-                        occurrence[part] = deepcopy(cache[part])
-                    else:
-                        try:
-                            value = evaluate(deepcopy(self.plan), deepcopy(query), deepcopy(occurrence))
-                            if part == 'geo':
-                                self.validate_geo(self.plan, occurrence['candidate'], value)
-                            self.store.record_evaluation(self.execution_id, qid, oid, part, value,
-                                                         part + ':' + oid)
-                        except Exception as exc:
-                            self.store.record_query(self.execution_id, qid, 'failed', [], 'evaluation-failed:' + qid,
-                                                    error={'type': type(exc).__name__, 'stage': part})
-                            raise
-                        occurrence[part] = deepcopy(value)
-                        self.checkpoint('after_' + part, {'occurrence_id': oid})
-                try:
-                    eligible_tier(self.plan, occurrence)  # legitimate exclusions are still completed judgments
-                except Exception as exc:
-                    self.store.record_query(self.execution_id, qid, 'failed', [], 'contract-failed:' + qid,
-                                            error={'type': type(exc).__name__, 'stage': 'evaluation_contract'})
-                    raise
-                occurrences.append(occurrence)
-            # Use exactly the original engine's order, preserving original rank and every score field.
-            ordered_scores = rank_candidates([CandidateScore(**o['risk']['score']) for o in occurrences])
-            # CandidateScore objects carry no occurrence ID; content/rank identify a per-query occurrence.
-            indexed = {(o['content_key'], o['rank']): o for o in occurrences}
-            if len(indexed) != len(occurrences):
-                raise ValueError('duplicate per-query content/rank occurrence')
-            ranked = [indexed[(s.content_key, s.rank)] for s in ordered_scores]
-            self.store.record_query(self.execution_id, qid, 'evaluated', ranked, 'evaluated:' + qid)
+            status = self._capture_query(query)
+            if status:
+                return status
         return None
 
     def collection_receipt(self, attempt, content):
@@ -180,25 +186,17 @@ class ScopedExecution:
             if attempt['status'] in {'collected', 'settled'}:
                 self._finish_collection(attempt)
 
-    def run(self):
-        saved = self.snapshot()
-        if saved.get('fatal_error'):
-            return self.report([saved['fatal_error']['kind']])
-        if any(q.get('auth_pending') for q in saved['queries'].values()):
-            return self.report(['awaiting_account_resolution'])
-        status = self._capture_all()
-        if status:
-            return self.report([status])
+    def _collect_ready(self):
         self._pending_receipts()
         while not self.stop():
             saved = self.snapshot()
             if any(a['status'] in {'collecting', 'unknown', 'infrastructure'} for a in saved['attempts'].values()):
-                return self.report(['awaiting_reconciliation'])
+                return ['awaiting_reconciliation']
             active = next((b for b in saved['batches'].values() if b['status'] == 'active'), None)
             if active is None:
                 result = self.store.reserve_next(self.execution_id, 'reserve:' + str(saved['revision']))
                 if result['status'] != 'ready':
-                    return self.report(result.get('reasons', []))
+                    return result.get('reasons', [])
                 self.checkpoint('after_reserve', result)
                 active = self.snapshot()['batches'][result['batch_id']]
             for occurrence in active['picks']:
@@ -247,7 +245,29 @@ class ScopedExecution:
                                            'collection:' + attempt['attempt_id'], receipt)
                 self.checkpoint('after_receipt', {'attempt_id': attempt['attempt_id']})
                 self._pending_receipts()
-        return self.report(['paused'])
+        return ['paused']
+
+    def run(self):
+        saved = self.snapshot()
+        if saved.get('fatal_error'):
+            return self.report([saved['fatal_error']['kind']])
+        if any(q.get('auth_pending') for q in saved['queries'].values()):
+            return self.report(['awaiting_account_resolution'])
+
+        # Resume durable receipts/batches before starting any later keyword. Each
+        # evaluated keyword then completes selection/detail/delivery before the
+        # next keyword capture, matching the legacy per-keyword streaming order.
+        reasons = self._collect_ready()
+        if 'awaiting_reconciliation' in reasons or 'paused' in reasons:
+            return self.report(reasons)
+        for query in self.plan['queries']:
+            status = self._capture_query(query)
+            if status:
+                return self.report([status])
+            reasons = self._collect_ready()
+            if 'awaiting_reconciliation' in reasons or 'paused' in reasons:
+                return self.report(reasons)
+        return self.report(reasons)
 
     def report(self, reasons=()):
         saved = self.snapshot()

@@ -66,6 +66,7 @@ def test_confirm_job_roundtrip_and_live_drift(creation_stack, content, monkeypat
     from backend.investigation_creation.geographic_runtime import IsolatedGeographicCapability
     from backend.investigation_creation.errors import ConfigurationValidationError
     from backend.investigation_creation.contracts import parse_confirmed_configuration_snapshot
+    from backend.investigation_creation.frozen_preview import confirmed_run_preview
     monkeypatch.setattr(settings, 'triage_mode', 'select')
     authority = make_authority(creation_stack, content, formal_rules=formal_rules, formal_lexicon=formal_lexicon)
     app = creation_stack['app_service']
@@ -77,6 +78,9 @@ def test_confirm_job_roundtrip_and_live_drift(creation_stack, content, monkeypat
     assert run.confirmed_configuration['schema_version'] == 'investigation-run-config-v5'
     frozen = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
     assert frozen.execution.geographic_plan['identity'] == authority['identity']
+    preview = confirmed_run_preview(run)
+    assert preview.draft_id == run.draft_id
+    assert preview.resolved_search_terms == frozen.resolved_search_terms
     adapter = _adapter(creation_stack)
     job_id = adapter.ensure_job(run)
     assert job_id == adapter.job_id_for_run(run.id)

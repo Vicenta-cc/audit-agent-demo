@@ -51,6 +51,55 @@ def test_incomplete_marker_is_typed_even_on_clean_exit(tmp_path,monkeypatch,exit
     assert not isinstance(error.value,(CrawlerAuthenticationError,CrawlerVerificationError))
 
 
+def test_media_download_stack_timeout_is_typed_without_crawler_marker(tmp_path, monkeypatch):
+    class Process:
+        returncode = 1
+
+        def __init__(self, *args, stderr, **kwargs):
+            stderr.write('''Traceback (most recent call last):
+  File "core.py", line 1044, in get_aweme_video
+    content = await self._download_media_with_retry(url, budget)
+  File "core.py", line 1008, in _download_media_with_retry
+    return await self.dy_client.get_aweme_media(url, raise_on_error=True)
+  File "client.py", line 624, in get_aweme_media
+    response = await self._send("GET", url, operation='media')
+  File "tools/persistent_request_gate.py", line 230, in slot
+    async with asyncio.timeout(timeout):
+TimeoutError
+''')
+            stderr.flush()
+
+        def poll(self):
+            return self.returncode
+
+    monkeypatch.setattr('backend.audit_agent.crawler_adapter.subprocess.Popen', Process)
+    with pytest.raises(CrawlerMediaDownloadError, match='媒体下载超时'):
+        MediaCrawlerAdapter(tmp_path)._run_command(
+            command=['python', 'main.py'], save_root=tmp_path / 'output', platform='dy',
+            account_id='test', max_notes=1, progress_callback=None, content_callback=None,
+        )
+
+
+def test_unscoped_timeout_remains_infrastructure_failure(tmp_path, monkeypatch):
+    class Process:
+        returncode = 1
+
+        def __init__(self, *args, stderr, **kwargs):
+            stderr.write('Traceback: search_api\nTimeoutError\n')
+            stderr.flush()
+
+        def poll(self):
+            return self.returncode
+
+    monkeypatch.setattr('backend.audit_agent.crawler_adapter.subprocess.Popen', Process)
+    with pytest.raises(RuntimeError, match='MediaCrawler failed') as error:
+        MediaCrawlerAdapter(tmp_path)._run_command(
+            command=['python', 'main.py'], save_root=tmp_path / 'output', platform='dy',
+            account_id='test', max_notes=1, progress_callback=None, content_callback=None,
+        )
+    assert not isinstance(error.value, CrawlerCollectionIncompleteError)
+
+
 @pytest.mark.parametrize('caught',[False,True])
 def test_actual_crawler_preserves_good_post_and_rejects_incomplete_post(tmp_path,monkeypatch,caught):
     root=Path(os.environ.get('MEDIACRAWLER_RELIABILITY_ROOT',str(settings.media_crawler_dir))).resolve()

@@ -4,6 +4,7 @@ No JobStore, product settings, network, or expiry-based reconciliation is used.
 """
 from __future__ import annotations
 
+from contextlib import closing, nullcontext
 from copy import deepcopy
 from pathlib import Path
 import json
@@ -25,8 +26,13 @@ class Store:
         if plan.get("validation_origin") != "fixture":
             raise ValueError("experiment store requires fixture plan")
 
+    def _state_guard(self):
+        lock = getattr(self, '_state_lock', None)
+        return lock if lock is not None else nullcontext()
+
     def __init__(self, path):
         self.path = Path(path).resolve()
+        self._state_lock = None
         temporary = self.path.is_relative_to(Path(tempfile.gettempdir()).resolve())
         # macOS temporary directories reside under /private/var/folders.
         temporary = temporary or self.path.is_relative_to(Path('/private/var/folders'))
@@ -35,12 +41,13 @@ class Store:
         if self.path.name.lower() in {'jobs.db', 'audit.db', 'audit_agent.db', 'state.db'}:
             raise ValueError('production database basename rejected')
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connection() as db:
-            tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-            if any(not name[0].startswith('scoped_selection_') for name in tables):
-                raise ValueError('database contains non-experiment tables')
-            db.execute('CREATE TABLE IF NOT EXISTS scoped_selection_executions '
-                       '(execution_id TEXT PRIMARY KEY, snapshot TEXT NOT NULL)')
+        with self._state_guard():
+            with closing(self._connection()) as db:
+                tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+                if any(not name[0].startswith('scoped_selection_') for name in tables):
+                    raise ValueError('database contains non-experiment tables')
+                db.execute('CREATE TABLE IF NOT EXISTS scoped_selection_executions '
+                           '(execution_id TEXT PRIMARY KEY, snapshot TEXT NOT NULL)')
 
     def _connection(self):
         return sqlite3.connect(self.path, timeout=30, isolation_level=None)
@@ -52,38 +59,39 @@ class Store:
     def _transaction(self, execution_id, operation_id, payload, action):
         if not isinstance(operation_id, str) or not operation_id:
             raise ValueError('nonempty operation ID required')
-        with self._connection() as db:
-            db.execute('BEGIN IMMEDIATE')
-            try:
-                self._fence(db)
-                row = db.execute(f'SELECT snapshot FROM {self._table} WHERE execution_id=?',
-                                 (execution_id,)).fetchone()
-                if not row:
-                    raise ValueError('unknown execution')
-                snap = json.loads(row[0])
-                self._validate_snapshot(snap, execution_id)
-                previous = snap['operations'].get(operation_id)
-                fingerprint = digest(payload)
-                if previous:
-                    if previous['digest'] != fingerprint:
-                        raise ValueError('operation ID payload conflict')
+        with self._state_guard():
+            with closing(self._connection()) as db:
+                db.execute('BEGIN IMMEDIATE')
+                try:
+                    self._fence(db)
+                    row = db.execute(f'SELECT snapshot FROM {self._table} WHERE execution_id=?',
+                                     (execution_id,)).fetchone()
+                    if not row:
+                        raise ValueError('unknown execution')
+                    snap = json.loads(row[0])
+                    self._validate_snapshot(snap, execution_id)
+                    previous = snap['operations'].get(operation_id)
+                    fingerprint = digest(payload)
+                    if previous:
+                        if previous['digest'] != fingerprint:
+                            raise ValueError('operation ID payload conflict')
+                        db.rollback()
+                        return deepcopy(previous['result'])
+                    result = action(snap)
+                    self._refresh(snap)
+                    snap['revision'] += 1
+                    snap['events'].append({'revision': snap['revision'], 'operation_id': operation_id,
+                                           'payload': deepcopy(payload)})
+                    snap['operations'][operation_id] = {'digest': fingerprint, 'result': deepcopy(result)}
+                    snap['snapshot_digest'] = digest({k: v for k, v in snap.items() if k != 'snapshot_digest'})
+                    db.execute(f'UPDATE {self._table} SET snapshot=? WHERE execution_id=?',
+                               (json.dumps(snap, ensure_ascii=False), execution_id))
+                    self._fence(db)
+                    self._commit(db)
+                    return deepcopy(result)
+                except BaseException:
                     db.rollback()
-                    return deepcopy(previous['result'])
-                result = action(snap)
-                self._refresh(snap)
-                snap['revision'] += 1
-                snap['events'].append({'revision': snap['revision'], 'operation_id': operation_id,
-                                       'payload': deepcopy(payload)})
-                snap['operations'][operation_id] = {'digest': fingerprint, 'result': deepcopy(result)}
-                snap['snapshot_digest'] = digest({k: v for k, v in snap.items() if k != 'snapshot_digest'})
-                db.execute(f'UPDATE {self._table} SET snapshot=? WHERE execution_id=?',
-                           (json.dumps(snap, ensure_ascii=False), execution_id))
-                self._fence(db)
-                self._commit(db)
-                return deepcopy(result)
-            except BaseException:
-                db.rollback()
-                raise
+                    raise
 
     def _validate_snapshot(self, snap, execution_id):
         if (snap['plan']['execution_id'] != execution_id or
@@ -155,45 +163,47 @@ class Store:
                     'payload': {'kind': 'create', 'plan_digest': plan['plan_digest']}}], excluded_occurrences=[])
         self._refresh(snap)
         snap['snapshot_digest'] = digest(snap)
-        with self._connection() as db:
-            db.execute('BEGIN IMMEDIATE')
-            try:
-                self._fence(db)
-                old = db.execute(f'SELECT snapshot FROM {self._table} WHERE execution_id=?',
-                                 (plan['execution_id'],)).fetchone()
-                if old:
-                    self._validate_snapshot(json.loads(old[0]), plan['execution_id'])
-                    if json.loads(old[0])['plan'] != plan:
-                        raise ValueError('immutable execution plan conflict')
-                else:
-                    db.execute(f'INSERT INTO {self._table} VALUES (?, ?)',
-                               (plan['execution_id'], json.dumps(snap, ensure_ascii=False)))
-                self._fence(db)
-                self._commit(db)
-            except BaseException:
-                db.rollback()
-                raise
+        with self._state_guard():
+            with closing(self._connection()) as db:
+                db.execute('BEGIN IMMEDIATE')
+                try:
+                    self._fence(db)
+                    old = db.execute(f'SELECT snapshot FROM {self._table} WHERE execution_id=?',
+                                     (plan['execution_id'],)).fetchone()
+                    if old:
+                        self._validate_snapshot(json.loads(old[0]), plan['execution_id'])
+                        if json.loads(old[0])['plan'] != plan:
+                            raise ValueError('immutable execution plan conflict')
+                    else:
+                        db.execute(f'INSERT INTO {self._table} VALUES (?, ?)',
+                                   (plan['execution_id'], json.dumps(snap, ensure_ascii=False)))
+                    self._fence(db)
+                    self._commit(db)
+                except BaseException:
+                    db.rollback()
+                    raise
         return self.load(plan['execution_id'], plan['plan_digest'])
 
     def load(self, execution_id, expected_plan_digest):
-        with self._connection() as db:
-            db.execute('BEGIN IMMEDIATE')
-            try:
-                self._fence(db)
-                row = db.execute(f'SELECT snapshot FROM {self._table} WHERE execution_id=?',
-                                 (execution_id,)).fetchone()
-                if not row:
-                    raise ValueError('unknown execution')
-                snap = json.loads(row[0])
-                self._validate_snapshot(snap, execution_id)
-                if snap['plan']['plan_digest'] != expected_plan_digest:
-                    raise ValueError('plan digest mismatch')
-                self._fence(db)
-                db.commit()
-                return snap
-            except BaseException:
-                db.rollback()
-                raise
+        with self._state_guard():
+            with closing(self._connection()) as db:
+                db.execute('BEGIN')
+                try:
+                    self._fence(db)
+                    row = db.execute(f'SELECT snapshot FROM {self._table} WHERE execution_id=?',
+                                     (execution_id,)).fetchone()
+                    if not row:
+                        raise ValueError('unknown execution')
+                    snap = json.loads(row[0])
+                    self._validate_snapshot(snap, execution_id)
+                    if snap['plan']['plan_digest'] != expected_plan_digest:
+                        raise ValueError('plan digest mismatch')
+                    self._fence(db)
+                    db.commit()
+                    return snap
+                except BaseException:
+                    db.rollback()
+                    raise
 
     def record_query(self, execution_id, query_id, status, occurrences, operation_id, capture_account=None, capture=None, error=None):
         payload = dict(kind='query', query_id=query_id, status=status, occurrences=occurrences,
@@ -270,8 +280,8 @@ class Store:
             qid = result['query_id']
             if qid not in s['queries'] or s['queries'][qid]['closure']:
                 raise ValueError('closed or unknown query')
-            if any(q['status'] != 'evaluated' for q in s['queries'].values()):
-                raise ValueError('all-query barrier incomplete')
+            if s['queries'][qid]['status'] != 'evaluated':
+                raise ValueError('selected query is not evaluated')
             cap = next(q['max_notes'] for q in s['plan']['queries'] if q['query_id'] == qid)
             if len(picks) + s['state']['total_success'] + s['state']['total_reserved'] > s['plan']['task_limit']:
                 raise ValueError('task quota exceeded')

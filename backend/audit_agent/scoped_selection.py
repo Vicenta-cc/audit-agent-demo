@@ -266,10 +266,17 @@ def select_next_batch(plan, query_states, state):
                  'invalid_query_status')
         if any(s in ('failed', 'paused') for s in statuses):
             return _result('blocked', ['query_failed_or_paused'])
-        if any(s != 'evaluated' for s in statuses):
-            return _result('waiting', ['all_query_evaluation_barrier'])
+        evaluated_queries = []
+        incomplete_seen = False
+        for query, status in zip(plan['queries'], statuses):
+            if status == 'evaluated':
+                if incomplete_seen:
+                    return _result('blocked', ['non_prefix_query_completion'])
+                evaluated_queries.append(query)
+            else:
+                incomplete_seen = True
         seen = set()
-        for query in plan['queries']:
+        for query in evaluated_queries:
             occurrences = query_states[query['query_id']].get('occurrences')
             _require(isinstance(occurrences, list), 'missing_occurrence_set')
             for occurrence in occurrences:
@@ -299,7 +306,7 @@ def select_next_batch(plan, query_states, state):
             tiers += ['province_unknown', 'ip_only']
         occupied, excluded = set(state['occupied']), set(state['excluded_occurrences'])
         for tier in tiers:
-            for query in plan['queries']:
+            for query in evaluated_queries:
                 qid = query['query_id']
                 if qid in state['closed_queries']:
                     continue
@@ -321,6 +328,8 @@ def select_next_batch(plan, query_states, state):
                     batch_entities.add(entity)
                 if picks:
                     return _result('ready', ['original_query_and_ranked_order'], picks=picks, query_id=qid, tier=tier)
+        if len(evaluated_queries) != len(plan['queries']):
+            return _result('waiting', ['next_query_not_evaluated'])
         return _result('exhausted', ['no_eligible_occurrence_within_policy_and_budgets'])
     except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as exc:
         return _result('blocked', [str(exc)])

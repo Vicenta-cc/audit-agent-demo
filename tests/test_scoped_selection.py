@@ -73,12 +73,40 @@ def test_tier_outer_then_query_then_supplied_ranking_without_mutation():
     assert select_next_batch(p, states(p, b, x), state())['picks'] == [b, x]
 
 
-@pytest.mark.parametrize('status,expected', [('pending','waiting'), ('capturing','waiting'), ('captured','waiting'), ('failed','blocked'), ('paused','blocked')])
-def test_all_query_barrier(status, expected):
-    p = make_plan(); qs = states(p, occurrence(p, 'A', 'province', 'province_unknown'))
+@pytest.mark.parametrize('status', ['pending', 'capturing', 'captured'])
+def test_partial_query_completion_finishes_all_tiers_inside_current_query(status):
+    p = make_plan()
+    local = occurrence(p, 'A', 'local', 'local')
+    province = occurrence(p, 'A', 'province', 'province_unknown')
+    qs = states(p, local, province)
+    qs['B']['status'] = status
+    qs['B']['occurrences'] = []
+    qs['C']['status'] = status
+    qs['C']['occurrences'] = []
+
+    assert select_next_batch(p, qs, state())['picks'] == [local]
+
+    after_local = state()
+    after_local.update(occupied=['dy:local'], query_success={'A': 1}, total_success=1)
+    assert select_next_batch(p, qs, after_local)['picks'] == [province]
+
+    after_current_query = state()
+    after_current_query.update(
+        occupied=['dy:local', 'dy:province'],
+        query_success={'A': 2},
+        total_success=2,
+    )
+    waiting = select_next_batch(p, qs, after_current_query)
+    assert waiting['status'] == 'waiting'
+    assert waiting['reasons'] == ['next_query_not_evaluated']
+
+
+@pytest.mark.parametrize('status', ['failed', 'paused'])
+def test_failed_or_paused_query_still_blocks_selection(status):
+    p = make_plan(); qs = states(p, occurrence(p, 'A', 'local'))
     qs['C']['status'] = status
     result = select_next_batch(p, qs, state())
-    assert result['status'] == expected and not result['picks']
+    assert result['status'] == 'blocked' and not result['picks']
 
 
 @pytest.mark.parametrize('policy,target,tier,selected', [

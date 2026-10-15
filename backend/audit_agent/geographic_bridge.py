@@ -15,6 +15,15 @@ from backend.audit_agent.scoped_selection import digest, validate_plan, validate
 VERSION = 'geographic-runtime-bridge-v1'
 
 
+def _p3_response_payload(raw):
+    """Separate provider diagnostics from the strict pinned P3 response."""
+    if not isinstance(raw, dict):
+        return deepcopy(raw), None
+    payload = deepcopy(raw)
+    metadata = payload.pop('_llm_meta', None)
+    return payload, deepcopy(metadata) if isinstance(metadata, dict) else None
+
+
 def risk_config(snapshot):
     risk = validate_risk_inputs(snapshot)
     model = risk['model']
@@ -153,10 +162,13 @@ class GeographicBridge:
         invocation = profile['model']['invocation_config']
         raw = self.geo_client.audit_text(request['prompt'], model=profile['model']['identifier'],
             **{key: invocation[key] for key in ('max_tokens', 'enable_thinking', 'request_timeout')})
+        raw, model_meta = _p3_response_payload(raw)
         result = p3.consume(request, raw)
         record = {'evidence_digest': request['raw_evidence_digest'], 'scope_digest': request['scope_digest'],
             'policy_digest': request['policy_digest'], 'request_digest': digest(request),
             'p3_version': p3.COMMIT, 'result': result, 'request': request}
+        if model_meta is not None:
+            record['model_meta'] = model_meta
         self.validate_geo(self._plan, request['candidate'], record)
         return record
 

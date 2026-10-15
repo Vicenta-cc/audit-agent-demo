@@ -91,6 +91,19 @@ def _analysis_lock_for(job_id: str) -> threading.RLock:
         return _analysis_locks.setdefault(job_id, threading.RLock())
 
 
+def _geographic_progress_message(report: dict) -> str:
+    progress = report.get("progress") if isinstance(report.get("progress"), dict) else {}
+    query = str(progress.get("query") or "").strip()
+    rank = progress.get("rank")
+    if report.get("stage") == "capture_started" and query:
+        return f"地域预筛：正在抓取候选「{query}」"
+    if report.get("stage") == "risk_started" and query and type(rank) is int:
+        return f"地域预筛：正在对「{query}」第 {rank} 条候选进行风险筛选"
+    if report.get("stage") == "geo_started" and query and type(rank) is int:
+        return f"地域预筛：正在对「{query}」第 {rank} 条候选进行地域判断"
+    return ""
+
+
 def _authorized_crawler_account_ids(job_id: str) -> frozenset[str] | None:
     """Return public accounts plus the task owner's private accounts."""
     if settings.app_auth_mode != "required":
@@ -891,6 +904,11 @@ class AuditPipeline:
                                 with ExitStack() as rotation_leases:
                                     rotation = self._triage_account_rotation(
                                         request.platform, account, account_auth_state, rotation_leases)
+                                    def publish_geographic_progress(report):
+                                        job_store.update_control(self.job_id, geographic_selection=report)
+                                        if message := _geographic_progress_message(report):
+                                            job_store.log(self.job_id, message, stage="crawl")
+
                                     runner = GeographicPipeline(plan=request.geographic_plan,
                                         binding=request._verified_geographic_binding,
                                         crawler=self.crawler, ingestion=self.ingestion,
@@ -899,8 +917,8 @@ class AuditPipeline:
                                         lease_fence=fence, stop=crawl_stop_requested,
                                         on_delivery=enqueue_geographic_refs, retire=self._retire_rotation_account,
                                         started_callback=mark_crawler_started, progress_callback=log_crawl_progress,
-                                        on_progress=lambda report: job_store.update_control(
-                                            self.job_id, geographic_selection=report))
+                                        on_progress=publish_geographic_progress,
+                                        state_lock=job_store._lock)
                                     summary = None
                                     try:
                                         summary, result = runner.run()

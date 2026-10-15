@@ -4,6 +4,7 @@ import json
 import re
 import sqlite3
 import threading
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -115,11 +116,18 @@ class JobStore:
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30)
+        conn.execute("PRAGMA busy_timeout = 30000")
         conn.row_factory = sqlite3.Row
         return conn
 
     def _init_db(self) -> None:
+        # The API and the persistent worker share this file. WAL lets short
+        # worker commits finish while API status readers keep their snapshots.
+        with closing(self._connect()) as connection:
+            mode = str(connection.execute("PRAGMA journal_mode = WAL").fetchone()[0]).lower()
+            if mode != "wal":
+                raise RuntimeError("shared JobStore database requires WAL journal mode")
         with self._connect() as conn:
             conn.executescript(
                 """

@@ -1,9 +1,20 @@
 import json
+import sqlite3
+import threading
+import time
 
 from backend.audit_agent.ingestion import IngestionStore
 from backend.audit_agent.job_state import available_job_actions, failure_metadata
 from backend.audit_agent.job_store import JobStore
 from backend.investigation_creation.adapters import _public_job_logs
+
+
+def test_job_store_uses_wal_for_shared_api_and_worker_database(tmp_path):
+    path = tmp_path / "shared.sqlite3"
+    JobStore(path)
+
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
 
 
 def test_job_persists_independent_phase_statuses_configs_and_structured_logs(tmp_path):
@@ -35,6 +46,32 @@ def test_job_persists_independent_phase_statuses_configs_and_structured_logs(tmp
     assert job["logs"][-1]["error_code"] == "operation_paused"
     assert job["logs"][-1]["retryable"] is True
     assert job["logs"][-1]["action"] == "resume_when_ready"
+
+
+def test_job_store_waits_for_a_short_external_sqlite_writer(tmp_path):
+    path = tmp_path / "busy.sqlite3"
+    store = JobStore(path)
+    store.create(job_id="busy", run_crawler=True)
+    blocker = sqlite3.connect(path, timeout=0, check_same_thread=False)
+    blocker.execute("BEGIN IMMEDIATE")
+    errors = []
+
+    def update():
+        try:
+            store.update_control("busy", geographic_selection={"stage": "risk_started"})
+        except BaseException as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=update)
+    thread.start()
+    time.sleep(0.1)
+    blocker.rollback()
+    blocker.close()
+    thread.join(timeout=5)
+
+    assert not thread.is_alive()
+    assert errors == []
+    assert store.control("busy")["geographic_selection"] == {"stage": "risk_started"}
 
 
 def test_log_level_uses_explicit_metadata_and_does_not_treat_zero_failures_as_error(tmp_path):

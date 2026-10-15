@@ -191,14 +191,14 @@ def test_receipt_must_match_full_binding_and_delivery_needs_review(tmp_path, mon
     assert len(s.load('e', p['plan_digest'])['deliveries']) == 1
 
 
-def test_barrier_quota_and_entity_checked_in_transaction(tmp_path, monkeypatch):
+def test_query_readiness_quota_and_entity_checked_in_transaction(tmp_path, monkeypatch):
     p = plan()
     s = Store(tmp_path / 'state.sqlite')
     s.create(p)
     picks = [stored_occurrence(p, str(i), content_key='same') for i in range(2)]
     monkeypatch.setattr('audit_agent.scoped_selection_store.select_next_batch',
                         lambda *args: dict(status='ready', picks=picks, query_id='q', tier='local'))
-    with pytest.raises(ValueError, match='barrier'):
+    with pytest.raises(ValueError, match='not evaluated'):
         s.reserve_next('e', 'early')
     complete_query(s, picks)
     with pytest.raises(ValueError, match='duplicate entity'):

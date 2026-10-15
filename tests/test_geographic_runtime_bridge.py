@@ -225,3 +225,23 @@ def test_actual_confirmed_run_drives_bridge_without_risk_changes(creation_stack,
         changed_bindings['expected_identity'][key] = 999 if key == 'revision' else 'foreign'
         with pytest.raises(ValueError):
             GeographicBridge(frozen, **changed_bindings, risk_client=risk_client, geo_client=geo_client)
+
+
+def test_provider_metadata_is_not_passed_into_strict_p3_contract(
+        creation_stack, content, monkeypatch, tmp_path):
+    bridge, _, geo_client, _, _ = confirmed_bridge(
+        creation_stack, content, monkeypatch, tmp_path)
+    geo_client.response = response() | {
+        '_llm_meta': {'model': 'qwen3.6-flash', 'finish_reason': 'stop', 'total_tokens': 42}}
+    plan = bridge.plan
+    query = plan['queries'][0]
+    item = {'post_id': 'metadata', 'aweme_id': 'metadata', 'title': '克拉玛依市收费',
+        'source_keyword': query['query'], 'custom_verify': '', 'follower_count': 1}
+    occurrence = bridge.occurrence(query['query_id'], 'dy:metadata', 1, item)
+
+    record = bridge.geo(plan, query, occurrence)
+
+    assert record['result']['geo_tier'] == 'local'
+    assert '_llm_meta' not in record['result']['raw_response']
+    assert record['model_meta'] == geo_client.response['_llm_meta']
+    bridge.validate_geo(plan, occurrence['candidate'], record)

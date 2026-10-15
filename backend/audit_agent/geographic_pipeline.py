@@ -15,7 +15,8 @@ class GeographicPipeline:
     def __init__(self, *, plan, binding, crawler, ingestion, state_path, save_root,
                  risk_client, geo_client, accounts, lease_fence, stop,
                  on_delivery=lambda refs: None, retire=lambda account, error: None,
-                 started_callback=None, progress_callback=None, on_progress=lambda report: None):
+                 started_callback=None, progress_callback=None, on_progress=lambda report: None,
+                 state_lock=None):
         self.crawler, self.ingestion = crawler, ingestion
         self.root = Path(save_root) / 'geographic'
         self.stop, self.on_delivery, self.retire = stop, on_delivery, retire
@@ -34,7 +35,8 @@ class GeographicPipeline:
             risk_client=risk_client, geo_client=geo_client)
         projection = self.bridge.plan
         self.store = GeographicExecutionStore(state_path,
-            projection['binding'] | projection['runtime_binding'], projection['plan_digest'], lease_fence)
+            projection['binding'] | projection['runtime_binding'], projection['plan_digest'], lease_fence,
+            state_lock=state_lock)
         self.sink = GeographicDelivery(ingestion, self.store, projection, self.root / 'delivered')
         self.execution = ScopedExecution(self.store, projection, capture=self.capture,
             risk=self.risk, geo=self.geo, detail=self.detail, review=self.review,
@@ -42,7 +44,7 @@ class GeographicPipeline:
             account=self.account, rotate=self.rotate, stop=stop, checkpoint=self.progress)
 
     def progress(self, stage, payload):
-        self.on_progress(self.execution.report() | {'stage': stage})
+        self.on_progress(self.execution.report() | {'stage': stage, 'progress': deepcopy(payload)})
 
     def fence(self):
         # A fresh transaction rejects a stale worker before each external action.
@@ -78,6 +80,7 @@ class GeographicPipeline:
         collection = self.bridge.p2.collection
         params = collection.effective_parameters
         account_id = self.account(query)
+        self.progress('capture_started', {'query_id': query['query_id'], 'query': query['query']})
         for attempt in range(2):
             self.fence()
             if self.stop():
@@ -128,10 +131,14 @@ class GeographicPipeline:
 
     def risk(self, plan, query, occurrence):
         self.fence()
+        self.progress('risk_started', {'query_id': query['query_id'], 'query': query['query'],
+            'occurrence_id': occurrence['occurrence_id'], 'rank': occurrence['rank']})
         return self.bridge.risk(plan, query, occurrence)
 
     def geo(self, plan, query, occurrence):
         self.fence()
+        self.progress('geo_started', {'query_id': query['query_id'], 'query': query['query'],
+            'occurrence_id': occurrence['occurrence_id'], 'rank': occurrence['rank']})
         return self.bridge.geo(plan, query, occurrence)
 
     def review(self, plan, occurrence, content):

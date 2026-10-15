@@ -79,12 +79,20 @@ class Harness:
                                stop=lambda: self.stop_now, checkpoint=self.checkpoint)
 
 
-def test_barrier_and_complete_detail_callback_isolation(tmp_path):
-    h = Harness(tmp_path, rows={'A': [('x', '新疆欠薪')], 'B': [('y', '克拉玛依欠薪')]}, task_limit=1)
+def test_local_delivery_streams_before_next_query_capture_and_callback_stays_isolated(tmp_path):
+    h = Harness(tmp_path, rows={'A': [('x', '克拉玛依欠薪')], 'B': [('y', '克拉玛依欠薪')]})
     result = h.runner().run()
-    assert [c for c in h.calls if c[0] == 'detail'] == [('detail', 'y')]
-    assert h.calls.index(('capture', 'B')) < h.calls.index(('detail', 'y'))
-    assert result['collected'] == result['handed_off'] == 1
+    assert h.calls.index(('deliver', 'x')) < h.calls.index(('capture', 'B'))
+    assert [c for c in h.calls if c[0] == 'detail'] == [('detail', 'x'), ('detail', 'y')]
+    assert result['collected'] == result['handed_off'] == 2
+
+
+def test_supplement_is_selected_inside_its_query_before_next_query_capture(tmp_path):
+    h = Harness(tmp_path, rows={'A': [('x', '新疆欠薪')], 'B': [('y', '克拉玛依欠薪')]}, task_limit=2)
+    result = h.runner().run()
+    assert [c for c in h.calls if c[0] == 'detail'] == [('detail', 'x'), ('detail', 'y')]
+    assert h.calls.index(('deliver', 'x')) < h.calls.index(('capture', 'B'))
+    assert result['collected'] == result['handed_off'] == 2
     assert not result['unfinished_queries']
 
 

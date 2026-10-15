@@ -69,6 +69,17 @@ def collection_incomplete_error(save_root: Path, platform: str) -> CrawlerCollec
     )
 
 
+def is_media_download_timeout(log_text: str) -> bool:
+    """Recognize the known MediaCrawler timeout escape only at the media boundary."""
+    return (
+        "_download_media_with_retry" in log_text
+        and "get_aweme_media" in log_text
+        and "operation='media'" in log_text
+        and "persistent_request_gate.py" in log_text
+        and re.search(r"(?:^|\n)TimeoutError\s*$", log_text) is not None
+    )
+
+
 @dataclass
 class CrawlOutput:
     platform: str
@@ -688,6 +699,10 @@ class MediaCrawlerAdapter:
                     raise CrawlerBrowserInitializationError()
                 if "COLLECTION_INCOMPLETE" in stdout or "COLLECTION_INCOMPLETE" in stderr:
                     raise collection_incomplete_error(save_root, platform)
+                if is_media_download_timeout(stdout + "\n" + stderr):
+                    raise CrawlerMediaDownloadError(
+                        "crawler_media_download_failed: 媒体下载超时，失败记录已保留"
+                    )
                 raise RuntimeError(
                     f"MediaCrawler failed with exit code {returncode}\n"
                     f"STDOUT:\n{stdout[-4000:]}\n"

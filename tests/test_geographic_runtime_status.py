@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 import pytest
 from audit_agent.geographic_status import classify_geographic_status, geographic_completion_failure, selection_page
+from audit_agent.pipeline import _geographic_progress_message
 
 
 def report(**changes):
@@ -21,6 +22,15 @@ def test_empty_differs_from_positive_complete():
     assert classify_geographic_status(report())['status']=='ready'
     assert classify_geographic_status(report(collected=0,handed_off=0))['status']=='empty'
     assert classify_geographic_status(None)['status']=='incomplete'
+
+
+@pytest.mark.parametrize(('stage','progress','expected'), [
+    ('capture_started', {'query':'克拉玛依大火'}, '地域预筛：正在抓取候选「克拉玛依大火」'),
+    ('risk_started', {'query':'克拉玛依大火','rank':2}, '地域预筛：正在对「克拉玛依大火」第 2 条候选进行风险筛选'),
+    ('geo_started', {'query':'克拉玛依大火','rank':2}, '地域预筛：正在对「克拉玛依大火」第 2 条候选进行地域判断'),
+])
+def test_geographic_progress_is_visible_in_pipeline_logs(stage, progress, expected):
+    assert _geographic_progress_message({'stage':stage,'progress':progress}) == expected
 
 
 def test_authorization_precedes_database_and_snapshot_access():
