@@ -382,6 +382,17 @@ investigation_creation_conversation_service = InvestigationCreationConversationS
         auth_store.principal_for_user if _authz_enabled() else None
     ),
 )
+# Turn subprocesses import this same composition rather than the launcher.
+# Install the trusted runtime capability here so chat and API confirmation share it.
+if os.environ.get('AUDIT_RUNTIME_MANIFEST'):
+    from .investigation_creation.geographic_runtime import IsolatedGeographicCapability
+    _runtime_manifest = Path(os.environ['AUDIT_RUNTIME_MANIFEST'])
+    _runtime_config = json.loads(_runtime_manifest.read_text())
+    if _runtime_config.get('geographic_runtime') is True:
+        investigation_creation_service.conversation_store = investigation_agent_service.store
+        IsolatedGeographicCapability(
+            _runtime_config['runtime_root'], runtime_manifest=_runtime_manifest,
+        ).install(investigation_creation_service)
 configure_hermes_investigation_creation_tools(
     investigation_creation_tool_service,
     principal_provider=investigation_creation_conversation_service.principal_for_session,

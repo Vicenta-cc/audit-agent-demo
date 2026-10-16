@@ -3,9 +3,30 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import os
 from pathlib import Path
 
 from .config import settings
+
+
+def crawler_network_env(source=None) -> dict[str, str]:
+    """Apply the crawler's explicit route without inheriting the model's proxy.
+
+    Unmanaged installations retain their existing behavior. The fixed runtime
+    always supplies CRAWLER_PROXY_URL, including an empty value for direct access.
+    """
+    env = dict(os.environ if source is None else source)
+    if 'CRAWLER_PROXY_URL' not in env:
+        return env
+    for key in tuple(env):
+        if key.lower() in {'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy'}:
+            env.pop(key)
+    proxy = env['CRAWLER_PROXY_URL']
+    if proxy:
+        for key in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY'):
+            env[key] = env[key.lower()] = proxy
+    env['NO_PROXY'] = env['no_proxy'] = '127.0.0.1,localhost,::1'
+    return env
 
 
 def account_profile_directory(account_id: str, profile_root: Path | None = None) -> Path:

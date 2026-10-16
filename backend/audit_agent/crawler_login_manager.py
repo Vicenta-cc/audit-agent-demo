@@ -17,7 +17,7 @@ from uuid import uuid4
 from .auth_state_cipher import AuthStateCipher, auth_state_cipher
 from .config import settings
 from .crawler_account_store import CrawlerAccountStore, crawler_account_store
-from .crawler_browser import account_browser_env, scheduler_env
+from .crawler_browser import account_browser_env, scheduler_env, crawler_network_env
 from .crawler_login_interaction import validate_login_input
 
 
@@ -173,7 +173,7 @@ class CrawlerAccountLoginManager:
             "--timeout",
             str(timeout),
         ]
-        env = os.environ.copy()
+        env = crawler_network_env()
         if session.platform == "dy":
             browser_env = account_browser_env(session.account_id)
             env.update(browser_env)

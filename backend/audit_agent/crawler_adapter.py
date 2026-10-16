@@ -16,7 +16,7 @@ from time import sleep
 from typing import Callable
 
 from .config import settings
-from .crawler_browser import account_browser_env, account_profile_owns_auth, scheduler_env
+from .crawler_browser import account_browser_env, account_profile_owns_auth, scheduler_env, crawler_network_env
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"}
@@ -800,7 +800,7 @@ class MediaCrawlerAdapter:
         return self._build_runner()
 
     def _subprocess_env(self, auth_state: dict | None = None, *, platform: str = "", account_id: str = "") -> dict[str, str]:
-        env = os.environ.copy()
+        env = crawler_network_env()
         for name in ("MEDIACRAWLER_ACCOUNT_ID", "MEDIACRAWLER_CLOAK_PROFILE_ROOT", "MEDIACRAWLER_DY_BROWSER_ENGINE", *scheduler_env()):
             env.pop(name, None)
         if platform == "dy":

@@ -38,9 +38,22 @@ def hold_geographic_claim(store, run_id, claim_token):
 
 class IsolatedGeographicCapability:
     """Explicit server dependency; never accepted from request JSON or settings."""
-    def __init__(self, root):
+    def __init__(self, root, *, runtime_manifest=None):
         self.root = Path(root).resolve()
-        if self.root == Path(tempfile.gettempdir()).resolve() or not self.root.is_relative_to(Path(tempfile.gettempdir()).resolve()):
+        temporary = Path(tempfile.gettempdir()).resolve()
+        if runtime_manifest is not None:
+            # Only the trusted server entry supplies this file. Request JSON
+            # cannot opt a shared/production database into geographic execution.
+            manifest = Path(runtime_manifest).resolve()
+            config = json.loads(manifest.read_text())
+            repository = Path(config['repository']).resolve()
+            if (manifest != self.root / 'runtime.json' or config.get('schema_version') != 1
+                    or config.get('geographic_runtime') is not True
+                    or Path(config['runtime_root']).resolve() != self.root
+                    or self.root in (Path('/'), Path.home().resolve(), temporary)
+                    or self.root.is_relative_to(repository) or repository.is_relative_to(self.root)):
+                raise ValueError('a dedicated manifest-owned geographic isolation root is required')
+        elif self.root == temporary or not self.root.is_relative_to(temporary):
             raise ValueError('a dedicated temporary isolation root is required')
         self._confirmation = ContextVar('geographic_confirmation', default=None)
 
