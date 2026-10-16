@@ -52,6 +52,19 @@ def generation_messages(kind: str, request: ResourceGenerationRequest) -> list[d
                      "包括主题本身和停用备选；主题与搜索词同名同平台同匹配类型也冲突。"
                      "主题名称应概括分组，与实际候选词区分。"
                      "不为通过校验擅自删词、改名或去重。")
+        if request.requested_count == 1 or (request.exact_terms is not None and len(request.exact_terms) == 1):
+            guidance += (
+                "\n只生成一个检索词时仍须有一个主题和一个 variant。"
+                "主题是你新编写的概括分组名，不要复制唯一检索词；"
+                "为新主题选择分组名不属于改写用户指定的实际搜索词。"
+                "exact_terms 只约束 variants 中实际搜索词，不要求主题同名。"
+                "不要通过换 platform 或 match_type 绕过同名冲突。"
+                "\n单检索词结构示例（只示范结构，不复制词义）：\n"
+                + json.dumps({"title": "工资争议检索", "themes": [
+                    {"term": "工资支付争议", "variants": [{"term": "拖欠工资"}]},
+                ]}, ensure_ascii=False)
+                + "\n输出前核对主题与 variant 名称不同，实际搜索词数量仍为一。"
+            )
     else:
         guidance += ("\n只生成名称、条件、分类、风险、适用阶段、裁定说明及豁免等业务字段。"
                      "不要填写 schema_version、category_id、rule_id、exemption_id 或 order；"

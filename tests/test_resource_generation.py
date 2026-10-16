@@ -85,6 +85,35 @@ def test_deepseek_resource_request_disables_thinking_without_changing_budget():
     assert len(args["messages"]) == 2
 
 
+@pytest.mark.parametrize("constraints", [{"requested_count": 1}, {"exact_terms": ["拖欠工资"]}])
+def test_single_search_term_guidance_has_valid_distinct_theme_example(constraints):
+    request = ResourceGenerationRequest(**REQUEST, **constraints)
+    system = generation_messages("lexicon", request)[0]["content"]
+    example_text = system.split("单检索词结构示例（只示范结构，不复制词义）：\n", 1)[1].split("\n", 1)[0]
+    example = json.loads(example_text)
+    gen, client, _ = generator(example)
+    result = gen.generate("lexicon", request)
+    assert len(result.search_terms()) == 1
+    assert result.entries[0].term != result.search_terms()[0]
+    assert client.chat.completions.create.call_count == 1
+
+
+def test_single_search_term_same_theme_still_rejected_without_rewrite():
+    body = {"title": "本地启动验收词库1016", "themes": [
+        {"term": "劳动仲裁", "variants": [{"term": "劳动仲裁"}]},
+    ]}
+    gen, client, _ = generator(body)
+    request = ResourceGenerationRequest(**REQUEST, requested_count=1, exact_terms=["劳动仲裁"])
+    with pytest.raises(ResourceError) as error:
+        gen.generate("lexicon", request)
+    detail = error.value.details["validation_errors"][0]
+    assert detail["path"] == ["themes", 0, "variants", 0]
+    assert detail["conflicts_with"] == ["themes", 0]
+    assert detail["constraint"] == "duplicate_term_platform_match_type"
+    assert not error.value.details["resource_created"]
+    assert client.chat.completions.create.call_count == 1
+
+
 @pytest.mark.parametrize("finish,refusal,code", [
     ("length", None, "OUTPUT_LENGTH_TRUNCATED"),
     ("content_filter", None, "OUTPUT_CONTENT_BLOCKED"),
