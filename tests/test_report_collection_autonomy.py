@@ -37,7 +37,12 @@ def test_prior_objects_are_optional_and_explicit_filters_still_work(collection):
     s=collection;s['collection'].agent_driven=True;t=begin(s)
     refs={r['label']:r['report_ref'] for r in call(s,t,'list_conversation_reports')['reports']}
     common=agent_call(s,t,kind='accounts',common_only=True)
-    account=next(a for a in common['items'] if a['unique_comment_count'])
+    account=next(a for a in common['items'] if 'comment_author' in a['roles_in_filtered_result'])
+    assert account['roles_in_filtered_result']==['comment_author']
+    assert len(account['evidence_entities'])==1
+    observations=account['evidence_entities'][0]['report_observations']
+    assert {row['source']['label'] for row in observations}=={'A','B'}
+    assert {row['risk_level'] for row in observations}=={'low','high'}
     b=agent_call(s,t,report_refs=[refs['B']],account_ref=account['account_ref'])
     assert b['total_count']==1
     finish(s,t);t=begin(s)

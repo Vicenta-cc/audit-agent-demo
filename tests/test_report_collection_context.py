@@ -78,4 +78,24 @@ def test_runtime_projects_input_but_keeps_original_transcript_and_replay(collect
     assert seen[-1][-12:]==stored[-18:-6] # recent prior turn remains exact
     current_turn=begin(s)
     restored=json.loads(dispatch('read_conversation_result',{'result_ref':original_results[0]},s['sid'],current_turn))
-    assert restored['ok'] and len(restored['data']['items'])==5
+    assert restored['ok']
+    data=restored['data']
+    assert data['total_count']==5
+    assert {source['label'] for source in data['sources']}=={'A','B'}
+    if agent_mode:
+        assert len(data['items'])==4
+        assert data['query_statistics']['comments']['original_comments']==4
+        shared=next(group for group in data['items'] if group['visible_observation_count']==2)
+        assert {row['source']['label'] for row in shared['report_observations']}=={'A','B'}
+        assert {row['risk_level'] for row in shared['report_observations']}=={'low','high'}
+        observations=sorted((row for group in data['items'] for row in group['report_observations']),
+            key=lambda row:row['source_result_position'])
+        rows=[{key:value for key,value in row.items()
+            if key not in ('identity_status','source_result_position')} for row in observations]
+    else:
+        rows=data['items']
+    assert len(rows)==5
+    with s['collection'].connect() as db:
+        raw=json.loads(db.execute('SELECT payload FROM collection_results WHERE ref=?',
+            (original_results[0],)).fetchone()[0])
+    assert rows==raw['items']
