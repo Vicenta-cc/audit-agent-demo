@@ -17,6 +17,17 @@ const highRiskValues = new Set(["high", "高", "高危"]);
 const mediumRiskValues = new Set(["medium", "mid", "中", "中危"]);
 const noRiskValues = new Set(["", "none", "safe", "pass", "unknown", "无", "无风险"]);
 
+// Explicit timezones represent instants; legacy timezone-free values keep their display.
+export function formatDetailDateTime(value: string) {
+  if (/[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
+    const date = new Date(value);
+    if (Number.isFinite(date.getTime())) {
+      return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+    }
+  }
+  return formatDateTime(value);
+}
+
 export function mapAuditResultToTaskOutput(output: AuditResult): TaskOutputItem {
   return {
     id: getOutputKey(output),

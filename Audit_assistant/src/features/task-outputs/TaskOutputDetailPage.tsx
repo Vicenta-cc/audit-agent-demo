@@ -36,7 +36,6 @@ import {
   fetchAuditResultDetail,
   fetchAuditResults,
   fetchJob,
-  formatDateTime,
   getPlatformLabel,
   linkCommentUserRelation,
   mapJobsToMonitorTasks
@@ -51,7 +50,7 @@ import type {
   RawJob
 } from "../../types/jobs";
 import type { RiskLevel, TaskOutputItem } from "../../types/taskOutputs";
-import { getOutputKey, isNoRiskOutput, mapAuditResultToTaskOutput } from "./taskOutputUtils";
+import { formatDetailDateTime, getOutputKey, isNoRiskOutput, mapAuditResultToTaskOutput } from "./taskOutputUtils";
 import { evidenceSeconds, formatEvidenceTime, formatEvidenceRange, formatFramePosition, frameTimeRange } from "./evidenceTime";
 
 type EvidenceType = "text" | "ocr" | "asr" | "comment" | "vision";
@@ -1275,7 +1274,7 @@ function riskIcon(level: RiskLevel) {
 function getPublishedAt(result: AuditResult) {
   if (result.report_snapshot_source) {
     const publishedAt = stringField(result, "published_at");
-    return publishedAt ? formatDateTime(publishedAt) : "--";
+    return publishedAt ? formatDetailDateTime(publishedAt) : "--";
   }
   const direct = firstText(
     stringField(result, "publish_time"),
@@ -1286,7 +1285,7 @@ function getPublishedAt(result: AuditResult) {
     result.updated_at,
     result.created_at
   );
-  return direct ? formatDateTime(direct) : "--";
+  return direct ? formatDetailDateTime(direct) : "--";
 }
 
 function formatCommentTime(value: string | number | undefined) {
@@ -1299,7 +1298,7 @@ function formatCommentTime(value: string | number | undefined) {
       return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
     }
   }
-  return formatDateTime(String(value));
+  return formatDetailDateTime(String(value));
 }
 
 function formatOcrContext(context: AuditEvidenceGroupItem["ocr_context"]) {
