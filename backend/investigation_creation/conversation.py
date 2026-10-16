@@ -1280,18 +1280,10 @@ class InvestigationCreationConversationService:
             raise InvestigationTurnNotFoundError("turn is not ready for execution")
         session = self.store.get_session(turn.session_id)
         principal = self.principal_for_session(session.id)
-        if (not settings.investigation_multi_round_enabled
-                and self.report_collection and self.report_collection.active(session.id)):
-            return self._execute_collection_turn(turn)
-        history = self.store.hermes_conversation_history(turn.id)
-        recovered_history = self._failed_turn_checkpoint_history(
-            turn, principal=principal
-        )
-        if recovered_history:
-            history = [*(history or []), *recovered_history]
         user_message = self.store.get_user_message_for_turn(turn.id).content
         fixed_reply = product_identity_reply(user_message)
         if fixed_reply is not None:
+            history = self.store.hermes_conversation_history(turn.id)
             result = {
                 "completed": True,
                 "failed": False,
@@ -1318,6 +1310,15 @@ class InvestigationCreationConversationService:
                 history_count=len(history or []),
                 include_proposal_presentations=False,
             )
+        if (not settings.investigation_multi_round_enabled
+                and self.report_collection and self.report_collection.active(session.id)):
+            return self._execute_collection_turn(turn)
+        history = self.store.hermes_conversation_history(turn.id)
+        recovered_history = self._failed_turn_checkpoint_history(
+            turn, principal=principal
+        )
+        if recovered_history:
+            history = [*(history or []), *recovered_history]
         # A creation session is single-report scoped. Once its run is published,
         # keep accidental creation-route turns deterministic and preserve the
         # published report. The UI normally sends report questions through the

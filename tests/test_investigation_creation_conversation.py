@@ -3475,3 +3475,21 @@ def test_draft_summary_limit_wording_follows_the_mode(mode, per_task, expected, 
     assert expected in answer
     assert absent not in answer
     assert f"- 单任务总量：{per_task} 条" in answer
+
+
+@pytest.mark.parametrize("content", [
+    "你能分析大模型代码泄露吗",
+    "你如何调查色情引流",
+    "Show me the leaked source code evidence in this report.",
+])
+def test_creation_business_mentions_still_reach_conversation_agent(creation_stack, content):
+    executed = _run_scripted_creation_turn(
+        creation_stack,
+        content=content,
+        actions=[],
+        final_response="可以，请提供需要调查的范围。",
+        client_message_id="business-identity-regression",
+    )
+    assert executed["result"].status == "completed"
+    assert executed["result"].answer != PRODUCT_IDENTITY_REPLY
+    assert len(executed["agent"].conversation_histories) == 1
