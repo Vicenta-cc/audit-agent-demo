@@ -10,7 +10,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 
@@ -135,3 +135,195 @@ def report_capacity(job_id):
 
     with analysis_capacity(check):
         yield
+
+
+def proxy_lock_path(proxy_id):
+    return lock_root() / 'proxy' / (digest(proxy_id) + '.lock')
+
+
+def _open_lock(path, mode=fcntl.LOCK_EX):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = path.open('a+b')
+    try:
+        fcntl.flock(handle.fileno(), mode | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return None
+    return handle
+
+
+@contextmanager
+def proxy_edit_lease(proxy_id):
+    # Reentrancy applies only to a proven exclusive descriptor in this thread.
+    # Shared execution descriptors are never recorded in _held.
+    with file_lease(proxy_lock_path(proxy_id), reentrant=True) as acquired:
+        yield acquired
+
+
+@contextmanager
+def proxy_mutation_guard(operation, proxy_id, account_id=None, *, account_store=None):
+    from backend.audit_agent.crawler_route import CollectionRouteError
+    with ExitStack() as stack:
+        if account_id and not stack.enter_context(account_lease('dy', account_id)):
+            raise CollectionRouteError('PROXY_BUSY')
+        proxy_ids = {proxy_id} if proxy_id else set()
+        if account_id:
+            from backend.audit_agent.crawler_route import get_proxy_store
+            account = (account_store or get_proxy_store().accounts).get(account_id)
+            if account and account.get("proxy_id"):
+                proxy_ids.add(account["proxy_id"])
+        for resource_id in sorted(proxy_ids):
+            if not stack.enter_context(proxy_edit_lease(resource_id)):
+                raise CollectionRouteError("PROXY_BUSY")
+        yield
+
+
+class ExecutionLeaseBundle:
+    """Explicit thread-safe resource ownership; children retain inherited locks.
+
+    Closing the owner forbids new borrowers. Existing borrowers keep owned FDs
+    alive. An outer account descriptor is duplicated, never unlocked or closed.
+    """
+    def __init__(self, execution_id, owner_id, account_id, snapshot=None):
+        import threading
+        self.execution_id, self.owner_id, self.account_id = execution_id, owner_id, account_id
+        self.snapshot = snapshot
+        self._lock = threading.RLock()
+        self._handles = []
+        self._borrowers = 0
+        self._closing = False
+        self._closers = []
+
+    @property
+    def pass_fds(self):
+        with self._lock:
+            return tuple(h.fileno() for h in self._handles if not h.closed)
+
+    def acquire(self, *, account_handle=None, max_active_accounts=1):
+        import os
+        with self._lock:
+            if self._handles or self._closing:
+                raise ResourceBusy('PROXY_BUSY')
+            if account_handle is None:
+                path = account_lock_path('dy', self.account_id).resolve()
+                account_handle = next((h for key, h in _held.get() if key == path and not h.closed), None)
+            handle = os.fdopen(os.dup(account_handle.fileno()), 'a+b') if account_handle is not None else acquire_account_handle('dy', self.account_id)
+            if handle is None:
+                return False
+            self._handles.append(handle)
+            if self.snapshot is None:
+                return True
+            shared = _open_lock(proxy_lock_path(self.snapshot.proxy_id), fcntl.LOCK_SH)
+            if shared is not None:
+                self._handles.append(shared)
+                for slot in range(max(1, int(max_active_accounts))):
+                    active = _open_lock(lock_root() / 'proxy' / (digest(self.snapshot.proxy_id) + f'-active-{slot}.lock'))
+                    if active is not None:
+                        self._handles.append(active)
+                        return True
+            self._close_handles()
+            return False
+
+    def acquire_exit_capacity(self, observed_exit):
+        """Actual exit capacity uses inherited FDs, never timestamp expiry.
+
+        Call after observation and before business snapshot issuance. Independent
+        proxy resources and direct service routes use the same physical-exit key.
+        """
+        import ipaddress
+        try:
+            key=str(ipaddress.ip_address(observed_exit))
+        except (TypeError,ValueError):
+            raise ResourceBusy('PROXY_CONFIG_INVALID') from None
+        with self._lock:
+            if self._closing or not self._handles:
+                raise ResourceBusy('PROXY_BUSY')
+            if getattr(self,'_exit_capacity_key',None)==key:
+                return True
+            if getattr(self,'_exit_capacity_key',None) is not None:
+                raise ResourceBusy('PROXY_EXIT_CHANGED')
+            for slot in range(settings.crawler_shared_exit_active_limit):
+                handle=_open_lock(lock_root()/'exit'/(digest(key)+f'-active-{slot}.lock'))
+                if handle is not None:
+                    self._handles.append(handle)
+                    self._exit_capacity_key=key
+                    return True
+            return False
+
+    @contextmanager
+    def borrow(self, *, execution_id=None, owner_id=None, account_id=None):
+        with self._lock:
+            if self._closing or not self._handles or any(value is not None and value != actual for value, actual in ((execution_id, self.execution_id), (owner_id, self.owner_id), (account_id, self.account_id))):
+                raise ResourceBusy('PROXY_BUSY')
+            self._borrowers += 1
+        token = BorrowedRouteContext(self)
+        try:
+            yield token
+        finally:
+            token._active = False
+            with self._lock:
+                self._borrowers -= 1
+                if self._closing and not self._borrowers:
+                    self._close_handles()
+
+    def add_closer(self, callback):
+        with self._lock:
+            if self._closing:
+                raise ResourceBusy("PROXY_BUSY")
+            self._closers.append(callback)
+
+    def _close_handles(self):
+        # A failed child/context drain retains the remaining callbacks and FDs;
+        # it must not run the admission-release callback or free the Profile.
+        while self._closers:
+            callback=self._closers[-1]
+            callback()
+            self._closers.pop()
+        for handle in reversed(self._handles):
+            handle.close()
+        self._handles.clear()
+
+    def close(self):
+        with self._lock:
+            self._closing = True
+            if not self._borrowers:
+                self._close_handles()
+
+
+class BorrowedRouteContext:
+    """Transferable live borrow; nested use can finish after owner closes."""
+    def __init__(self, bundle):
+        object.__setattr__(self, '_bundle', bundle)
+        object.__setattr__(self, '_active', True)
+
+    def __getattr__(self, name):
+        return getattr(self._bundle, name)
+
+    def __setattr__(self, name, value):
+        if name in {'_bundle', '_active'}:
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._bundle, name, value)
+
+    @contextmanager
+    def borrow(self, *, execution_id=None, owner_id=None, account_id=None):
+        bundle = self._bundle
+        with bundle._lock:
+            if not self._active or any(value is not None and value != actual for value, actual in ((execution_id, bundle.execution_id), (owner_id, bundle.owner_id), (account_id, bundle.account_id))):
+                raise ResourceBusy('PROXY_BUSY')
+            bundle._borrowers += 1
+        token = BorrowedRouteContext(bundle)
+        try:
+            yield token
+        finally:
+            token._active = False
+            with bundle._lock:
+                bundle._borrowers -= 1
+                if bundle._closing and not bundle._borrowers:
+                    bundle._close_handles()
+
+    def add_closer(self, callback):
+        with self._bundle._lock:
+            if not self._active:
+                raise ResourceBusy('PROXY_BUSY')
+            self._bundle._closers.append(callback)

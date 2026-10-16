@@ -20,7 +20,8 @@ def test_scheduler_persists_spacing_across_instances(tmp_path: Path):
     assert first.acquire("search") == 0
     second = RequestScheduler(db, platform="dy", min_interval=2, per_minute=30, clock=lambda: clock.now, sleeper=clock.sleep)
     assert second.acquire("detail") == 2
-    assert clock.sleeps == [2]
+    assert sum(clock.sleeps) == 2
+    assert all(0 < delay <= .25 for delay in clock.sleeps)
 
 
 def test_scheduler_enforces_rolling_window_and_cooldown(tmp_path: Path):
@@ -29,8 +30,11 @@ def test_scheduler_enforces_rolling_window_and_cooldown(tmp_path: Path):
     scheduler.acquire()
     scheduler.acquire()
     scheduler.acquire()
-    assert clock.sleeps == [60]
+    assert sum(clock.sleeps) == 60
+    assert all(0 < delay <= .25 for delay in clock.sleeps)
+    before_cooldown_wait = sum(clock.sleeps)
     scheduler.enter_cooldown("verify")
     scheduler.acquire()
-    assert clock.sleeps[-1] == 10
+    assert sum(clock.sleeps) - before_cooldown_wait == 10
+    assert all(0 < delay <= .25 for delay in clock.sleeps)
     assert scheduler.snapshot()["last_reason"] == "verify"

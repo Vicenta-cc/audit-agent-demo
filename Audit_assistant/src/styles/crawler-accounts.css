@@ -1190,3 +1190,47 @@
     padding: 24px 18px;
   }
 }
+
+.crawler-login-v2 { display: grid; gap: 18px; text-align: center; width: 100%; }
+.crawler-login-v2-status { display: grid; gap: 8px; }
+.crawler-login-v2-status small { color: var(--text-secondary, #64748b); }
+.crawler-login-v2-qr img { display: block; margin: auto; width: min(264px, 100%); aspect-ratio: 1; object-fit: contain; padding: 16px; background: white; image-rendering: pixelated; border: 1px solid #e2e8f0; border-radius: 12px; }
+.crawler-login-v2-qr img.is-expired { opacity: .3; }
+.crawler-login-v2-sms { display: grid; gap: 14px; text-align: left; max-width: 360px; width: 100%; margin: auto; }
+.crawler-login-v2 label { display: grid; gap: 8px; font-size: 14px; }
+.crawler-login-v2 input { min-width: 0; padding: 11px; border: 1px solid #d5dce5; border-radius: 8px; background: white; color: #0f172a; }
+.crawler-login-v2-sms > div { display: flex; justify-content: space-between; gap: 10px; }
+.crawler-login-v2-challenge canvas { width: 100%; height: auto; touch-action: none; outline-offset: 3px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; }
+.crawler-login-v2-challenge canvas.is-disabled { opacity: .5; pointer-events: none; }
+.crawler-login-v2-error { color: #b91c1c; font-size: 14px; }
+@media (max-width: 540px) { .crawler-login-v2-qr img { width: min(232px, 100%); } .crawler-login-v2-challenge p { font-size: 13px; } }
+
+.crawler-login-v2-complete { display: flex; justify-content: center; gap: 12px; padding-top: 16px; }
+.crawler-login-v2-complete .mt-button { min-width: 112px; }
+
+.crawler-login-dialog.is-v2 .crawler-login-body { min-height: 0; padding: 28px 24px; }
+.crawler-login-v2-status { justify-items: center; }
+.crawler-login-v2-status strong { font-size: 16px; }
+.crawler-login-v2-status p { margin: 0; font-size: 14px; color: var(--color-text-secondary); line-height: 1.6; }
+.crawler-login-v2-success-icon { color: var(--color-success, #16a34a); }
+.crawler-login-v2-identity { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--color-border); border-radius: 8px; overflow-wrap: anywhere; }
+.crawler-login-v2-identity span, .crawler-login-v2-session-time { font-size: 12px; color: var(--color-text-secondary); }
+.crawler-login-v2-retry { text-align: center; }
+.crawler-login-v2-retry p { color: var(--color-text-secondary); font-size: 13px; }
+@media (max-width: 540px) { .crawler-login-dialog.is-v2 .crawler-login-body { padding: 24px 18px; } .crawler-login-v2-sms > div { flex-wrap: wrap; } }
+
+.crawler-login-dialog.is-v2 { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.crawler-login-v2 p { margin-top: 0; margin-bottom: 0; }
+.crawler-login-v2-slow { padding: 10px 12px; background: var(--color-bg-secondary, #f8fafc); border-radius: 8px; }
+
+.crawler-login-native-surface { position: relative; line-height: 0; }
+.crawler-login-native-surface canvas { display: block; }
+.crawler-login-native-sync { position: absolute; left: 8px; bottom: 8px; z-index: 2; padding: 5px 8px; border-radius: 4px; background: rgba(255,255,255,.95); color: #475569; font-size: 12px; line-height: 1.5; pointer-events: none; }
+
+.crawler-login-keyboard-relay { position: fixed !important; left: -10000px !important; top: 0 !important; width: 1px !important; height: 1px !important; min-width: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; opacity: 0; resize: none; pointer-events: none; }
+
+/* Actual Firefox editor caret geometry projected over the existing image. */
+.crawler-login-caret-layer { position: absolute; inset: 1px; overflow: hidden; pointer-events: none; }
+.crawler-login-projected-caret { position: absolute; pointer-events: none; z-index: 1; animation: crawler-login-caret-blink 1s step-end infinite; }
+@keyframes crawler-login-caret-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .crawler-login-projected-caret { animation: none; } }

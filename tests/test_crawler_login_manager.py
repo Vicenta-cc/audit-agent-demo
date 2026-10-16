@@ -1,4 +1,5 @@
 import sys
+import threading
 import tempfile
 import time
 import unittest
@@ -9,59 +10,102 @@ from unittest.mock import patch
 from backend.audit_agent.auth_state_cipher import AuthStateCipher
 from backend.audit_agent.config import settings
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
-from backend.audit_agent.crawler_login_manager import CrawlerAccountLoginManager, LoginSession
+from backend.audit_agent.crawler_login_manager import (
+    CrawlerAccountLoginManager,
+    LoginSession,
+)
+
+
+def joined_legacy_manager(**kwargs):
+    """Finish this test's reader and expiry timer before deleting its SQLite DB."""
+    manager = CrawlerAccountLoginManager(**kwargs)
+    original = manager.shutdown
+
+    def shutdown():
+        original()
+        readers = {f"crawler-login-{sid[:8]}" for sid in manager._sessions}
+        owned = [
+            thread
+            for thread in threading.enumerate()
+            if thread.name in readers
+            or isinstance(thread, threading.Timer)
+            and getattr(thread.function, "__self__", None) is manager
+        ]
+        for thread in owned:
+            if isinstance(thread, threading.Timer):
+                thread.cancel()
+        for thread in owned:
+            if thread is not threading.current_thread():
+                thread.join(timeout=3)
+                assert not thread.is_alive(), (
+                    "legacy login test leaked its reader/timer"
+                )
+
+    manager.shutdown = shutdown
+    return manager
 
 
 class CrawlerAccountLoginManagerTest(unittest.TestCase):
-    def test_douyin_login_can_be_configured_headed(self):
+    def setUp(self):
+        runtime = tempfile.TemporaryDirectory(prefix="legacy-login-test-")
+        self.addCleanup(runtime.cleanup)
+        for name, value in {
+            "crawler_browser_profile_root": Path(runtime.name) / "profiles",
+            "task_resource_lock_dir": Path(runtime.name) / "locks",
+        }.items():
+            setting = patch.object(settings, name, value)
+            setting.start()
+            self.addCleanup(setting.stop)
+
+    def make_manager(self, **kwargs):
+        manager = joined_legacy_manager(**kwargs)
+        self.addCleanup(manager.shutdown)
+        return manager
+
+    def test_douyin_headed_option_cannot_reenable_v1_or_spawn_browser(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            helper = root / "headed_login.py"
-            helper.write_text(
-                "import json, sys\n"
-                "assert '--headed' in sys.argv\n"
-                "print(json.dumps({'type': 'success', "
-                "'auth_state': {'cookies': [], 'origins': []}}), flush=True)\n",
-                encoding="utf-8",
-            )
             store = CrawlerAccountStore(root / "audit.sqlite3")
-            manager = CrawlerAccountLoginManager(
+            manager = self.make_manager(
                 store=store,
                 cipher=AuthStateCipher(key_file=root / "auth.key"),
                 python_path=Path(sys.executable),
-                helper_path=helper,
-                timeout_seconds=60,
+                helper_path=root / "unused.py",
             )
             account = store.create(platform="dy", display_name="测试账号")
-
-            with patch.object(settings, "crawler_login_headed", True):
-                session = manager.start(account)
-                deadline = time.monotonic() + 3
-                while time.monotonic() < deadline:
-                    session = manager.get(session["id"])
-                    if session and session["status"] == "success":
-                        break
-                    time.sleep(0.02)
-
-            self.assertEqual(session["status"], "success")
-            manager.shutdown()
+            with (
+                patch.object(settings, "crawler_login_headed", True),
+                patch(
+                    "backend.audit_agent.crawler_login_manager.subprocess.Popen"
+                ) as spawn,
+            ):
+                with self.assertRaisesRegex(ValueError, "Login V2"):
+                    manager.start(account)
+                spawn.assert_not_called()
+            self.assertFalse(manager._sessions)
 
     def test_scanned_state_clears_qr_and_remains_active(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             store = CrawlerAccountStore(root / "audit.sqlite3")
-            manager = CrawlerAccountLoginManager(
+            manager = self.make_manager(
                 store=store,
                 cipher=AuthStateCipher(key_file=root / "auth.key"),
                 python_path=Path(sys.executable),
                 helper_path=root / "unused-login.py",
             )
-            account = store.create(platform="dy", display_name="测试账号")
+            account = store.create(platform="xhs", display_name="测试账号")
             now = datetime.now(timezone.utc).isoformat()
             manager._sessions["scan-session"] = LoginSession(
-                id="scan-session", account_id=account["id"], platform="dy",
-                status="waiting_scan", created_at=now, updated_at=now,
-                expires_at=(datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat(),
+                id="scan-session",
+                account_id=account["id"],
+                platform="xhs",
+                status="waiting_scan",
+                created_at=now,
+                updated_at=now,
+                expires_at=(
+                    datetime.now(timezone.utc) + timedelta(minutes=1)
+                ).isoformat(),
                 qr_image_data_url="data:image/png;base64,SYNTHETIC",
             )
 
@@ -76,7 +120,7 @@ class CrawlerAccountLoginManagerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             store = CrawlerAccountStore(root / "audit.sqlite3")
-            manager = CrawlerAccountLoginManager(
+            manager = self.make_manager(
                 store=store,
                 cipher=AuthStateCipher(key_file=root / "auth.key"),
                 python_path=Path(sys.executable),
@@ -118,7 +162,7 @@ class CrawlerAccountLoginManagerTest(unittest.TestCase):
                 encoding="utf-8",
             )
             store = CrawlerAccountStore(root / "audit.sqlite3")
-            manager = CrawlerAccountLoginManager(
+            manager = self.make_manager(
                 store=store,
                 cipher=AuthStateCipher(key_file=root / "auth.key"),
                 python_path=Path(sys.executable),
@@ -148,7 +192,7 @@ class CrawlerAccountLoginManagerTest(unittest.TestCase):
                 encoding="utf-8",
             )
             store = CrawlerAccountStore(root / "audit.sqlite3")
-            manager = CrawlerAccountLoginManager(
+            manager = self.make_manager(
                 store=store,
                 cipher=AuthStateCipher(key_file=root / "auth.key"),
                 python_path=Path(sys.executable),
@@ -194,7 +238,7 @@ class CrawlerAccountLoginManagerTest(unittest.TestCase):
             )
             store = CrawlerAccountStore(root / "audit.sqlite3")
             cipher = AuthStateCipher(key_file=root / "auth.key")
-            manager = CrawlerAccountLoginManager(
+            manager = self.make_manager(
                 store=store,
                 cipher=cipher,
                 python_path=Path(sys.executable),
@@ -239,7 +283,7 @@ class CrawlerAccountLoginManagerTest(unittest.TestCase):
                 encoding="utf-8",
             )
             store = CrawlerAccountStore(root / "audit.sqlite3")
-            manager = CrawlerAccountLoginManager(
+            manager = self.make_manager(
                 store=store,
                 cipher=AuthStateCipher(key_file=root / "auth.key"),
                 python_path=Path(sys.executable),
@@ -247,7 +291,7 @@ class CrawlerAccountLoginManagerTest(unittest.TestCase):
                 timeout_seconds=60,
             )
             first = store.create(platform="xhs", display_name="账号一")
-            second = store.create(platform="dy", display_name="账号二")
+            second = store.create(platform="xhs", display_name="账号二")
 
             manager.start(first)
             with self.assertRaisesRegex(ValueError, "已有账号正在登录"):

@@ -191,11 +191,19 @@ export function CrawlerAccountDrawer({
 }
 
 function readApiError(error: unknown): string {
-  const message = error instanceof Error ? error.message : "保存失败";
+  let message = error instanceof Error ? error.message : "保存失败";
   try {
     const parsed = JSON.parse(message) as { detail?: string };
-    return parsed.detail || message;
+    message = parsed.detail || message;
   } catch {
-    return message;
+    // API errors may already carry a plain-text detail.
   }
+  const networkErrors: Record<string, string> = {
+    PROXY_CONFIGURATION_REQUIRED: "采集网络尚未配置，请联系管理员",
+    PROXY_UNAVAILABLE: "采集网络暂不可用，请稍后重试或联系管理员",
+    PROXY_CAPACITY_EXCEEDED: "采集网络容量不足，请联系管理员",
+    PROXY_BINDING_CAPACITY: "采集网络容量不足，请联系管理员",
+    PROXY_CAPACITY_CONFLICT: "采集网络容量不足，请联系管理员"
+  };
+  return networkErrors[message] || message;
 }

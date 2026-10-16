@@ -308,6 +308,8 @@ async def wait_for_qr(page, config: dict, timeout_seconds: float = 35) -> tuple[
     deadline = time.monotonic() + timeout_seconds
     triggered = False
     while time.monotonic() < deadline:
+        if "douyin.com" in config["url"] and getattr(page,"context",None) is not None:
+            await report_douyin_challenge(page,page.context)
         qr = await first_valid_qr(page, config)
         if qr:
             return qr
@@ -381,6 +383,26 @@ async def rendered_link_candidates(page, selector: str) -> list[dict]:
 
 async def identify_logged_in_account(platform: str, context) -> str:
     """Passively identify the current account without making an extra platform request."""
+    if platform == "dy":
+        # An open /user/<id> may be a video author's page, never proof of self.
+        # Require a visible personal-menu marker and reject conflicting pages or
+        # selectors instead of returning whichever candidate was visited first.
+        personal_ids = set()
+        for candidate_page in list(context.pages):
+            for selector, _ in IDENTITY_LINK_SELECTORS["dy"]:
+                personal_ids.update(
+                    extract_platform_account_id("dy", candidate.get("href", ""))
+                    for candidate in await rendered_link_candidates(candidate_page, selector)
+                    if candidate_is_personal_link("dy", candidate, require_marker=True)
+                    and any(
+                        str(candidate.get(field) or "").strip()
+                        in {"我的主页", "个人主页", "我的抖音"}
+                        for field in ("text", "label")
+                    )
+                )
+        personal_ids.discard("")
+        return next(iter(personal_ids)) if len(personal_ids) == 1 else ""
+
     for candidate_page in list(context.pages):
         current_id = extract_platform_account_id(platform, candidate_page.url)
         if current_id:
@@ -402,27 +424,34 @@ async def identify_logged_in_account(platform: str, context) -> str:
 async def login_context(platform: str, account_id: str = "", *, headless: bool = True):
     if platform == "dy":
         adapter = load_account_browser()
-        if settings.crawler_login_browser_version:
-            # Existing profiles retain their pinned version; new profiles use the deployment pin.
-            adapter.profile_for(account_id, settings.crawler_browser_profile_root, settings.crawler_login_browser_version)
-        context, profile = await adapter.launch_account_context(
-            account_id, settings.crawler_browser_profile_root, headless=headless,
-        )
-        try:
-            await request_login_reset()
-            if headless:
-                await adapter.prepare_account_login(context, profile)
-            else:
+        root = settings.crawler_camoufox_state_root / "profiles"
+        os.environ["MEDIACRAWLER_CAMOUFOX_BROWSER_VERSION"] = settings.crawler_camoufox_browser_version
+        adapter.profile_for(account_id, root, settings.crawler_camoufox_browser_version)
+        from backend.audit_agent.crawler_route import child_route_snapshot
+        route_snapshot = child_route_snapshot(account_id)
+        from backend.audit_agent.crawler_route import make_bound_proxy_session
+        route_options = {"route_snapshot": route_snapshot,
+                         "bound_proxy_session": await asyncio.to_thread(make_bound_proxy_session, route_snapshot)} if route_snapshot else {}
+        from contextlib import nullcontext
+        from scripts.crawler_interactive_login import virtual_display
+        display = virtual_display() if sys.platform == "linux" and not os.environ.get("DISPLAY") else nullcontext()
+        with display:
+            context, profile = await adapter.launch_account_context(
+                account_id, root, headless=sys.platform == "darwin", **route_options,
+            )
+            try:
+                await request_login_reset()
                 from scripts.crawler_login_pages import prepare_headed_login
                 await prepare_headed_login(context, profile)
-            yield context
-        finally:
-            if sys.exc_info()[0] is not None:
-                # Cleanup must not hide the original navigation/reset failure.
-                with suppress(Exception):
+                context._bound_proxy_session = profile.get("bound_proxy_session")
+                yield context
+            finally:
+                if sys.exc_info()[0] is not None:
+                    # Cleanup must not hide the original navigation/reset failure.
+                    with suppress(Exception):
+                        await asyncio.wait_for(context.close(), 15)
+                else:
                     await asyncio.wait_for(context.close(), 15)
-            else:
-                await asyncio.wait_for(context.close(), 15)
         return
 
     async with async_playwright() as playwright:
@@ -458,6 +487,19 @@ async def request_login_reset():
         raise RuntimeError("登录管理器未确认状态更新，原浏览器登录态保留")
 
 
+async def report_douyin_challenge(page, context):
+    from scripts.crawler_douyin_login_adapter import CHALLENGE_SELECTORS
+    for selector in CHALLENGE_SELECTORS:
+        if await page.locator(selector).first.is_visible():
+            session=getattr(context,'_bound_proxy_session',None)
+            if session is not None:
+                from tools.bound_proxy import emit_account_risk
+                emit_account_risk(session.snapshot)
+            emit('security_challenge')
+            return True
+    return False
+
+
 async def run_login(platform: str, timeout_seconds: int, account_id: str = "", *,
                     headless: bool = True, expected_platform_account_id: str = "") -> None:
     config = PLATFORMS[platform]
@@ -480,7 +522,7 @@ async def run_login(platform: str, timeout_seconds: int, account_id: str = "", *
         try:
             try:
                 if platform == "dy":
-                    gate = load_request_scheduler().configured_gate()
+                    gate = getattr(context, "_bound_proxy_session", None) or load_request_scheduler().configured_gate()
                     async with gate.slot('login_navigation', timeout=60):
                         await page.goto(config["url"], wait_until="domcontentloaded", timeout=60_000)
                 else:
@@ -502,6 +544,7 @@ async def run_login(platform: str, timeout_seconds: int, account_id: str = "", *
             next_scanned_diagnostic = 0.0
 
             while time.monotonic() < deadline:
+                if platform=="dy":await report_douyin_challenge(page,context)
                 now = time.monotonic()
                 if await is_logged_in(platform, page, context, baseline_cookies):
                     if login_confirmed_at is None:
@@ -595,13 +638,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-platform-account-id", default="")
     parser.add_argument("--headed", action="store_true")
     parser.add_argument("--interactive", action="store_true")
+    parser.add_argument("--protocol-v2", action="store_true")
+    parser.add_argument("--media-fd", type=int, default=-1)
+    parser.add_argument("--operation-id", default="")
+    parser.add_argument("--intent", choices=("check_or_login", "reauth", "recover"), default="check_or_login")
+    parser.add_argument("--entry", choices=("self", "home"), default="self")
+    parser.add_argument("--block-media", action="store_true")
+    parser.add_argument("--has-auth-backup", action="store_true")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
     try:
-        if args.interactive:
+        if args.protocol_v2:
+            if args.platform != "dy" or args.media_fd < 0 or not args.operation_id:
+                raise ValueError("V2 requires Douyin, operation ID and inherited media channel")
+            from scripts.crawler_douyin_login_v2 import run_login_v2
+            asyncio.run(run_login_v2(args))
+        elif args.interactive:
             if args.platform != "dy":
                 raise ValueError("当前平台不支持交互登录")
             from scripts.crawler_interactive_login import run_interactive_login

@@ -32,6 +32,36 @@ SETTING_KEYS = {
     "REQUEST_CONCURRENCY", "HERMES_INVESTIGATION_MAX_WORKERS", "HERMES_TURN_TIMEOUT_SECONDS",
     "REPORT_REQUEST_TIMEOUT", "QWEN_MAX_TOKENS", "QWEN_REPORT_MODEL", "DY_MEDIA_TIMEOUT_SECONDS",
 }
+LOGIN_V2_SETTING_KEYS = {
+    "CRAWLER_LOGIN_V2_ENABLED", "CRAWLER_LOGIN_V2_ENTRY", "CRAWLER_LOGIN_V2_BROWSER_MODE",
+    "CRAWLER_LOGIN_V2_TIMEOUT_SECONDS", "CRAWLER_LOGIN_V2_ACTIVE_FPS", "CRAWLER_LOGIN_V2_IDLE_FPS",
+    "CRAWLER_LOGIN_V2_JPEG_QUALITY", "CRAWLER_LOGIN_V2_RESOURCE_POLICY", "CRAWLER_LOGIN_V2_ORIGINS",
+    "CRAWLER_LOGIN_V2_OPERATION_RETENTION_DAYS",
+}
+SETTING_KEYS |= LOGIN_V2_SETTING_KEYS
+
+
+def login_v1_rollback_config(config, *, target_setting_keys, repository, commit):
+    """Return an independent manifest; drop only V2 keys, never credentials or data references.
+
+    The target must be a release with the shared Douyin risk-state protection.
+    Its actual whitelist is supplied by the operator, rather than guessed here.
+    """
+    import copy
+    if not isinstance(target_setting_keys, (set, frozenset)) or not all(isinstance(k, str) for k in target_setting_keys):
+        raise ValueError("Target controller whitelist required")
+    if not isinstance(repository, str) or not Path(repository).is_absolute() or any(c in repository for c in "\r\n\x00"):
+        raise ValueError("Target repository must be absolute")
+    if not isinstance(commit, str) or not re.fullmatch(r"[a-f0-9]{40}", commit):
+        raise ValueError("Target release requires full SHA")
+    result = copy.deepcopy(config)
+    result["settings"] = {k: v for k, v in config["settings"].items() if k not in LOGIN_V2_SETTING_KEYS}
+    if set(result["settings"]) - target_setting_keys:
+        raise ValueError("Unknown non-V2 target setting; rollback refused")
+    result.update(repository=repository, commit=commit)
+    return result
+
+
 FIELDS = {"schema_version", "environment_id", "repository", "commit", "runtime_root", "python", "node",
           "crawler_repository", "crawler_commit", "crawler_python", "ffmpeg", "probe_video",
           "api_port", "frontend_port", "secrets_file", "dolphin_url", "settings"}

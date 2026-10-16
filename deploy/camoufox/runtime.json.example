@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "release_id": "EXAMPLE-NOT-A-PRODUCTION-RELEASE",
+  "mode": "production",
+  "maintenance": true,
+  "sources": {
+    "app_commit": "0000000000000000000000000000000000000000",
+    "crawler_commit": "0000000000000000000000000000000000000000",
+    "frontend_hotfix_commit": "0000000000000000000000000000000000000000"
+  },
+  "artifacts": {
+    "app": {
+      "path": "/srv/zhanyun/camoufox-release/app",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "crawler": {
+      "path": "/srv/zhanyun/camoufox-release/crawler",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "frontend_dist": {
+      "path": "/srv/zhanyun/camoufox-release/frontend_dist",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "runtime_support": {
+      "path": "/srv/zhanyun/camoufox-release/runtime_support",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "app_requirements": {
+      "path": "/srv/zhanyun/camoufox-release/app_requirements",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "crawler_requirements": {
+      "path": "/srv/zhanyun/camoufox-release/crawler_requirements",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "wheelhouse": {
+      "path": "/srv/zhanyun/camoufox-release/wheelhouse",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "browser_archive": {
+      "path": "/srv/zhanyun/camoufox-release/browser_archive",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "browser_binary": {
+      "path": "/srv/zhanyun/camoufox-release/browser_binary",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "browser_assets": {
+      "path": "/srv/zhanyun/camoufox-release/browser_assets",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "browser": {
+    "engine": "camoufox",
+    "sdk": "0.5.8",
+    "playwright": "1.62.0",
+    "version": "156.0.1-beta.39",
+    "platform": "linux.x86_64",
+    "prerelease": true,
+    "asset_url": "https://github.com/daijro/camoufox/releases/download/v156.0.1-beta.39/REPLACE_WITH_VERIFIED_LINUX_X86_64_ASSET"
+  },
+  "runtime": {
+    "state_root": "/srv/zhanyun/camoufox-release/state",
+    "profile_root": "/srv/zhanyun/camoufox-release/state/profiles",
+    "logical_profile_root": "/srv/zhanyun/camoufox-release/locks",
+    "cache_root": "/srv/zhanyun/camoufox-release/state/cache",
+    "tmp_root": "/srv/zhanyun/camoufox-release/state/tmp",
+    "home": "/srv/zhanyun/camoufox-release/state/home",
+    "uid": 10001,
+    "gid": 10001,
+    "app_python": "/srv/zhanyun/camoufox-release/venv-app/bin/python",
+    "crawler_python": "/srv/zhanyun/camoufox-release/venv-crawler/bin/python",
+    "node": "/usr/bin/node",
+    "authority_schema": 1,
+    "scheduler_db": "/srv/zhanyun/camoufox-release/db/scheduler.db",
+    "account_db": "/srv/zhanyun/camoufox-release/db/audit_index.sqlite3",
+    "owner_db": "/srv/zhanyun/camoufox-release/db/owners.db",
+    "archive_root": "/srv/zhanyun/camoufox-release/archive"
+  },
+  "ports": {
+    "host": "127.0.0.1",
+    "backend": 8298,
+    "frontend": 3298,
+    "allowed": [
+      8298,
+      3298
+    ],
+    "protected": [
+      80,
+      443,
+      13298
+    ]
+  },
+  "environment": {
+    "CRAWLER_LOGIN_V2_ORIGINS": "https://content-audit.guixucloud.cn"
+  },
+  "parent_env_files": [],
+  "quiescence_scope": {
+    "units": [
+      "xhs-audit-formal.service"
+    ],
+    "process_roots": [
+      "/srv/zhanyun/camoufox-release/old-runtime"
+    ]
+  },
+  "security_evidence": {
+    "path": "/srv/zhanyun/camoufox-release/g0.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

@@ -24,6 +24,7 @@ from backend.api.reporting import create_reporting_router
 from backend.audit_agent.audit_policy_store import AuditPolicyStore
 from backend.audit_agent.config import settings
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+from crawler_auth_fixtures import mark_camoufox_login_verified
 from backend.audit_agent.job_store import JobStore
 from backend.audit_agent.lexicon_store import LexiconStore
 from backend.hermes_runtime.adapter import HermesRuntimeBinding
@@ -230,6 +231,8 @@ def creation_stack(tmp_path: Path) -> dict:
             display_name=f"{platform} fixture account",
         )
         crawler_accounts.save_auth_state(account["id"], "synthetic-fixture-ciphertext")
+        if platform == "dy":
+            mark_camoufox_login_verified(crawler_accounts, account["id"])
     resolver = InvestigationConfigurationResolver(
         lexicon_store=lexicons,
         policy_store=policies,

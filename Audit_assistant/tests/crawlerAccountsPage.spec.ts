@@ -7,7 +7,7 @@ const applicationUser = (role: "admin" | "user") => ({
   status: "active",
   activation_mode: "first_login",
   validity_started_at: "2026-09-21T00:00:00Z",
-  expires_at: role === "admin" ? null : "2026-09-28T00:00:00Z",
+  expires_at: role === "admin" ? null : "2099-09-28T00:00:00Z",
   created_at: "2026-09-21T00:00:00Z",
   updated_at: "2026-09-21T00:00:00Z"
 });
@@ -86,6 +86,39 @@ const account = (id: string, displayName: string, platform: "xhs" | "dy") => ({
 });
 
 test("desktop page renders exactly two authoritative accounts and restores the Draft link", async ({ page }) => {
+  const workspaceId = "investigation-session:account-return";
+  const timestamp = "2026-10-10T00:00:00Z";
+  const preview = {
+    draft_id: "return-draft", draft_revision: 1, title: "返回中的调查草稿",
+    objective: "核查用户原有请求", mode: "search", platform: "dy",
+    resolved_search_terms: ["原有关键词"], creator_url: "",
+    recall_plan: { strategy: "temporary_terms", lexicon_id: "", lexicon_title: "",
+      enabled_main_term_count: 0, enabled_main_terms: [], temporary_terms: ["原有关键词"], source_lexicon_ids: [] },
+    audit_policy: { id: "policy-1", name: "调查策略", description: "", published_version: "v1",
+      ruleset_revision_id: "revision-1", ruleset_version: 1, domain: "general" },
+    ruleset_revision: { id: "revision-1", ruleset_id: "rules-1", name: "调查规则", domain: "general", version: 1, enabled_rule_count: 1 },
+    max_notes: 1, blockers: [], can_confirm: true
+  };
+  const artifact = {
+    artifact_type: "investigation_draft", presentation_stage: "confirmation",
+    draft_id: "return-draft", draft_revision: 1,
+    draft: { id: "return-draft", status: "DRAFT", current_revision: 1, title: preview.title,
+      objective: preview.objective, configuration: { schema_version: "investigation-draft-config-v3", platform: "dy",
+        investigation: { mode: "search", recall_plan: { strategy: "temporary_terms", terms: ["原有关键词"], source_lexicon_ids: [] } }, audit_policy: null },
+      created_at: timestamp, updated_at: timestamp, confirmed_revision: null, confirmed_at: "" },
+    confirmation_preview: preview, suggestion: null
+  };
+  await page.route("**/api/historical-report-workspaces", route => route.fulfill({ json: { items: [] } }));
+  await page.route("**/api/investigation-workspaces", route => route.fulfill({ json: { items: [{
+    workspace_session_id: workspaceId, title: preview.title, updated_at: timestamp,
+    run_status: null, presentation_stage: "confirmation"
+  }], has_more: false } }));
+  await page.route("**/api/investigation-workspaces/*/state", route => route.fulfill({ json: {
+    workspace: { workspace_session_id: workspaceId, status: "active", created_at: timestamp, updated_at: timestamp },
+    messages: [{ message_id: "return-request", turn_id: "return-turn", role: "user", content: "保留原来的调查请求", sequence: 1, created_at: timestamp },
+      { message_id: "return-answer", turn_id: "return-turn", role: "assistant", content: "调查草稿等待确认", artifact, sequence: 2, created_at: timestamp }],
+    latest_turn: null, draft_artifact: artifact, run: null, report_messages: [], latest_report_turn: null
+  } }));
   await page.route("**/api/crawler-accounts", async (route) => {
     await route.fulfill({
       json: {
@@ -97,7 +130,7 @@ test("desktop page renders exactly two authoritative accounts and restores the D
     });
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto("/crawler-accounts?return_to=%2Finvestigation%2Fsession-ethnic-relations");
+  await page.goto(`/crawler-accounts?return_to=${encodeURIComponent(`/investigation/${encodeURIComponent(workspaceId)}`)}`);
 
   await expect(page.getByRole("heading", { name: "采集账号", exact: true })).toBeVisible();
   await expect(page.getByText("真实小红书账号", { exact: true })).toHaveCount(1);
@@ -115,7 +148,9 @@ test("desktop page renders exactly two authoritative accounts and restores the D
   expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(pageBox!.x + pageBox!.width + 1);
 
   await returnButton.click();
-  await expect(page).toHaveURL(/\/investigation\/session-ethnic-relations$/);
+  await expect(page).toHaveURL(new RegExp(`/investigation/${encodeURIComponent(workspaceId)}$`));
+  await expect(page.getByText("保留原来的调查请求", { exact: true })).toBeVisible();
+  await expect(page.getByText("返回中的调查草稿", { exact: true }).first()).toBeVisible();
 });
 
 test("ordinary user sees only private accounts plus shared pool capacity", async ({ page }) => {
@@ -363,4 +398,22 @@ test("scanned login session remains visible and continues polling", async ({ pag
   await page.getByRole("button", { name: "重新登录真实抖音账号" }).click();
   await expect(page.getByText(/已扫码，请在手机\s*抖音\s*确认登录/)).toBeVisible();
   await expect.poll(() => sessionReads, { timeout: 4000 }).toBeGreaterThan(1);
+});
+
+test("readonly account safety states preserve expired priority and show controlled direct mode", async ({ page }) => {
+  const items = [
+    { ...account("paused", "安全暂停账号", "dy"), collection_ready: false, route_state: "challenge_paused", collection_block_reason: "ACCOUNT_CHALLENGE_PAUSED", shared_exit_generation: 2 },
+    { ...account("unknown-safe", "未知保护账号", "dy"), collection_ready: false, collection_block_reason: "FUTURE_PROTECTION_REASON" },
+    { ...account("manual", "人工处理账号", "dy"), collection_ready: false, route_state: "manual_required", collection_block_reason: "ACCOUNT_MANUAL_REQUIRED" },
+    { ...account("direct", "低频账号", "dy"), collection_ready: true, route_mode: "direct_degraded" },
+    { ...account("expired-safe", "失效账号", "dy"), status: "expired", collection_ready: false, needs_proxy_login_validation: true, collection_block_reason: "PROXY_LOGIN_VALIDATION_REQUIRED" }
+  ];
+  await page.route("**/api/crawler-accounts", route => route.fulfill({ json: { items } }));
+  await page.goto("/crawler-accounts");
+  await expect(page.getByText("安全验证暂停", { exact: true })).toBeVisible();
+  await expect(page.getByText("采集暂不可用", { exact: true })).toBeVisible();
+  await expect(page.getByText("需人工处理", { exact: true })).toBeVisible();
+  await expect(page.getByText("受控直连 · 低频采集", { exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "抖音账号列表" }).getByText("已失效", { exact: true })).toBeVisible();
+  await expect(page.getByText("采集网络已变更，需校验登录", { exact: true })).toHaveCount(0);
 });

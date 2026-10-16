@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Header, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import Field
 
 from backend.api.contracts import (
@@ -21,6 +22,19 @@ from backend.api.investigation import (
     turn_event_stream_response,
 )
 from backend.investigation_creation.principal import Principal, PrincipalProvider
+from backend.historical_reports.importer import HistoricalReportImportError
+
+
+logger = logging.getLogger(__name__)
+
+
+def _raise_historical_error(exc: Exception) -> None:
+    if isinstance(exc, HistoricalReportImportError):
+        logger.warning("Historical report import failed: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=503, detail="历史报告暂时无法读取，请联系管理员检查历史归档。"
+        ) from exc
+    _raise_public_error(exc)
 
 
 class HistoricalDisplayMessageResponse(PublicApiModel):
@@ -119,7 +133,7 @@ def create_historical_report_router(
             )
             return HistoricalWorkspaceListResponse(items=items)
         except Exception as exc:
-            _raise_public_error(exc)
+            _raise_historical_error(exc)
 
     @router.get(
         "/api/historical-report-workspaces/{workspace_id}",
@@ -135,7 +149,7 @@ def create_historical_report_router(
                 service.get_workspace(workspace_id, principal_id=principal.id),
             )
         except Exception as exc:
-            _raise_public_error(exc)
+            _raise_historical_error(exc)
 
     @router.get("/api/historical-report-workspaces/{workspace_id}/analysis-records")
     def get_analysis_records(
@@ -145,7 +159,7 @@ def create_historical_report_router(
         try:
             return service.analysis_records(workspace_id, principal_id=principal.id)
         except Exception as exc:
-            _raise_public_error(exc)
+            _raise_historical_error(exc)
 
     @router.post(
         "/api/historical-report-workspaces/{workspace_id}/turns",
@@ -169,7 +183,7 @@ def create_historical_report_router(
                 updated_at=turn.created_at,
             )
         except Exception as exc:
-            _raise_public_error(exc)
+            _raise_historical_error(exc)
 
     @router.get(
         "/api/historical-report-workspaces/{workspace_id}/turns/{turn_id}",
@@ -186,7 +200,7 @@ def create_historical_report_router(
             )
             return _turn_response(service, turn)
         except Exception as exc:
-            _raise_public_error(exc)
+            _raise_historical_error(exc)
 
     @router.get(
         "/api/historical-report-workspaces/{workspace_id}/turns/{turn_id}/events"
@@ -209,7 +223,7 @@ def create_historical_report_router(
                 last_event_id=last_event_id,
             )
         except Exception as exc:
-            _raise_public_error(exc)
+            _raise_historical_error(exc)
 
     @router.post(
         "/api/historical-report-workspaces/{workspace_id}/turns/{turn_id}/resume",
@@ -230,7 +244,7 @@ def create_historical_report_router(
                 updated_at=turn.created_at,
             )
         except Exception as exc:
-            _raise_public_error(exc)
+            _raise_historical_error(exc)
 
     return router
 

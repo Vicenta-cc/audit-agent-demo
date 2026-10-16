@@ -100,6 +100,8 @@ def test_real_worker_pipeline_audit_and_native_report(
     settings=pipeline_module.settings
     for name,value in {'data_dir':tmp_path/'data','outputs_dir':tmp_path/'outputs',
             'task_resource_lock_dir':tmp_path/'locks','crawler_browser_profile_root':tmp_path/'profiles',
+            'crawler_camoufox_state_root':tmp_path/'physical-profiles',
+            'request_scheduler_db':tmp_path/'scheduler.sqlite3','crawler_proxy_enabled':False,
             'stream_crawl_analysis':True,'ocr_enabled':False,'app_auth_mode':auth_mode}.items():
         monkeypatch.setattr(settings,name,value)
     model=AuditModel();events=[]
@@ -113,6 +115,13 @@ def test_real_worker_pipeline_audit_and_native_report(
     monkeypatch.setattr(pipeline_module,'auth_state_cipher',cipher)
     monkeypatch.setattr(pipeline_module,'QwenClient',lambda:model)
     monkeypatch.setattr(pipeline_module,'MediaCrawlerAdapter',lambda:crawler)
+    from backend.audit_agent import crawler_route
+    import time
+    contract=crawler_route.route_contract()
+    # Only the external exit observation is fixed; account/profile validation,
+    # route admission and the real execution lease remain production code.
+    monkeypatch.setattr(crawler_route,'_run_maintenance_probe',lambda bundle:
+        contract.ProbeReceipt('service-direct',1,'offline-exit-probe','203.0.113.9',time.time()))
     def factory(job_id):
         pipeline=pipeline_module.AuditPipeline(job_id)
         pipeline.ingestion=adapter.ingestion_store

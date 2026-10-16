@@ -20,7 +20,10 @@ const USER_CACHE_KEYS = new Set([
   "crawler-account-login-target"
 ]);
 const USER_CACHE_PREFIXES = [
+  "crawler-login-control-token:",
   "crawler-account-login-session:",
+  "crawler-account-login-intent:",
+  "crawler-account-login-command:",
   "xhs-audit:historical-report-pending:",
   "xhs-audit:list-scroll:",
   "xhs-audit:task-intent:"
@@ -44,6 +47,7 @@ export const setCsrfToken = (token: string) => {
 };
 
 function clearUserScopedBrowserState() {
+  if (typeof window !== "undefined") window.dispatchEvent?.(new Event("application-auth-cleared"));
   const storage = browserSessionStorage();
   if (!storage) return;
   const keys: string[] = [];

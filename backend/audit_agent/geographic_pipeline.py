@@ -1,4 +1,5 @@
 """Crawler ports for the shared geographic executor, after Run/Job verification."""
+from contextlib import ExitStack
 from copy import deepcopy
 from pathlib import Path
 
@@ -13,13 +14,15 @@ from .scoped_selection import digest
 
 class GeographicPipeline:
     def __init__(self, *, plan, binding, crawler, ingestion, state_path, save_root,
-                 risk_client, geo_client, accounts, lease_fence, stop,
+                 risk_client, geo_client, accounts, lease_fence, stop, route_operation,
                  on_delivery=lambda refs: None, retire=lambda account, error: None,
                  started_callback=None, progress_callback=None, on_progress=lambda report: None,
                  state_lock=None):
         self.crawler, self.ingestion = crawler, ingestion
         self.root = Path(save_root) / 'geographic'
         self.stop, self.on_delivery, self.retire = stop, on_delivery, retire
+        self.route_operation = route_operation
+        self._detail_route = ExitStack()
         self.started_callback, self.progress_callback = started_callback, progress_callback
         self.on_progress = on_progress
         self.accounts = {a['id']: deepcopy(a) for a in accounts if a.get('id')}
@@ -44,6 +47,10 @@ class GeographicPipeline:
             account=self.account, rotate=self.rotate, stop=stop, checkpoint=self.progress)
 
     def progress(self, stage, payload):
+        if stage == 'after_settle':
+            review = self.execution.snapshot()['reviews'].get(payload['attempt_id'], {})
+            if not review.get('allowed') or self.stop():
+                self._detail_route.close()
         self.on_progress(self.execution.report() | {'stage': stage, 'progress': deepcopy(payload)})
 
     def fence(self):
@@ -60,11 +67,18 @@ class GeographicPipeline:
 
     def rotate(self, query, account_id, error):
         self.fence()
+        self._retire_account(account_id, error)
+        error.triage_rotation_stop = True  # Never restart all queries via the outer legacy loop.
+        return self.account(query) if self.accounts else None
+
+    def _retire_account(self, account_id, error):
         removed = self.accounts.pop(account_id, None)
         if removed:
             self.retire(removed, error)
-        error.triage_rotation_stop = True  # Never restart all queries via the outer legacy loop.
-        return self.account(query) if self.accounts else None
+            if isinstance(error, CrawlerVerificationError) and removed.get('proxy_id'):
+                # A shared exit pause cannot be bypassed by its other accounts.
+                self.accounts = {key: account for key, account in self.accounts.items()
+                                 if account.get('proxy_id') != removed['proxy_id']}
 
     @staticmethod
     def original(item, key, keyword):
@@ -77,6 +91,7 @@ class GeographicPipeline:
         return item
 
     def capture(self, plan, query):
+        self._detail_route.close()
         collection = self.bridge.p2.collection
         params = collection.effective_parameters
         account_id = self.account(query)
@@ -87,18 +102,20 @@ class GeographicPipeline:
                 raise RuntimeError('geographic capture incomplete: stopped')
             account = self.accounts[account_id]
             try:
-                output = self.crawler.run_search(platform=plan['platform'], keyword=query['query'],
-                    start_page=params.start_page, max_notes=collection.candidate_count,
-                    max_total_notes=collection.candidate_count, max_comments=collection.candidate_comment_limit,
-                    max_concurrency=params.max_concurrency, max_items_per_minute=params.max_items_per_minute,
-                    get_sub_comment=False, collect_comments=collection.collect_comments and collection.candidate_comment_limit > 0,
-                    collect_media=False, save_root=self.root/'candidates'/query['query_id']/str(attempt),
-                    fetch_author_profile=True,
-                    skip_profile_verify_regex='|'.join(plan['risk_config']['parameters']['official_verify_patterns']),
-                    stream_items=False, content_callback=None, stop_checker=self.stop,
-                    auth_state=account['auth_state'], account_id=account_id,
-                    started_callback=self.started_callback, search_sort=params.search_sort,
-                    reusable_content_db=None, current_task_id=plan['runtime_binding']['job_id'])
+                with self.route_operation(account_id) as route_context:
+                    self.fence()
+                    output = self.crawler.run_search(platform=plan['platform'], keyword=query['query'],
+                        start_page=params.start_page, max_notes=collection.candidate_count,
+                        max_total_notes=collection.candidate_count, max_comments=collection.candidate_comment_limit,
+                        max_concurrency=params.max_concurrency, max_items_per_minute=params.max_items_per_minute,
+                        get_sub_comment=False, collect_comments=collection.collect_comments and collection.candidate_comment_limit > 0,
+                        collect_media=False, save_root=self.root/'candidates'/query['query_id']/str(attempt),
+                        fetch_author_profile=True,
+                        skip_profile_verify_regex='|'.join(plan['risk_config']['parameters']['official_verify_patterns']),
+                        stream_items=False, content_callback=None, stop_checker=self.stop,
+                        auth_state=account['auth_state'], account_id=account_id, route_context=route_context,
+                        started_callback=self.started_callback, search_sort=params.search_sort,
+                        reusable_content_db=None, current_task_id=plan['runtime_binding']['job_id'])
                 self.started_callback = None
             except (CrawlerAuthenticationError, CrawlerVerificationError) as error:
                 replacement = self.rotate(query, account_id, error)
@@ -154,7 +171,12 @@ class GeographicPipeline:
             error.triage_rotation_stop = True
             raise error
         params = self.bridge.p2.collection.effective_parameters
+        # Retain only this attempt's source route through approved delivery.
+        # Rejected/empty earlier details cannot accumulate account/exit leases.
+        self._detail_route.close()
         try:
+            route_context = self._detail_route.enter_context(self.route_operation(account_id))
+            self.fence()
             output = self.crawler.run_detail(platform=occurrence['platform'], content_id=occurrence['content_key'],
                 source_keyword=occurrence['source_keyword'], max_comments=self.bridge.p2.collection.detail_comment_limit,
                 max_concurrency=params.max_concurrency, max_items_per_minute=params.max_items_per_minute,
@@ -162,18 +184,24 @@ class GeographicPipeline:
                 collect_media=params.collect_media, save_root=self.root/'details'/attempt['attempt_id'],
                 progress_callback=self.progress_callback, content_callback=content_callback,
                 stream_items=False, stop_checker=self.stop,
-                auth_state=self.accounts[account_id]['auth_state'], account_id=account_id, started_callback=None)
+                auth_state=self.accounts[account_id]['auth_state'], account_id=account_id,
+                route_context=route_context, started_callback=None)
         except (CrawlerAuthenticationError, CrawlerVerificationError) as error:
+            self._detail_route.close()
             self.fence()
             # Both the first failure and the exhausted retry retire their account.
             # The shared executor alone owns whether the query gets one retry.
-            self.retire(self.accounts.pop(account_id), error)
+            self._retire_account(account_id, error)
             error.triage_rotation_stop = True
+            raise
+        except BaseException:
+            self._detail_route.close()
             raise
         self.fence()
         if self.stop():
             raise RuntimeError('geographic detail incomplete: stopped')
         if not output.contents:
+            self._detail_route.close()
             return None
         if len(output.contents) != 1 or content_identity(output.contents[0], occurrence['platform']) != occurrence['content_key']:
             raise ValueError('detail returned unexpected content identity')
@@ -183,12 +211,18 @@ class GeographicPipeline:
             'comments': deepcopy(comments), 'source_queries': [occurrence['source_keyword']]})
 
     def deliver(self, content, *, idempotency_key, binding):
-        receipt = self.sink.deliver(content, idempotency_key=idempotency_key, binding=binding)
-        self.on_delivery(receipt['refs'])
-        return receipt
+        try:
+            receipt = self.sink.deliver(content, idempotency_key=idempotency_key, binding=binding)
+            self.on_delivery(receipt['refs'])
+            return receipt
+        finally:
+            self._detail_route.close()
 
     def run(self):
-        report = self.execution.run()
+        try:
+            report = self.execution.run()
+        finally:
+            self._detail_route.close()
         _, refs = self.ingestion.validated_selection_for_task(self.bridge.plan['runtime_binding']['job_id'])
         # Read only durable approved membership; never scan candidate/detail folders.
         output = CrawlOutput(self.bridge.plan['platform'], [r['item'] for r in refs],

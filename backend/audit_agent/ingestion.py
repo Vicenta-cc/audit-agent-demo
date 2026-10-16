@@ -11,6 +11,16 @@ from typing import Iterable
 from .config import settings
 
 
+def _validated_collection_source(value: dict) -> dict:
+    from .crawler_route import CollectionRouteError, route_contract
+    try:
+        return route_contract().validate_collection_route_provenance(value)
+    except Exception as exc:
+        if getattr(exc, "code", None):
+            raise CollectionRouteError(exc.code) from None
+        raise
+
+
 def utc_now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
@@ -711,6 +721,10 @@ class BatchWriter:
                 if not item_id:
                     continue
                 item_ids.add(item_id)
+                item = dict(item)
+                source = item.get("collection_route_provenance")
+                if source is not None:
+                    item["collection_route_provenance"] = _validated_collection_source(source)
                 self._items.append(item)
 
             if not item_ids:
@@ -929,6 +943,7 @@ class IngestionStore:
                 "raw_item_path": "TEXT",
                 "result_path": "TEXT",
                 "audit_result_id": "INTEGER",
+                "use_context_json": "TEXT",
             }.items():
                 if column not in columns:
                     conn.execute(f"ALTER TABLE task_contents ADD COLUMN {column} {definition}")
@@ -998,6 +1013,9 @@ class IngestionStore:
                 title = str(item.get("title") or item.get("desc") or "")
                 content_comments = comments_by_content.get(content_key, [])
                 raw_path = raw_items_dir / f"{safe_part(platform)}_{safe_part(content_key)}.json"
+                provenance = item.get("collection_route_provenance")
+                if provenance is not None:
+                    provenance = _validated_collection_source(provenance)
                 raw_payload = {
                     "task_id": task_id,
                     "platform": platform,
@@ -1006,6 +1024,7 @@ class IngestionStore:
                     "source_batch": str(batch_path),
                     "item": item,
                     "comments": content_comments,
+                    "collection_route_provenance": provenance,
                 }
 
                 cursor = conn.execute(
@@ -1051,6 +1070,10 @@ class IngestionStore:
                     """,
                     (task_id, content_id, str(raw_path), now, now),
                 )
+                use_context = {"task_id": task_id, "keyword": item_keyword, "discovered_at": now,
+                               "observation_id": provenance.get("observation_id") if provenance else None}
+                conn.execute("UPDATE task_contents SET use_context_json = ? WHERE task_id = ? AND content_id = ?",
+                             (json.dumps(use_context), task_id, content_id))
                 processed += 1
                 task_row = conn.execute(
                     """
@@ -1080,13 +1103,18 @@ class IngestionStore:
                         "UPDATE task_contents SET raw_item_path = ? WHERE task_id = ? AND content_id = ?",
                         (shared_raw_path, task_id, content_id),
                     )
+                if shared_complete and not inserted:
+                    task_raw_path = shared_raw_path
+                    raw_payload = json.loads(Path(shared_raw_path).read_text(encoding="utf-8"))
                 if task_status in {"queued", "failed"}:
                     queued.append({
                         "content_id": content_id,
                         "platform": platform,
                         "content_key": content_key,
-                        "item": item,
-                        "comments": content_comments,
+                        "item": self._source_item(raw_payload),
+                        "comments": raw_payload.get("comments") or [],
+                        "collection_route_provenance": raw_payload.get("collection_route_provenance"),
+                        "use_context": use_context,
                         "raw_item_path": task_raw_path,
                         "should_analyze": True,
                     })
@@ -1134,7 +1162,8 @@ class IngestionStore:
                 "content_id": int(row["id"]),
                 "platform": str(row["platform"]),
                 "content_key": str(row["content_key"]),
-                "item": payload.get("item") or {},
+                "item": self._source_item(payload),
+                "collection_route_provenance": payload.get("collection_route_provenance"),
                 "comments": payload.get("comments") or [],
                 "raw_item_path": str(raw_path),
                 "should_analyze": True,
@@ -1164,7 +1193,8 @@ class IngestionStore:
                 tc.analyze_status,
                 COALESCE(NULLIF(tc.raw_item_path, ''), c.raw_item_path) AS raw_item_path,
                 tc.result_path,
-                tc.audit_result_id
+                tc.audit_result_id,
+                tc.use_context_json
             FROM task_contents tc
             LEFT JOIN contents c ON c.id = tc.content_id
             WHERE tc.task_id = ?
@@ -1188,6 +1218,7 @@ class IngestionStore:
                 "raw_item_path": str(row["raw_item_path"] or ""),
                 "result_path": str(row["result_path"] or ""),
                 "audit_result_id": row["audit_result_id"],
+                "use_context": json.loads(row["use_context_json"] or "{}"),
             }
             for row in rows
         ]
@@ -1261,6 +1292,13 @@ class IngestionStore:
             verify_geographic_evidence(conn, task_id, content_id, path, payload)
 
     @staticmethod
+    def _source_item(payload: dict) -> dict:
+        item = dict(payload.get("item") or {})
+        # The raw top-level source is authoritative, including historical unknown.
+        item["collection_route_provenance"] = payload.get("collection_route_provenance")
+        return item
+
+    @staticmethod
     def _ref_from_payload(membership: dict, payload: dict, raw_path: Path) -> dict:
         item = payload.get("item")
         comments = payload.get("comments")
@@ -1269,7 +1307,9 @@ class IngestionStore:
             "content_id": int(membership["content_id"]),
             "platform": str(membership["platform"]),
             "content_key": str(membership["content_key"]),
-            "item": item if isinstance(item, dict) else {},
+            "item": IngestionStore._source_item(payload),
+            "collection_route_provenance": payload.get("collection_route_provenance"),
+            "use_context": membership.get("use_context") or {},
             "comments": comments if isinstance(comments, list) else [],
             "raw_item_path": str(raw_path),
             **({"geographic_binding": dict(payload["geographic_binding"])}

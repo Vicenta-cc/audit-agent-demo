@@ -46,6 +46,7 @@ class AuditSubject:
     desc_zh: str = ""
     local_image_paths: list[str] = field(default_factory=list)
     local_video_paths: list[str] = field(default_factory=list)
+    collection_route_provenance: dict | None = None
 
 
 @dataclass

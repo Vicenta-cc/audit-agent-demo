@@ -66,3 +66,167 @@ class CrawlerAccountIdentityTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_douyin_open_author_url_and_unlabelled_avatar_are_not_self(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    import pytest
+
+    pytest.importorskip(
+        "playwright", reason="login helper runs in pinned crawler Python"
+    )
+    from scripts import crawler_account_login as login
+
+    author = SimpleNamespace(url="https://www.douyin.com/user/MS4wLjABAAAA_author")
+    candidate = {
+        "href": author.url,
+        "visible": True,
+        "top": 40,
+        "hasImage": True,
+        "inContent": False,
+        "text": "",
+        "label": "",
+    }
+    monkeypatch.setattr(
+        login, "rendered_link_candidates", AsyncMock(return_value=[candidate])
+    )
+    assert (
+        asyncio.run(
+            login.identify_logged_in_account("dy", SimpleNamespace(pages=[author]))
+        )
+        == ""
+    )
+
+
+def test_douyin_explicit_personal_menu_is_self_even_on_author_page(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    import pytest
+
+    pytest.importorskip(
+        "playwright", reason="login helper runs in pinned crawler Python"
+    )
+    from scripts import crawler_account_login as login
+
+    author = SimpleNamespace(url="https://www.douyin.com/user/MS4wLjABAAAA_author")
+    personal = {
+        "href": "https://www.douyin.com/user/MS4wLjABAAAA_myself",
+        "visible": True,
+        "top": 40,
+        "hasImage": True,
+        "inContent": False,
+        "text": "",
+        "label": "我的主页",
+    }
+    content = {**personal, "href": author.url, "inContent": True}
+    monkeypatch.setattr(
+        login, "rendered_link_candidates", AsyncMock(return_value=[personal, content])
+    )
+    assert (
+        asyncio.run(
+            login.identify_logged_in_account("dy", SimpleNamespace(pages=[author]))
+        )
+        == "MS4wLjABAAAA_myself"
+    )
+
+
+def test_douyin_conflicting_personal_menus_across_pages_are_rejected(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    import pytest
+
+    pytest.importorskip(
+        "playwright", reason="login helper runs in pinned crawler Python"
+    )
+    from scripts import crawler_account_login as login
+
+    first, second = (
+        SimpleNamespace(url="https://www.douyin.com"),
+        SimpleNamespace(url="https://www.douyin.com/user/self"),
+    )
+
+    async def candidates(page, selector):
+        identity = "MS4wLjABAAAA_first" if page is first else "MS4wLjABAAAA_second"
+        return [
+            {
+                "href": "https://www.douyin.com/user/" + identity,
+                "visible": True,
+                "top": 40,
+                "hasImage": True,
+                "inContent": False,
+                "text": "个人主页",
+                "label": "",
+            }
+        ]
+
+    monkeypatch.setattr(login, "rendered_link_candidates", candidates)
+    assert (
+        asyncio.run(
+            login.identify_logged_in_account(
+                "dy", SimpleNamespace(pages=[first, second])
+            )
+        )
+        == ""
+    )
+
+
+def test_non_douyin_identity_keeps_existing_current_url_behavior(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    import pytest
+
+    pytest.importorskip(
+        "playwright", reason="login helper runs in pinned crawler Python"
+    )
+    from scripts import crawler_account_login as login
+
+    page = SimpleNamespace(
+        url="https://www.xiaohongshu.com/user/profile/5f58bd990000000001003753"
+    )
+    render = AsyncMock()
+    monkeypatch.setattr(login, "rendered_link_candidates", render)
+    assert (
+        asyncio.run(
+            login.identify_logged_in_account("xhs", SimpleNamespace(pages=[page]))
+        )
+        == "5f58bd990000000001003753"
+    )
+    render.assert_not_called()
+
+
+def test_douyin_author_homepage_label_is_not_personal_identity(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    import pytest
+
+    pytest.importorskip(
+        "playwright", reason="login helper runs in pinned crawler Python"
+    )
+    from scripts import crawler_account_login as login
+
+    page = SimpleNamespace(url="https://www.douyin.com/user/MS4wLjABAAAA_author")
+    for label in ("作者主页", "我关注的作者主页", "作者的个人主页"):
+        candidate = {
+            "href": page.url,
+            "visible": True,
+            "top": 40,
+            "hasImage": True,
+            "inContent": False,
+            "text": "",
+            "label": label,
+        }
+        monkeypatch.setattr(
+            login, "rendered_link_candidates", AsyncMock(return_value=[candidate])
+        )
+        assert (
+            asyncio.run(
+                login.identify_logged_in_account("dy", SimpleNamespace(pages=[page]))
+            )
+            == ""
+        )

@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 
-from .ingestion import content_identity, utc_now
+from .ingestion import _validated_collection_source, content_identity, utc_now
 from .scoped_selection import digest
 
 
@@ -99,8 +99,12 @@ class GeographicDelivery:
                 name = scope.get(region, {}).get('name')
                 if isinstance(name, str) and name:
                     basis[field] = name
+            source = raw['post'].get('collection_route_provenance')
+            if source is not None:
+                source = _validated_collection_source(source)
             payload = dict(task_id=job_id, platform=platform, category='', keyword=query['query'],
                            item=deepcopy(raw['post']), comments=deepcopy(raw['comments']),
+                           collection_route_provenance=deepcopy(source),
                            geographic_binding=expected | p['binding'] | p['runtime_binding'],
                            selection_basis=basis)
             raw_digest = digest(payload)

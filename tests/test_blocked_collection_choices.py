@@ -165,9 +165,11 @@ def test_two_choices_racing_cannot_both_execute(stack):
 
 
 def test_available_account_resumes_same_job_with_checkpoint(stack, monkeypatch):
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
     from backend.task_admission.resources import selected_account
+    from crawler_auth_fixtures import mark_camoufox_login_verified
     creation, auth, (owner, _) = stack
-    run = make_run(creation, owner, "resume")
+    run = make_run(creation, owner, "resume", platform="dy")
     execution = FakeExecutionAdapter(blocked_state())
     worker = worker_for(creation, execution)
     worker.run_once()
@@ -175,8 +177,9 @@ def test_available_account_resumes_same_job_with_checkpoint(stack, monkeypatch):
     job = execution.jobs[row["job_id"]]
     job.update(id=row["job_id"], owner_user_id=owner, platform="dy", keyword="resume", crawl_mode="search", crawl_checkpoint_keyword="resume", crawl_checkpoint_page=3)
     execution.job_store.update_control = lambda ident, **values: job.setdefault("control", {}).update(values)
-    available = []
-    execution.crawler_account_store = SimpleNamespace(available_accounts=lambda _: available)
+    accounts = CrawlerAccountStore(creation.db_path)
+    execution.crawler_account_store = accounts
+    replacement_id = None
     calls = []
 
     class Pipeline:
@@ -185,7 +188,7 @@ def test_available_account_resumes_same_job_with_checkpoint(stack, monkeypatch):
 
         def run(self, request):
             calls.append(job["id"])
-            assert selected_account() == "replacement"
+            assert selected_account() == replacement_id
             assert job["crawl_checkpoint_page"] == 3
             job.update(status="completed", crawl_status="completed", analysis_status="completed", error="")
 
@@ -193,8 +196,11 @@ def test_available_account_resumes_same_job_with_checkpoint(stack, monkeypatch):
     enqueue_resume(creation.admission, job, owner=owner, action="resume_crawl", key="resume")
     assert worker.run_once() is None
     assert not calls
-    auth.register_crawler_account("replacement", owner)
-    available.append({"id": "replacement", "platform": "dy"})
+    replacement = accounts.create(platform="dy", display_name="replacement")
+    replacement_id = replacement["id"]
+    accounts.save_auth_state(replacement_id, "fixture-ciphertext")
+    mark_camoufox_login_verified(accounts, replacement_id)
+    auth.register_crawler_account(replacement_id, owner)
     worker.run_once()
     worker.run_once()
     assert calls == [row["job_id"]]

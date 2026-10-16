@@ -13,6 +13,20 @@ export type CrawlerAccountLoginStatus =
   | "cancelled";
 
 export interface CrawlerAccount {
+  routeMode?: string;
+  routeState?: string;
+  pausedUntil?: string;
+  pauseReason?: string;
+  recoveryState?: string;
+  sharedExitGeneration?: number;
+  collectionReady?: boolean;
+  collectionBlockReason?: string;
+  proxyId?: string | null;
+  proxyRequired?: boolean;
+  needsProxyLoginValidation?: boolean;
+  validatedProxyBindingRevision?: number;
+  validatedProxyConfigRevision?: number;
+  bindingRevision?: number;
   id: string;
   platform: CrawlerAccountPlatform;
   displayName: string;
@@ -37,6 +51,7 @@ export interface CrawlerAccountLoginSession {
   platform: CrawlerAccountPlatform;
   status: CrawlerAccountLoginStatus;
   interactive?: boolean;
+  v2?: import("../services/crawlerLoginV2").LoginSnapshot;
   qrImageDataUrl: string;
   qrExpiresAt: string;
   finalizingStartedAt: string;

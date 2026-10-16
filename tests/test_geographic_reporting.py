@@ -80,6 +80,8 @@ def test_geographic_report_refuses_missing_delivery(tmp_path):
     with sqlite3.connect(source.db_path) as db:
         db.execute('UPDATE jobs SET control=? WHERE id=?',
                    (json.dumps({'geographic_selection': {'execution_id': 'missing'}}), 'new-search-task'))
+    with sqlite3.connect(source.db_path) as db:
+        assert db.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone()[0] == 0
     with pytest.raises(ValueError, match='geographic'):
         build_immutable_snapshot(source, 'new-search-task')
 
@@ -96,6 +98,8 @@ def test_real_delivery_context_is_readonly_source_bound_and_tamper_checked(confi
     with sqlite3.connect(adapter.job_store.db_path) as db:
         db.execute('UPDATE jobs SET control=? WHERE id=?',
                    (json.dumps({'geographic_selection': report}), job_id))
+    with sqlite3.connect(adapter.job_store.db_path) as db:
+        assert db.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone()[0] == 0
     source = CanonicalReportSource(adapter.job_store.db_path, tmp_path)
     context = source.geographic_context({'job_id': job_id, 'content_key': 'same'})
     assert context['coverage']['handed_off'] == 1
@@ -110,5 +114,7 @@ def test_real_delivery_context_is_readonly_source_bound_and_tamper_checked(confi
         receipt = json.loads(row[1]); receipt['selection_basis']['geo_tier'] = 'conflict'
         db.execute('UPDATE geographic_deliveries SET receipt=? WHERE idempotency_key=?',
                    (json.dumps(receipt), row[0]))
+    with sqlite3.connect(adapter.job_store.db_path) as db:
+        assert db.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone()[0] == 0
     with pytest.raises(ValueError, match='basis binding mismatch'):
         source.geographic_context({'job_id': job_id, 'content_key': 'same'})
