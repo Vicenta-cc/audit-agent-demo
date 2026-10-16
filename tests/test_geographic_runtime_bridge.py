@@ -245,3 +245,94 @@ def test_provider_metadata_is_not_passed_into_strict_p3_contract(
     assert '_llm_meta' not in record['result']['raw_response']
     assert record['model_meta'] == geo_client.response['_llm_meta']
     bridge.validate_geo(plan, occurrence['candidate'], record)
+
+
+@pytest.mark.parametrize('entrypoint', ['geo', 'review'])
+@pytest.mark.parametrize('invalid_count', [0, 1, 3])
+def test_geo_retries_only_invalid_evidence_with_fixed_protocol_reminder(
+        creation_stack, content, monkeypatch, tmp_path, entrypoint, invalid_count):
+    from backend.audit_agent.scoped_selection import eligible_tier
+    bridge, _, geo_client, _, _ = confirmed_bridge(
+        creation_stack, content, monkeypatch, tmp_path)
+    plan = bridge.plan
+    query = plan['queries'][0]
+    occurrence = bridge.occurrence(query['query_id'], 'dy:retry', 1,
+        {'post_id': 'retry', 'title': '克拉玛依市收费', 'source_keyword': query['query']})
+    occurrence['risk'] = bridge.risk(plan, query, occurrence)
+    responses = [response('新疆克拉玛依市')] * invalid_count + [response()]
+    calls = []
+
+    def audit_text(prompt, **kwargs):
+        calls.append({'prompt': prompt, 'kwargs': deepcopy(kwargs)})
+        return deepcopy(responses[len(calls) - 1]) | {'_llm_meta': {'attempt': len(calls)}}
+
+    monkeypatch.setattr(geo_client, 'audit_text', audit_text)
+    record = (bridge.geo(plan, query, occurrence) if entrypoint == 'geo'
+              else bridge.review(plan, occurrence, occurrence['candidate']))
+    expected_count = min(invalid_count + 1, 3)
+    assert len(calls) == expected_count
+    invocation = bridge.p2.inputs.p3_inputs['model']
+    from backend.audit_agent.geographic_bridge import _GEO_RETRY_REMINDER
+    allowed = {source['field']: [place['name'] for place in source['places']]
+        for source in record['request']['model_input']['sources']}
+    assert all('新疆克拉玛依市' not in names for names in allowed.values())
+    retry_suffix = (_GEO_RETRY_REMINDER
+        + '\n只允许的 field/place 组合（这是完整白名单，不能输出其他字符串）：'
+        + json.dumps(allowed, ensure_ascii=False))
+    assert calls == [{'prompt': record['request']['prompt'] + (retry_suffix if index else ''),
+        'kwargs': {'model': invocation['identifier'], **{key: invocation['invocation_config'][key]
+            for key in ('max_tokens', 'enable_thinking', 'request_timeout')}}}
+        for index in range(expected_count)]
+    assert record['model_meta'] == {'attempt': expected_count}
+    assert len(record['attempts']) == expected_count
+    for index, attempt in enumerate(record['attempts']):
+        assert attempt['raw_response'] == responses[index]
+        assert attempt['model_meta'] == {'attempt': index + 1}
+        assert attempt['evaluation_status'] == ('invalid_response' if index < invalid_count else 'completed')
+        assert bool(attempt['errors']) == (index < invalid_count)
+    bridge.validate_geo(plan, occurrence['candidate'], record)
+    for mutation in ('prompt', 'final', 'count'):
+        bad = deepcopy(record)
+        if mutation == 'prompt':
+            bad['attempts'][0]['prompt'] += 'tampered'
+        elif mutation == 'final':
+            bad['attempts'][-1]['model_meta'] = {'tampered': True}
+        else:
+            bad['attempts'] *= 4
+        with pytest.raises(ValueError, match='runtime_geo_'):
+            bridge.validate_geo(plan, occurrence['candidate'], bad)
+    occurrence['geo'] = record
+    if invalid_count == 3:
+        assert record['result']['evaluation_status'] == 'invalid_response'
+        with pytest.raises(ValueError, match='geo_evaluation_failed'):
+            eligible_tier(plan, occurrence)
+    else:
+        assert record['result']['evaluation_status'] == 'completed'
+        assert eligible_tier(plan, occurrence) == 'local'
+
+
+@pytest.mark.parametrize('entrypoint', ['geo', 'review'])
+@pytest.mark.parametrize('failure', ['transport', 'consume_binding'])
+def test_geo_retry_does_not_swallow_exceptions(
+        creation_stack, content, monkeypatch, tmp_path, entrypoint, failure):
+    from backend.audit_agent import geographic_bridge
+    bridge, _, geo_client, _, _ = confirmed_bridge(
+        creation_stack, content, monkeypatch, tmp_path)
+    plan = bridge.plan
+    query = plan['queries'][0]
+    occurrence = bridge.occurrence(query['query_id'], 'dy:error', 1,
+        {'post_id': 'error', 'title': '克拉玛依市收费', 'source_keyword': query['query']})
+    error = RuntimeError('transport') if failure == 'transport' else ValueError('binding')
+    if failure == 'transport':
+        geo_client.response = error
+    else:
+        def fail_consume(*args):
+            raise error
+        monkeypatch.setattr(geographic_bridge.p3, 'consume', fail_consume)
+    with pytest.raises(type(error)) as caught:
+        if entrypoint == 'geo':
+            bridge.geo(plan, query, occurrence)
+        else:
+            bridge.review(plan, occurrence, occurrence['candidate'])
+    assert caught.value is error
+    assert len(geo_client.calls) == 1

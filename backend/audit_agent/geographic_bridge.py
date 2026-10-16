@@ -14,6 +14,22 @@ from backend.audit_agent.scoped_selection import digest, validate_plan, validate
 
 VERSION = 'geographic-runtime-bridge-v1'
 
+_GEO_RETRY_REMINDER = (
+    '\n协议校验提醒：locations 中每个 field/place 必须原样选自上方 model_input.sources 对应字段的 places 列表；'
+    '不得合并候选地名、补充省市前缀或输出列表之外的名称，同一 field/place 不得重复。'
+    '请重新根据原帖语义判断，仍只返回原协议的 status 和 locations。\n'
+)
+
+
+def _geo_attempt_prompt(request, attempt_index):
+    if attempt_index == 0:
+        return request['prompt']
+    allowed = {source['field']: [place['name'] for place in source['places']]
+        for source in request['model_input']['sources']}
+    return (request['prompt'] + _GEO_RETRY_REMINDER
+        + '\n只允许的 field/place 组合（这是完整白名单，不能输出其他字符串）：'
+        + json.dumps(allowed, ensure_ascii=False))
+
 
 def _p3_response_payload(raw):
     """Separate provider diagnostics from the strict pinned P3 response."""
@@ -160,13 +176,21 @@ class GeographicBridge:
         profile = self._p2.inputs.p3_inputs
         request = p3.prepare(state, profile, candidate)
         invocation = profile['model']['invocation_config']
-        raw = self.geo_client.audit_text(request['prompt'], model=profile['model']['identifier'],
-            **{key: invocation[key] for key in ('max_tokens', 'enable_thinking', 'request_timeout')})
-        raw, model_meta = _p3_response_payload(raw)
-        result = p3.consume(request, raw)
+        attempts = []
+        for attempt_index in range(3):
+            prompt = _geo_attempt_prompt(request, attempt_index)
+            raw = self.geo_client.audit_text(prompt, model=profile['model']['identifier'],
+                **{key: invocation[key] for key in ('max_tokens', 'enable_thinking', 'request_timeout')})
+            raw, model_meta = _p3_response_payload(raw)
+            result = p3.consume(request, raw)
+            attempts.append({'prompt': prompt, 'raw_response': deepcopy(raw), 'model_meta': deepcopy(model_meta),
+                'evaluation_status': result.get('evaluation_status'),
+                'errors': deepcopy(result.get('errors', []))})
+            if result.get('evaluation_status') != 'invalid_response':
+                break
         record = {'evidence_digest': request['raw_evidence_digest'], 'scope_digest': request['scope_digest'],
             'policy_digest': request['policy_digest'], 'request_digest': digest(request),
-            'p3_version': p3.COMMIT, 'result': result, 'request': request}
+            'p3_version': p3.COMMIT, 'result': result, 'request': request, 'attempts': attempts}
         if model_meta is not None:
             record['model_meta'] = model_meta
         self.validate_geo(self._plan, request['candidate'], record)
@@ -197,6 +221,23 @@ class GeographicBridge:
         result = geo.get('result')
         if not isinstance(result, dict) or p3.consume(expected_request, result.get('raw_response')) != result:
             raise ValueError('runtime_geo_result_mismatch')
+        attempts = geo.get('attempts')
+        if attempts is not None:
+            if not isinstance(attempts, list) or not 1 <= len(attempts) <= 3:
+                raise ValueError('runtime_geo_attempts_mismatch')
+            for index, attempt in enumerate(attempts):
+                expected_prompt = _geo_attempt_prompt(expected_request, index)
+                if not isinstance(attempt, dict) or attempt.get('prompt') != expected_prompt:
+                    raise ValueError('runtime_geo_attempt_prompt_mismatch')
+                evaluated = p3.consume(expected_request, attempt.get('raw_response'))
+                if (attempt.get('evaluation_status') != evaluated.get('evaluation_status')
+                        or attempt.get('errors') != evaluated.get('errors')
+                        or (index < len(attempts) - 1
+                            and evaluated.get('evaluation_status') != 'invalid_response')):
+                    raise ValueError('runtime_geo_attempt_result_mismatch')
+            if (attempts[-1].get('raw_response') != result.get('raw_response')
+                    or geo.get('model_meta') != attempts[-1].get('model_meta')):
+                raise ValueError('runtime_geo_final_attempt_mismatch')
         for key, expected in (('p3_version', p3.COMMIT), ('scope_digest', plan['scope_digest']),
                               ('policy_digest', plan['policy_digest']), ('evidence_digest', digest(candidate))):
             if geo.get(key) != expected:
