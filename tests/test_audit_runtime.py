@@ -190,6 +190,34 @@ def test_installed_dependency_check_works_without_pip():
     runtime.check_dependencies()
 
 
+def test_migrated_account_key_is_never_recreated(config):
+    import sqlite3
+    root = Path(config['runtime_root'])
+    (root / 'data').mkdir()
+    with sqlite3.connect(root / 'data/audit_index.sqlite3') as db:
+        db.execute('CREATE TABLE crawler_accounts(status TEXT, auth_state_ciphertext TEXT)')
+        db.execute("INSERT INTO crawler_accounts VALUES ('active','encrypted-state')")
+    key = root / 'data/crawler_auth.key'
+    with pytest.raises(ValueError, match='original private runtime key'):
+        runtime.verify_crawler_auth(config)
+    assert not key.exists()
+
+
+def test_active_work_refuses_restart_before_any_process_is_stopped(config, monkeypatch):
+    import sqlite3
+    root = Path(config['runtime_root'])
+    (root / 'data').mkdir()
+    with sqlite3.connect(root / 'data/audit_index.sqlite3') as db:
+        db.execute('CREATE TABLE jobs(status TEXT)')
+        db.execute("INSERT INTO jobs VALUES ('running')")
+    stop = Mock()
+    monkeypatch.setattr(runtime, 'stop_owned', stop)
+    assert runtime.active_work(config) == {'jobs': 1}
+    with pytest.raises(ValueError, match='Active work must finish'):
+        runtime.lifecycle(config, 'restart')
+    stop.assert_not_called()
+
+
 def test_provider_settings_and_separate_proxy_environments(config, monkeypatch):
     monkeypatch.setenv("HTTP_PROXY", "http://wrong-shell:9999")
     monkeypatch.setenv("CRAWLER_PROXY_URL", "http://wrong-shell:9999")

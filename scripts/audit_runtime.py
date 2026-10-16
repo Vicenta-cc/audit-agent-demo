@@ -213,9 +213,29 @@ def check_dependencies():
                 raise ValueError("Installed dependency version conflict")
 
 
+def verify_crawler_auth(config):
+    """Refuse to replace a missing key for already encrypted account states."""
+    import sqlite3
+    root = Path(config["runtime_root"])
+    with sqlite3.connect((root / "data/audit_index.sqlite3").as_uri() + "?mode=ro", uri=True) as db:
+        exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='crawler_accounts'").fetchone()
+        rows = db.execute("SELECT auth_state_ciphertext FROM crawler_accounts WHERE status='active' AND auth_state_ciphertext IS NOT NULL").fetchall() if exists else []
+    if rows:
+        key = root / "data/crawler_auth.key"
+        if not key.is_file() or key.stat().st_mode & 0o077:
+            raise ValueError("Migrated crawler accounts require the original private runtime key")
+        from backend.audit_agent.auth_state_cipher import AuthStateCipher
+        cipher = AuthStateCipher(key_file=key)
+        if not all(cipher.decrypt(row[0]) for row in rows):
+            raise ValueError("Crawler account authentication cannot be decrypted")
+    return len(rows)
+
+
 def probe(config):
     """Executed only in the fixed Python with the same clean environment as services."""
     global PROBE_STAGE
+    PROBE_STAGE = "crawler_authentication"
+    verify_crawler_auth(config)
     PROBE_STAGE = "python_imports"
     import sqlite3
     import cv2
@@ -492,6 +512,15 @@ def stop_owned(config, service):
 
 
 def ensure_proxy(config):
+    # Individual service supervisors and the stack controller share this lock.
+    import fcntl
+    with (Path(config["runtime_root"]) / "proxy-controller.lock").open("a") as lock:
+        os.chmod(lock.name, 0o600)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return _ensure_proxy(config)
+
+
+def _ensure_proxy(config):
     proxy = config.get("managed_proxy")
     if proxy:
         if not os.access(proxy["binary"], os.X_OK):
@@ -527,6 +556,31 @@ def inspect(config):
             "models": {key: value for key, value in config["settings"].items() if key.endswith("_MODEL") or key.endswith("_BASE_URL")}}
 
 
+def active_work(config):
+    """Keep detached crawler sessions alive only with their owning worker."""
+    import sqlite3
+    counts = {}
+    checks = {
+        'investigation_creation.sqlite3': {'investigation_runs': ('QUEUED', 'RUNNING', 'REPORT_GENERATING')},
+        'audit_index.sqlite3': {'jobs': ('queued', 'running', 'crawl_pausing', 'analysis_running', 'analysis_stopping')},
+        'investigation.sqlite3': {'investigation_turns': ('running', 'pending', 'queued')},
+        'report-collections.sqlite3': {'collection_turns': ('running', 'pending', 'queued')},
+    }
+    for filename, tables in checks.items():
+        path = Path(config['runtime_root']) / 'data' / filename
+        if not path.is_file():
+            continue
+        with sqlite3.connect(path.as_uri() + '?mode=ro', uri=True) as db:
+            existing = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            for table, statuses in tables.items():
+                if table not in existing:
+                    continue
+                count = db.execute('SELECT count(*) FROM ' + table + ' WHERE status IN (' + ','.join('?' for _ in statuses) + ')', statuses).fetchone()[0]
+                if count:
+                    counts[table] = count
+    return counts
+
+
 def lifecycle(config, action):
     import fcntl
     root = Path(config["runtime_root"])
@@ -536,6 +590,8 @@ def lifecycle(config, action):
         if action == "inspect":
             return inspect(config)
         if action in ("down", "restart"):
+            if active_work(config):
+                raise ValueError("Active work must finish or be paused in the application before stopping this runtime")
             # Validate all records before stopping anything.
             for service in (*SERVICES, "proxy"):
                 owned_process(config, service)
