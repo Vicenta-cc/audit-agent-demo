@@ -21,9 +21,9 @@ class NativeToolsAgent:
         self.session_id, self.actions, self.answer = session_id, actions, answer
         self.results = []; self.prompt = ''
 
-    def run_conversation(self, message, *, conversation_history, task_id, system_message):
+    def run_conversation(self, message, *, conversation_history, task_id, system_message, persist_user_message=None):
         self.prompt = system_message + getattr(self, "ephemeral_system_prompt", "")
-        messages = [*deepcopy(conversation_history or []), {'role':'user','content':message}]
+        messages = [*deepcopy(conversation_history or []), {'role':'user','content':persist_user_message if persist_user_message is not None else message}]
         for i, (name, params) in enumerate(self.actions):
             args = params(self.results) if callable(params) else params
             call = f'{task_id}:{i}'

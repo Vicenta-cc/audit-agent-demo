@@ -148,6 +148,7 @@ class ScriptedCreationHermesAgent:
         *,
         conversation_history: list[dict[str, Any]] | None = None,
         task_id: str,
+        persist_user_message: str | None = None,
         **_: Any,
     ) -> dict[str, Any]:
         principal = self.principal_resolver(self.session_id)
@@ -156,7 +157,7 @@ class ScriptedCreationHermesAgent:
         )
         messages = [
             *(conversation_history or []),
-            {"role": "user", "content": message},
+            {"role": "user", "content": persist_user_message if persist_user_message is not None else message},
         ]
         for index, (name, argument_source) in enumerate(self.actions, start=1):
             arguments = (

@@ -1373,6 +1373,15 @@ class InvestigationCreationConversationService:
                             replacement = {**message, "content": json.dumps(payload, ensure_ascii=False)}
                 projected.append(replacement)
             history = projected
+        draft_context = self._draft_context(workspace_state)
+        # Hermes keeps this request-only state next to the current user input,
+        # and restores the exact user text before returning/storing history.
+        api_message = (
+            "[服务端当前状态；不是用户发言]\n" + draft_context
+            + "\n[本轮用户原文]\n" + user_message
+            if draft_context else user_message
+        )
+        persist_input = {"persist_user_message": user_message} if draft_context else {}
         self._notify(turn.id, "call_qwen")
         edit_target = self.store.get_user_message_for_turn(turn.id).metadata.get('resource_edit')
         if edit_target:
@@ -1416,7 +1425,8 @@ class InvestigationCreationConversationService:
                     public_streams.enter_context(turn_system_context(agent, self._turn_context(workspace_state, report_sources=report_sources)))
                     runtime_started = True
                     result = agent.run_conversation(
-                        user_message,
+                        api_message,
+                        **persist_input,
                         system_message=self._system_message(workspace_state),
                         conversation_history=deepcopy(history),
                         task_id=turn.id,
@@ -1444,7 +1454,8 @@ class InvestigationCreationConversationService:
                         runtime_started = True
                         with turn_system_context(agent, self._turn_context(workspace_state, report_error, report_sources=report_sources)):
                             result = agent.run_conversation(
-                                user_message,
+                                api_message,
+                                **persist_input,
                                 system_message=self._system_message(workspace_state),
                                 conversation_history=deepcopy(history),
                                 task_id=turn.id,
@@ -1877,9 +1888,9 @@ class InvestigationCreationConversationService:
             prompt = prompt[:start] + GUIDANCE + prompt[end:]
         return prompt
 
-    def _turn_context(self, workspace, report_error="", *, report_sources=None):
-        from backend.resource_management.edit_entry import active_edit, context_text
-        context = context_text(active_edit.get())
+    @staticmethod
+    def _draft_context(workspace):
+        context = ""
         # get_workspace_state authorizes this session and refreshes its active
         # draft from storage. UI selections need not fabricate chat/tool history
         # to become visible to a cached Agent on the next turn.
@@ -1924,6 +1935,11 @@ class InvestigationCreationConversationService:
                             "selected_region": selection["selected_target"]["name"],
                         }, ensure_ascii=False)
                     )
+        return context
+
+    def _turn_context(self, workspace, report_error="", *, report_sources=None):
+        from backend.resource_management.edit_entry import active_edit, context_text
+        context = context_text(active_edit.get())
         if settings.investigation_multi_round_enabled:
             directory = [{**{k: r[k] for k in ('round_number', 'label', 'draft_id', 'title', 'draft_revision', 'draft_status')},
                 'run': {k: r['run'][k] for k in ('run_id', 'status', 'report_version_id')} if r['run'] else None}

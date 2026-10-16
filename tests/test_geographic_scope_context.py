@@ -23,8 +23,8 @@ def capture_continue(stack, session_id, monkeypatch):
     original = ScriptedCreationHermesAgent.run_conversation
 
     def run(agent, message, **kwargs):
-        captured.append(agent.ephemeral_system_prompt)
-        agent.scope_contexts = [*getattr(agent, "scope_contexts", []), agent.ephemeral_system_prompt]
+        captured.append(message)
+        agent.scope_contexts = [*getattr(agent, "scope_contexts", []), message]
         return original(agent, message, **kwargs)
 
     monkeypatch.setattr(ScriptedCreationHermesAgent, 'run_conversation', run)
@@ -32,6 +32,9 @@ def capture_continue(stack, session_id, monkeypatch):
         content='继续', client_message_id=uuid4().hex, actions=[])
     assert result['turn'].status == 'completed', result
     assert len(captured) == 1
+    assert stack['conversation'].store.get_user_message_for_turn(result['turn'].id).content == '继续'
+    # Completed-transcript validation checks the clean user text, not this prefix.
+    assert captured[0].endswith('继续')
     # API-time context must be restored even though Agent instances are cached.
     assert getattr(result['agent'], 'ephemeral_system_prompt', '') == ''
     return captured[0], result
@@ -162,7 +165,7 @@ def test_failed_agent_restores_ephemeral_context(creation_stack, content, catalo
     observed = []
 
     def fail(*args, **kwargs):
-        observed.append(agent.ephemeral_system_prompt)
+        observed.append(args[0])
         raise RuntimeError('synthetic provider failure')
 
     monkeypatch.setattr(agent, 'run_conversation', fail)
