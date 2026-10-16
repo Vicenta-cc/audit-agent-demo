@@ -1873,7 +1873,10 @@ def create_crawler_account(
         pool_ids = _default_crawler_proxy_pool(principal)
         if not pool_ids:
             raise HTTPException(400, detail="PROXY_CONFIGURATION_REQUIRED")
-        resource = _crawler_proxy_store().select_pool_resource(pool_ids)
+        try:
+            resource = _crawler_proxy_store().select_pool_resource(pool_ids)
+        except ValueError as exc:
+            raise _proxy_http_error(exc) from exc
         if resource is None:
             raise HTTPException(409, detail="PROXY_UNAVAILABLE")
         request.proxy_id = resource["id"]

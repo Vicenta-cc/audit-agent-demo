@@ -307,6 +307,8 @@ class CrawlerProxyStore:
 
         bind() rechecks capacity transactionally, so callers retry after a racing
         bind. Selection neither changes an existing binding nor decrypts secrets.
+        Healthy resources with exhausted binding capacity raise a capacity error;
+        an absent or unhealthy pool still returns None.
         """
         ids=tuple(dict.fromkeys(pool_ids))
         excluded=set(exclude_ids)
@@ -317,13 +319,15 @@ class CrawlerProxyStore:
                 and row['status']=='active' and not row['stop_reason']
                 and row['expires_at'] is not None and row['expires_at']>time.time()
                 and (row['cooldown_until'] is None or row['cooldown_until']<=time.time())
-                and (row['paused_until'] is None or row['paused_until']<=time.time())
-                and row['bound_count']<row['max_bound_accounts']]
+                and (row['paused_until'] is None or row['paused_until']<=time.time())]
             # Unobserved resources may be assigned for a login bootstrap, but a
             # known paused exit must never be selected to bypass its incident.
             eligible=[row for row in eligible if not row['shared_exit_key'] or not conn.execute("SELECT 1 FROM crawler_shared_exits WHERE exit_key=? AND pause_reason<>''",(row['shared_exit_key'],)).fetchone()]
             if not eligible: return None
-            return self._public(conn,min(eligible,key=lambda row:(row['bound_count'],row['id'])))
+            available = [row for row in eligible if row['bound_count'] < row['max_bound_accounts']]
+            if not available:
+                raise ValueError('PROXY_CAPACITY_EXCEEDED')
+            return self._public(conn,min(available,key=lambda row:(row['bound_count'],row['id'])))
 
     def resolve(self, account_id, *, expected_binding_revision=None, expected_config_revision=None, now=None, allow_probe=False):
         now = time.time() if now is None else _epoch(now)

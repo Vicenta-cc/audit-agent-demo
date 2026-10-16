@@ -114,7 +114,8 @@ def test_default_selection_acl_capacity_and_expired_no_partial(api, monkeypatch)
     accounts.save_auth_state(item['id'], 'trusted-fixture-login')
     mark_camoufox_login_verified(accounts, item['id'])
     assert main._crawler_account_public_view(accounts.get(item['id']),principal[0])['collection_block_reason'] == 'PROXY_LOGIN_VALIDATION_REQUIRED'
-    assert client.post('/api/crawler-accounts', json=payload).status_code == 409
+    full = client.post('/api/crawler-accounts', json=payload)
+    assert full.status_code == 409 and full.json()['detail'] == 'PROXY_CAPACITY_EXCEEDED'
     assert len(accounts.list()) == 1
     proxies.update(resource['id'], expected_revision=1, expires_at=time.time()-1)
     assert client.post('/api/crawler-accounts', json=payload).status_code == 409
@@ -194,3 +195,47 @@ def test_cli_clear_credentials_requires_explicit_true(tmp_path, capsys, ops):
     assert rc == 0 and output['item']['config_revision'] == 2
     assert output['item']['has_credentials'] is False
     assert ops.decrypt_snapshot(resource['id'], expected_revision=2)['credentials'] == {'username':'','password':''}
+
+
+@pytest.mark.parametrize('failure', ['expired', 'unavailable', 'cooldown', 'paused', 'shared_exit_paused'])
+def test_unhealthy_default_pool_is_not_reported_as_full(api, monkeypatch, failure):
+    client, auth, accounts, proxies, users, principal = api
+    resource = create_proxy(client, expires_at=time.time()+3600)
+    monkeypatch.setattr(settings, 'crawler_proxy_default_id', resource['id'])
+    existing = accounts.create(platform='dy', display_name='existing')
+    proxies.bind(existing['id'], resource['id'], expected_binding_revision=0)
+    with accounts._connect() as db:
+        if failure == 'expired':
+            db.execute('UPDATE proxy_resources SET expires_at=? WHERE id=?', (time.time()-1, resource['id']))
+        elif failure == 'unavailable':
+            db.execute("UPDATE proxy_resources SET status='unavailable',stop_reason='PROXY_UNAVAILABLE' WHERE id=?", (resource['id'],))
+        elif failure in {'cooldown', 'paused'}:
+            field = 'cooldown_until' if failure == 'cooldown' else 'paused_until'
+            db.execute(f'UPDATE proxy_resources SET {field}=? WHERE id=?', (time.time()+60, resource['id']))
+        else:
+            accounts.observe_shared_exit('203.0.113.19')
+            db.execute("UPDATE proxy_resources SET shared_exit_key='203.0.113.19' WHERE id=?", (resource['id'],))
+            db.execute("UPDATE crawler_shared_exits SET pause_reason='ACCOUNT_CHALLENGE' WHERE exit_key='203.0.113.19'")
+    response = client.post('/api/crawler-accounts', json={'platform':'dy', 'display_name':'blocked'})
+    assert response.status_code == 409 and response.json()['detail'] == 'PROXY_UNAVAILABLE'
+    assert [item['id'] for item in accounts.list()] == [existing['id']]
+    assert proxies.get(resource['id'])['bound_accounts'] == 1
+
+
+def test_default_pool_concurrent_binding_rechecks_capacity_and_rolls_back(api, monkeypatch):
+    client, auth, accounts, proxies, users, principal = api
+    resource = create_proxy(client, expires_at=time.time()+3600)
+    monkeypatch.setattr(settings, 'crawler_proxy_default_id', resource['id'])
+    bind = proxies.bind
+    raced = []
+    def racing_bind(account_id, proxy_id, **kwargs):
+        if not raced:
+            winner = accounts.create(platform='dy', display_name='concurrent winner')
+            raced.append(winner['id'])
+            bind(winner['id'], proxy_id, expected_binding_revision=0)
+        return bind(account_id, proxy_id, **kwargs)
+    monkeypatch.setattr(proxies, 'bind', racing_bind)
+    response = client.post('/api/crawler-accounts', json={'platform':'dy', 'display_name':'losing creation'})
+    assert response.status_code == 409 and response.json()['detail'] == 'PROXY_CAPACITY_CONFLICT'
+    assert [item['id'] for item in accounts.list()] == raced
+    assert proxies.get(resource['id'])['bound_accounts'] == 1
