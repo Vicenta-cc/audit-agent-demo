@@ -67,6 +67,8 @@ def test_latest_saved_scope_in_real_next_turn_context(creation_stack, content, c
     assert current['status'] == 'DRAFT'
     assert current['relevance_scope']['target']['name'] == '吉林省'
     assert current['relevance_scope_state']['status'] == 'resolved'
+    assert '当前调查地域已确认：吉林省。' in text
+    assert '不得据此再次要求用户确认地域' in text
     assert current['selection_policy'] == 'local_first_with_supplement'
     assert '克拉玛依' not in text
     assert all(key not in text for key in ['source_quote', 'source_turn_id', 'principal_id', 'task_anchor', 'source_kind', 'source_operation_id'])
@@ -89,6 +91,7 @@ def test_pending_scope_masks_preserved_previous_value(creation_stack, content, c
     current = summary(text)
     assert current['relevance_scope'] is None
     assert current['relevance_scope_state']['status'] == 'pending'
+    assert '当前调查地域已确认' not in text
     assert {item['name'] for item in current['relevance_scope_state']['candidates']} == {'吉林省', '吉林市'}
     assert '克拉玛依' not in text
 
@@ -126,6 +129,7 @@ def test_continuous_cached_agent_reads_new_selection_without_stale_context(
     latest = summary(cached.scope_contexts[-1])
     assert latest['current_revision'] == 2
     assert latest['relevance_scope']['target']['name'] == '吉林省'
+    assert '当前调查地域已确认：吉林省。' in cached.scope_contexts[-1]
     assert '克拉玛依' not in cached.scope_contexts[-1]
     assert cached.ephemeral_system_prompt == ''
 
@@ -141,6 +145,7 @@ def test_cleared_scope_does_not_revive_previous_geography(creation_stack, conten
     current = summary(context)
     assert current['relevance_scope'] is None
     assert current['relevance_scope_state']['status'] == 'cleared'
+    assert '当前调查地域已确认' not in context
     assert '克拉玛依' not in context
 
 

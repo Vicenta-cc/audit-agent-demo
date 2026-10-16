@@ -1906,6 +1906,13 @@ class InvestigationCreationConversationService:
                 "地域待澄清时不得把保留的旧地域当作有效范围；除非用户明确要求，保留现有规则与词库）："
                 + json.dumps(current, ensure_ascii=False)
             )
+            if state and state.get("status") == "resolved" and scope:
+                context += (
+                    "\n当前调查地域已确认：" + scope["target"]["name"]
+                    + "。地域确认已完成，不处于待澄清状态。历史对话中未识别或待澄清的地域说法已失效，"
+                    "不得据此再次要求用户确认地域。用户沿用或重新生成现有草案时，保留此已确认地域；"
+                    "只有用户明确要求更改调查范围时才修改地域。任务执行失败不影响地域确认结果。"
+                )
         if settings.investigation_multi_round_enabled:
             directory = [{**{k: r[k] for k in ('round_number', 'label', 'draft_id', 'title', 'draft_revision', 'draft_status')},
                 'run': {k: r['run'][k] for k in ('run_id', 'status', 'report_version_id')} if r['run'] else None}
