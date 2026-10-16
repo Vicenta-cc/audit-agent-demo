@@ -17,6 +17,10 @@ from backend.audit_agent.config import settings
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
 from backend.hermes_runtime.adapter import HermesReportToolsUnavailable, HermesRuntimeBinding, prepare_creation_history, session_runtime_home
 from backend.hermes_runtime.service import HermesInvestigationAgentService
+from backend.hermes_runtime.product_identity import (
+    PRODUCT_IDENTITY_GUIDANCE,
+    product_identity_reply,
+)
 from backend.investigation.contracts import (
     InvestigationMessage,
     InvestigationSession,
@@ -1286,6 +1290,34 @@ class InvestigationCreationConversationService:
         if recovered_history:
             history = [*(history or []), *recovered_history]
         user_message = self.store.get_user_message_for_turn(turn.id).content
+        fixed_reply = product_identity_reply(user_message)
+        if fixed_reply is not None:
+            result = {
+                "completed": True,
+                "failed": False,
+                "interrupted": False,
+                "final_response": fixed_reply,
+                "messages": [
+                    *(history or []),
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": fixed_reply},
+                ],
+                "turn_exit_reason": "product_identity_boundary",
+                "api_calls": 0,
+            }
+            transcript = HermesInvestigationAgentService._validate_completed_transcript(
+                result,
+                history=history,
+                user_message=user_message,
+            )
+            return self._persist_result(
+                turn,
+                result,
+                transcript,
+                {},
+                history_count=len(history or []),
+                include_proposal_presentations=False,
+            )
         # A creation session is single-report scoped. Once its run is published,
         # keep accidental creation-route turns deterministic and preserve the
         # published report. The UI normally sends report questions through the
@@ -1821,7 +1853,12 @@ class InvestigationCreationConversationService:
         return self.store.get_session(turn.session_id).scope_type == "creation"
 
     def _system_message(self, workspace):
-        prompt = CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT
+        prompt = (
+            CREATION_SYSTEM_PROMPT
+            + RESOURCE_PROMPT
+            + "\n\n"
+            + PRODUCT_IDENTITY_GUIDANCE
+        )
         if settings.investigation_multi_round_enabled:
             from .rounds import GUIDANCE
             from backend.report_collection.tools import DIRECT_DELIVERY_PROMPT, AGENT_PROMPT

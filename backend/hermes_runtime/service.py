@@ -28,6 +28,7 @@ from backend.investigation.public_answer import PublicAnswerStreamer
 from .comment_delivery import compose as compose_comment_delivery, live_model_text_allowed
 from backend.investigation.report_query import ReportQueryFacade
 from backend.investigation.store import InvestigationStore
+from .product_identity import product_identity_reply
 
 
 _INTERNAL_ACCOUNT_ASSIGNMENT = re.compile(
@@ -287,6 +288,34 @@ class HermesInvestigationAgentService:
             raise InvestigationTurnNotFoundError("turn is not ready for execution")
         session = self.store.get_session(turn.session_id)
         self._validate_business_scope(session)
+        user_message = self.store.get_user_message_for_turn(turn.id).content
+        fixed_reply = product_identity_reply(user_message)
+        if fixed_reply is not None:
+            history = self.store.hermes_conversation_history(turn.id)
+            result = {
+                "completed": True,
+                "failed": False,
+                "interrupted": False,
+                "final_response": fixed_reply,
+                "messages": [
+                    *(history or []),
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": fixed_reply},
+                ],
+                "turn_exit_reason": "product_identity_boundary",
+                "api_calls": 0,
+            }
+            transcript = self._validate_completed_transcript(
+                result,
+                history=history,
+                user_message=user_message,
+            )
+            return self._persist_result(
+                turn.id,
+                result,
+                previous_message_count=len(history or []),
+                transcript=transcript,
+            )
         self._notify(turn.id, "call_qwen")
         try:
             mode_scope = (
@@ -314,7 +343,6 @@ class HermesInvestigationAgentService:
                     )
                     tool_service = report_task_runtime_for_session(session.id)
                     history = prepare_conversation_history(tool_service, session.id, history)
-                user_message = self.store.get_user_message_for_turn(turn.id).content
                 from .answer_style import with_answer_style
                 system_message = with_answer_style(self.runtime_binding.product_system_prompt(
                     self._product_mode(session.id)
