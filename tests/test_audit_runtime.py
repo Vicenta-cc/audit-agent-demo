@@ -218,6 +218,16 @@ def test_active_work_refuses_restart_before_any_process_is_stopped(config, monke
     stop.assert_not_called()
 
 
+def test_collection_context_table_is_not_mistaken_for_turn_lifecycle(config):
+    import sqlite3
+    root = Path(config['runtime_root'])
+    (root / 'data').mkdir()
+    with sqlite3.connect(root / 'data/report-collections.sqlite3') as db:
+        db.execute('CREATE TABLE collection_turns(turn TEXT, session TEXT, sources TEXT)')
+        db.execute("INSERT INTO collection_turns VALUES ('finished','session','[]')")
+    assert runtime.active_work(config) == {}
+
+
 def test_provider_settings_and_separate_proxy_environments(config, monkeypatch):
     monkeypatch.setenv("HTTP_PROXY", "http://wrong-shell:9999")
     monkeypatch.setenv("CRAWLER_PROXY_URL", "http://wrong-shell:9999")

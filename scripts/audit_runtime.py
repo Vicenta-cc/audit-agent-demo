@@ -564,7 +564,6 @@ def active_work(config):
         'investigation_creation.sqlite3': {'investigation_runs': ('QUEUED', 'RUNNING', 'REPORT_GENERATING')},
         'audit_index.sqlite3': {'jobs': ('queued', 'running', 'crawl_pausing', 'analysis_running', 'analysis_stopping')},
         'investigation.sqlite3': {'investigation_turns': ('running', 'pending', 'queued')},
-        'report-collections.sqlite3': {'collection_turns': ('running', 'pending', 'queued')},
     }
     for filename, tables in checks.items():
         path = Path(config['runtime_root']) / 'data' / filename
