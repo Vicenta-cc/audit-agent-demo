@@ -113,7 +113,7 @@ class ImmutableReportSnapshot:
 
 
 class CanonicalReportSource:
-    """Read the audit projection through SQLite immutable/query_only mode."""
+    """Read the live audit projection, including committed WAL data, read-only."""
 
     def __init__(self, db_path: Path, outputs_dir: Path):
         self.db_path = db_path.resolve()
@@ -122,7 +122,7 @@ class CanonicalReportSource:
             raise FileNotFoundError(self.db_path)
 
     def connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(f"file:{self.db_path}?immutable=1", uri=True)
+        connection = sqlite3.connect(self.db_path.as_uri() + "?mode=ro", uri=True)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA query_only=ON")
         return connection
