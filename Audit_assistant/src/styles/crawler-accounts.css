@@ -492,8 +492,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 22px;
-  padding: 0 8px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 2px 8px;
+  line-height: 18px;
+  white-space: normal;
+  overflow-wrap: anywhere;
   border: none;
   border-radius: 5px;
   font-size: 12px;
