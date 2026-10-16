@@ -42,6 +42,7 @@ import { platformOptionsList } from "../../mocks/investigationMocks";
 interface InvestigationCenterAreaProps {
   session: InvestigationSession;
   isSendingMessage: boolean;
+  sendBlockedReason?: string;
   onSaveRelevanceScope?: (targetText: string, operationId: string, clarificationTargetText?: string) => Promise<void>;
   isSavingRelevanceScope?: boolean;
   sendingMessageStage?: InvestigationTurnStage;
@@ -56,7 +57,7 @@ interface InvestigationCenterAreaProps {
   onStartAgentExecution: () => void;
   isConfirmingCreation?: boolean;
   onPhaseChange: (phase: AgentExecutionPhase) => void;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string) => boolean;
   onOpenDrawer: (type: "task_config" | "keyword_editor" | "report" | "evidence" | "key_users" | "agent_logs" | "ruleset") => void;
   onOpenReportSupport: (target: ReportSupportTarget) => void;
   onExamplePromptSelect: (prompt: string) => void;
@@ -129,6 +130,7 @@ function getEthnicRelationsFollowUpPlaceholder(session: InvestigationSession) {
 export function InvestigationCenterArea({
   session,
   isSendingMessage,
+  sendBlockedReason,
   onSaveRelevanceScope,
   isSavingRelevanceScope = false,
   sendingMessageStage,
@@ -244,9 +246,8 @@ export function InvestigationCenterArea({
   ]);
 
   const handleSend = () => {
-    if (!inputText.trim() || isSendingMessage || isSavingRelevanceScope) return;
-    onSendMessage(inputText.trim());
-    setInputText("");
+    if (!inputText.trim() || sendBlockedReason || isSendingMessage || isSavingRelevanceScope) return;
+    if (onSendMessage(inputText.trim())) setInputText("");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -860,12 +861,13 @@ export function InvestigationCenterArea({
             type="button"
             className="inv-send-btn"
             onClick={handleSend}
-            disabled={!inputText.trim() || isSendingMessage || isSavingRelevanceScope || session.status === "读取异常"}
+            disabled={!inputText.trim() || Boolean(sendBlockedReason) || isSendingMessage || isSavingRelevanceScope || session.status === "读取异常"}
             title="发送消息"
           >
             <Send size={15} />
           </button>
         </div>
+        {sendBlockedReason && <p role="status">{sendBlockedReason}</p>}
       </div>
     </main>
   );

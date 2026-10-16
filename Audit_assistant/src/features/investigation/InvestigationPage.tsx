@@ -2248,13 +2248,26 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     });
   }, [sessions]);
 
+  // Keep admission shared by the composer and callback; a rejected send retains its draft.
+  const getSendBlockedReason = () => {
+    if (activeSession.status === "读取异常") return "当前会话暂时无法读取，请刷新后重试。";
+    if (sendingMessageSessionId) return sendingMessageSessionId === activeSession.id
+      ? "当前会话正在处理，请稍后发送。" : "另一个会话正在处理，请等待完成后发送。";
+    if (activeSession.creationBinding) {
+      if (activeSession.creationBinding.pendingTurnId) return "当前会话正在处理，请稍后发送。";
+      if (relevanceSaveRef.current || savingRelevanceSessionId) return savingRelevanceSessionId === activeSession.id
+        ? "正在保存调查范围，请稍后发送。" : "另一个会话正在保存调查范围，请稍后发送。";
+    }
+    return "";
+  };
+  const sendBlockedReason = getSendBlockedReason();
+
   // User sends text in input box
-  const handleSendMessage = (text: string) => {
-    if (activeSession.status === "读取异常") return;
+  const handleSendMessage = (text: string): boolean => {
+    if (!text.trim() || getSendBlockedReason()) return false;
     const nowTime = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 
     if (activeSession.reportBinding && !activeSession.creationBinding?.resourceContinuityEnabled) {
-      if (sendingMessageSessionId) return;
       const clientMessageId = createClientMessageId(activeSession.id);
       const session = activeSession;
       setSendingMessageSessionId(session.id);
@@ -2275,11 +2288,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           : item
       )));
       void sendPublishedReportQuestion(session, text, clientMessageId);
-      return;
+      return true;
     }
 
     if (activeSession.creationBinding) {
-      if (sendingMessageSessionId || activeSession.creationBinding.pendingTurnId || relevanceSaveRef.current) return;
       const session = activeSession;
       const creationBinding = activeSession.creationBinding;
       const clientMessageId = createClientMessageId(session.id);
@@ -2347,7 +2359,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         )));
         setSendingMessageSessionId("");
       });
-      return;
+      return true;
     }
 
     // Check if in blank state
@@ -2403,7 +2415,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             }
           ]
         }));
-        return;
+        return true;
       }
 
       if (text.includes("世界杯") || text.includes("博彩") || text.includes("赌球")) {
@@ -2445,7 +2457,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             }
           ]
         }));
-        return;
+        return true;
       }
 
       if (text.includes("维汉") || text.includes("通婚") || text.includes("民族")) {
@@ -2488,7 +2500,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             }
           ]
         }));
-        return;
+        return true;
       }
 
       // Default response
@@ -2504,7 +2516,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           }
         ]
       }));
-      return;
+      return true;
     }
 
     // Default response for continuing QA after report or in existing session
@@ -2538,6 +2550,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         }
       ]
     }));
+    return true;
   };
 
   if (investigationId?.startsWith("historical-report-") && (
@@ -2649,6 +2662,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         <InvestigationCenterArea
           session={activeSession}
           isSendingMessage={sendingMessageSessionId === activeSession.id}
+          sendBlockedReason={sendBlockedReason}
           isSavingRelevanceScope={savingRelevanceSessionId === activeSession.id}
           onSaveRelevanceScope={handleSaveRelevanceScope}
           sendingMessageStage={
