@@ -33,6 +33,7 @@ from .audit_agent.requests import CrawlRequest, crawl_request_from_job
 from .audit_agent.crawler_account_store import account_is_cooling_down, crawler_account_store
 from .audit_agent.creator_url import (
     CreatorUrlValidationError,
+    resolve_creator_url as resolve_creator_url_contract,
     validate_creator_url as validate_creator_url_contract,
 )
 from .audit_agent.crawler_login_manager import crawler_account_login_manager
@@ -1112,6 +1113,13 @@ def validate_creator_url(platform: str, creator_url: str, *, allow_legacy_id: bo
             creator_url,
             allow_legacy_id=allow_legacy_id,
         )
+    except CreatorUrlValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def resolve_creator_url(platform: str, creator_url: str, *, allow_legacy_id: bool = False) -> str:
+    try:
+        return resolve_creator_url_contract(platform, creator_url, allow_legacy_id=allow_legacy_id)
     except CreatorUrlValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -2394,12 +2402,15 @@ def create_job(
                 request.keyword = ",".join(keywords)
     if request.run_crawler and request.crawl_mode == "creator":
         creator_ref = request.creator_url.strip() or request.creator_id.strip()
-        request.creator_url = validate_creator_url(
+        request.creator_url = resolve_creator_url(
             request.platform,
             creator_ref,
             allow_legacy_id=not bool(request.creator_url.strip()),
         )
         request.creator_id = request.creator_url
+        requested_config["creator_url"] = request.creator_url
+        if (relation_context and str(relation_context.get("suspect_profile_url") or "").strip() == creator_ref):
+            relation_context = {**relation_context, "suspect_profile_url": request.creator_url}
         relation_context = ensure_relation_context_matches_creator(relation_context, request.creator_url)
     if not request.run_crawler and not request.source_output_id:
         raise HTTPException(status_code=400, detail="source_output_id is required when run_crawler is false")

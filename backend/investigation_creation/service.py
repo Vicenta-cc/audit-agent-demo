@@ -4,6 +4,8 @@ import hashlib
 from copy import deepcopy
 from typing import Any, Callable
 
+from backend.audit_agent.creator_url import CreatorUrlValidationError, resolve_creator_url
+
 from backend.rulesets.compiler import compile_ruleset_content, content_hash
 from backend.rulesets.contracts import RuleSetContent
 
@@ -90,6 +92,20 @@ class InvestigationCreationService:
                 reject("PROPOSAL_APPROVAL_REQUIRED", "An authoritative current conversation turn is required.")
             if self.resource_service is None:
                 raise ConfigurationValidationError("investigation resource service is not configured")
+            # Resolve externally supplied links before taking resource/SQLite write locks.
+            if command.create_draft is not None:
+                creation = command.create_draft
+                command = command.model_copy(update={"create_draft": creation.model_copy(update={
+                    "configuration": self._resolve_creator_configuration(creation.configuration),
+                })})
+            if draft_patch is not None:
+                draft_patch = deepcopy(draft_patch)
+                configuration = draft_patch.get("configuration", {})
+                investigation = configuration.get("investigation", {})
+                if configuration.get("platform") == "dy" and investigation.get("mode") == "creator":
+                    investigation["creator_url"] = self._resolve_creator_reference(
+                        "dy", investigation.get("creator_url", ""),
+                    )
             with self.resource_service.authoritative_draft_fence() as resource_connection:
                 if resource_ref:
                     self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, session_id=session_id, connection=resource_connection)
@@ -179,7 +195,8 @@ class InvestigationCreationService:
                 command.model_dump(mode="json", warnings=False)
             )
             self._reject_legacy_creation_platform(command.configuration)
-            configuration = self._geographic_configuration(command.configuration,
+            configuration = self._resolve_creator_configuration(command.configuration)
+            configuration = self._geographic_configuration(configuration,
                 principal=principal, session_id=session_id, scope_change=scope_change,
                 scope_turn_id=scope_turn_id)
             self.store.protect_temporary_judgement(configuration)
@@ -268,6 +285,7 @@ class InvestigationCreationService:
             if command.configuration is not None
             else draft.configuration
         )
+        effective_configuration = self._resolve_creator_configuration(effective_configuration)
         effective_configuration = self._geographic_configuration(effective_configuration,
             previous=draft.configuration, principal=principal, session_id=session_id,
             draft_id=draft.id, scope_change=scope_change, scope_turn_id=scope_turn_id)
@@ -311,6 +329,30 @@ class InvestigationCreationService:
             configuration=effective_configuration,
             mutation_receipt=mutation_receipt,
         )
+
+    def _resolve_creator_reference(self, platform: str, value: str) -> str:
+        try:
+            return resolve_creator_url(platform, value)
+        except CreatorUrlValidationError as exc:
+            # Preserve the existing cross-platform error instead of treating every
+            # failed resolution as an invalid URL.
+            from .resources import InvestigationResourceService
+            blocker = InvestigationResourceService._creator_blocker(platform, value)
+            code = "PLATFORM_MISMATCH" if blocker and blocker.code == "PLATFORM_MISMATCH" else "INVALID_CREATOR_URL"
+            raise ConfigurationValidationError(
+                str(exc), code=code,
+                details={"mutation_applied": False, "platform": platform},
+            ) from exc
+
+    def _resolve_creator_configuration(self, configuration):
+        investigation = getattr(configuration, "investigation", None)
+        if (getattr(configuration, "platform", None) is not Platform.DOUYIN
+                or getattr(investigation, "mode", None) != "creator"):
+            return configuration
+        resolved = self._resolve_creator_reference("dy", investigation.creator_url)
+        return configuration.model_copy(update={"investigation": investigation.model_copy(
+            update={"creator_url": resolved},
+        )})
 
     def _geographic_configuration(self, configuration, *, principal, previous=None,
                                  session_id='', draft_id='', scope_change=None, scope_turn_id=''):

@@ -155,6 +155,10 @@ omit task_parameters. crawler_account_id remains application-managed.
 There are exactly two investigation modes. A creator mode request contains a valid creator homepage
 URL, never a post URL, post ID, or arbitrary webpage. Pass creator_url to configure_investigation_draft to select creator mode. Creator mode
 must not carry search terms, source 黑话库, or recall plans, and must resolve to crawl_mode=creator.
+For Douyin creator investigations, creator_url may contain the user's copied homepage share short
+link or its original share text. Pass it unchanged to the tool: Application resolves and validates
+it before saving the Draft. Never invent or infer a sec_uid or construct a replacement profile URL.
+A video share link is not a homepage and must not be used for creator investigation.
 For a search Draft, select a matching published 审核规则已发布版本 and prefer an independently available
 real recall 黑话库 when it is sufficiently suitable. When its terms need to be discovered, query that 黑话库 with
 include_lexicon_terms_for_ids. For a selected formal 黑话库, pass its resource_ref as lexicon_ref to configure_investigation_draft; if you only have discovery results,
