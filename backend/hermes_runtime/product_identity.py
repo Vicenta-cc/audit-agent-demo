@@ -45,6 +45,13 @@ _DIRECT_INTERNAL_QUESTION_PATTERNS = tuple(
         r"(?:到底|究竟|是|本身|自己|自身|\s)*(?:怎么|如何)"
         r"(?:被|具体|在底层|\s)*(?:实现|运行|工作)",
         r"(?:你们?|研判助手|这个助手|该助手|这个系统|该系统)的(?:实现原理|系统架构)",
+        # The implementation target can be described by its relationship to
+        # the assistant; encoding or splitting its name does not change scope.
+        r"(?:为你们?提供(?:推理|回答|生成|智能)(?:能力|支持|服务)?的|"
+        r"(?:驱动|支持)你们?(?:运行|推理|回答)?的|你们?(?:推理|回答|运行)(?:所)?依赖的)"
+        r"(?:实际|底层|核心|背后|具体|所用的|\s)*(?:模型|产品|服务|引擎|系统|供应商|提供商)",
+        r"\b(?:model|product|service|engine|provider)\s+"
+        r"(?:(?:that|which)\s+)?(?:powers?|powering|drives?|driving|supports?|supporting)\s+you\b",
         # Unowned instructions need an explicit prompt-extraction request;
         # generic source-code and prompt evidence remain valid report topics.
         r"(?:展示|输出|复述|重复|泄露|告诉我|给我)(?:一下|所有|全部|你收到的|你看到的|最初的|最上面的|上面的|之前的|原始的|\s)*"
