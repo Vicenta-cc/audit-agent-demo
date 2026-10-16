@@ -8,6 +8,7 @@ from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
+from typing import Callable
 
 from .config import settings
 
@@ -770,10 +771,11 @@ class JobStore:
                 (now, job_id),
             )
 
-    def recover_interrupted_jobs(self) -> int:
+    def recover_interrupted_jobs(self, *, is_worker_managed: Callable[[str], bool] | None = None) -> int:
         now = datetime.now().isoformat(timespec="seconds")
         placeholders = ",".join("?" for _ in RECOVERABLE_STATUSES)
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             rows = conn.execute(
                 f"SELECT id, status, crawl_status, analysis_status FROM jobs "
                 f"WHERE archived = 0 AND status IN ({placeholders})",
@@ -781,6 +783,8 @@ class JobStore:
             ).fetchall()
             recovered = 0
             for row in rows:
+                if is_worker_managed is not None and is_worker_managed(row["id"]):
+                    continue
                 crawl_status = str(row["crawl_status"] or "pending")
                 analysis_status = str(row["analysis_status"] or "pending")
                 active_phases = {"queued", "running", "pausing", "stopping"}

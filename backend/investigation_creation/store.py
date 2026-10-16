@@ -1809,6 +1809,19 @@ class InvestigationCreationStore:
             row = connection.execute("SELECT * FROM investigation_runs WHERE job_id=?", (job_id,)).fetchone()
         return self._run(row) if row is not None else None
 
+    def manages_job(self, job_id: str) -> bool:
+        """Include the ensure_job/bind_job window; worker owns expired Runs too."""
+        from .adapters import AuditPipelineExecutionAdapter
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT id, job_id FROM investigation_runs WHERE job_id=? OR job_id=''",
+                (job_id,),
+            ).fetchall()
+        return any(row["job_id"] == job_id or (
+            not row["job_id"]
+            and AuditPipelineExecutionAdapter.job_id_for_run(row["id"]) == job_id
+        ) for row in rows)
+
     def requeue_interrupted_run_for_job(self, job_id: str) -> bool:
         """Re-open a paused/stopped Run after its durable Job finishes resuming.
 

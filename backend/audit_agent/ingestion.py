@@ -6,7 +6,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 from time import monotonic
-from typing import Iterable
+from typing import Callable, Iterable
 
 from .config import settings
 
@@ -1508,15 +1508,26 @@ class IngestionStore:
             )
             return int(cursor.rowcount or 0)
 
-    def reset_all_analyzing(self) -> int:
-        """Return orphaned in-flight analysis leases to the durable queue on startup."""
+    def reset_all_analyzing(self, *, is_worker_managed: Callable[[str], bool] | None = None) -> int:
+        """Requeue legacy analysis only; durable Run leases belong to their worker."""
         with self._lock, self._connect() as conn:
-            cursor = conn.execute(
-                """
-                UPDATE task_contents
-                SET analyze_status = 'queued', updated_at = ?
-                WHERE analyze_status = 'analyzing'
-                """,
-                (utc_now(),),
-            )
-            return int(cursor.rowcount or 0)
+            conn.execute("BEGIN IMMEDIATE")
+            tasks = conn.execute(
+                "SELECT DISTINCT task_id FROM task_contents WHERE analyze_status='analyzing'"
+            ).fetchall()
+            recovered = 0
+            for task in tasks:
+                task_id = str(task["task_id"])
+                if is_worker_managed is not None and is_worker_managed(task_id):
+                    continue
+                cursor = conn.execute(
+                    """
+                    UPDATE task_contents
+                    SET analyze_status = 'queued', updated_at = ?
+                    WHERE task_id = ? AND analyze_status = 'analyzing'
+                    """,
+                    (utc_now(), task_id),
+                )
+                recovered += int(cursor.rowcount or 0)
+            # Global content can also belong to an active durable task.
+            return recovered

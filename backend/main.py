@@ -1476,8 +1476,9 @@ def recover_interrupted_jobs():
         print(f"[startup] deleted results for archived jobs: {deleted_results}")
     # The durable worker reconciles admissions under the execution fence.
     # An API restart must not rewrite another process's live Job state.
-    recovered = 0 if _authz_enabled() else job_store.recover_interrupted_jobs()
-    requeued_analysis = 0 if _authz_enabled() else ingestion_store.reset_all_analyzing()
+    is_worker_managed = investigation_creation_store.manages_job
+    recovered = job_store.recover_interrupted_jobs(is_worker_managed=is_worker_managed)
+    requeued_analysis = ingestion_store.reset_all_analyzing(is_worker_managed=is_worker_managed)
     if recovered:
         print(f"[startup] recovered interrupted jobs: {recovered}")
     if requeued_analysis:
