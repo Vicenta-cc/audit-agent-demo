@@ -1272,6 +1272,7 @@ class InvestigationRunProjection(StrictModel):
     audit_results: list[dict[str, Any]] = Field(default_factory=list)
     logs: list[dict[str, Any]] = Field(default_factory=list)
     available_actions: dict[str, StrictBool] = Field(default_factory=dict)
+    recovery_blocker: str = ""
     report_status: str
     report_version_id: str = ""
     report_session_id: str = ""

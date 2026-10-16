@@ -65,6 +65,9 @@ export function mapInvestigationRunState(
     return { phase: "audit_resumed", terminal: null, label: "正在从检查点恢复", step: inferStoppedStep(run), activity: "running" };
   }
   if (run.status === "INTERRUPTED") {
+    if (run.recovery_blocker) {
+      return { phase: "audit_working", terminal: "interrupted", label: "调查已中断，采集记录待核对", step: inferStoppedStep(run), activity: "stopped" };
+    }
     return { phase: "audit_working", terminal: "interrupted", label: "调查已中断，可恢复", step: inferStoppedStep(run), activity: "stopped" };
   }
   if (["paused", "stopped"].includes(run.analysis_status) && crawlActive) {

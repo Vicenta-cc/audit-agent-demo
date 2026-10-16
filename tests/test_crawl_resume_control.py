@@ -142,6 +142,9 @@ def test_resume_rejects_globally_available_but_unauthorized_account(
     jobs.update_control(job["id"], crawl_stop_requested=True)
 
     class Accounts:
+        def stale_route_candidates(self, _platform):
+            return []
+
         def get(self, account_id):
             return {"id": account_id, "platform": "dy"}
 
@@ -200,7 +203,10 @@ def test_recoverable_failed_m3_job_reenters_same_pipeline_and_run(tmp_path, monk
             assert job_id == job["id"]
             return SimpleNamespace(status=RunStatus.FAILED)
 
-        def begin_recoverable_crawl_for_job(self, job_id, **kwargs):
+        def local_resume_replay(self, *args, **kwargs):
+            return False
+
+        def enqueue_local_resume(self, job_id, **kwargs):
             calls.append((job_id, kwargs))
             return True
 
@@ -218,14 +224,15 @@ def test_recoverable_failed_m3_job_reenters_same_pipeline_and_run(tmp_path, monk
 
     background = BackgroundTasks()
     response = main.control_job(
-        job["id"], main.JobControlRequest(action="resume_crawl"), background
+        job["id"], main.JobControlRequest(action="resume_crawl"), background,
+        idempotency_key="recover-once",
     )
 
     assert response["id"] == job["id"]
-    assert response["status"] == "queued"
+    assert response["recovery_status"] == "queued"
     assert calls[0][0] == job["id"]
-    assert calls[0][1]["failure_code"] == "crawler_account_verification_required"
-    assert len(background.tasks) == 1
+    assert calls[0][1]["action"] == "resume_crawl"
+    assert not background.tasks
 
 
 def test_nonrecoverable_failed_job_cannot_continue_collection(tmp_path, monkeypatch):
@@ -287,6 +294,7 @@ def test_continue_collection_projection_waits_for_an_eligible_account(
         "crawler_account_store",
         SimpleNamespace(
             get=lambda _account_id: None,
+            stale_route_candidates=lambda _platform: [],
             available_accounts=lambda _platform: [],
         ),
     )
@@ -299,6 +307,7 @@ def test_continue_collection_projection_waits_for_an_eligible_account(
         "crawler_account_store",
         SimpleNamespace(
             get=lambda _account_id: None,
+            stale_route_candidates=lambda _platform: [],
             available_accounts=lambda _platform: [{"id": "fresh"}],
         ),
     )
@@ -309,7 +318,8 @@ def test_continue_collection_projection_waits_for_an_eligible_account(
         job_store=jobs,
         ingestion_store=ingestion,
         crawler_account_store=SimpleNamespace(
-            available_accounts=lambda _platform: []
+            available_accounts=lambda _platform: [],
+            stale_route_candidates=lambda _platform: [],
         ),
     )
     projected = projector.project(

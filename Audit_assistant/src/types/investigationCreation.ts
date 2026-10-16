@@ -238,6 +238,7 @@ export interface InvestigationRunProjection {
   job_id: string;
   crawl_status: string;
   analysis_status: string;
+  recovery_blocker?: string;
   task_stats: Record<string, unknown>;
   audit_results: CompletedAuditResult[];
   logs?: Array<{

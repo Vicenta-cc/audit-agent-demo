@@ -1,5 +1,5 @@
 """Crawler ports for the shared geographic executor, after Run/Job verification."""
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 from pathlib import Path
 
@@ -7,6 +7,8 @@ from .crawler_adapter import CrawlOutput, CrawlerAuthenticationError, CrawlerVer
 from .geographic_bridge import GeographicBridge
 from .geographic_delivery import GeographicDelivery
 from .geographic_execution_store import GeographicExecutionStore
+from .crawler_route import CollectionRouteError
+from .geographic_recovery import GeographicCaptureDeferred
 from .ingestion import content_identity, comment_content_identity
 from .scoped_execution import ScopedExecution
 from .scoped_selection import digest
@@ -102,7 +104,7 @@ class GeographicPipeline:
                 raise RuntimeError('geographic capture incomplete: stopped')
             account = self.accounts[account_id]
             try:
-                with self.route_operation(account_id) as route_context:
+                with self._acquire_route(account_id) as route_context:
                     self.fence()
                     output = self.crawler.run_search(platform=plan['platform'], keyword=query['query'],
                         start_page=params.start_page, max_notes=collection.candidate_count,
@@ -175,7 +177,7 @@ class GeographicPipeline:
         # Rejected/empty earlier details cannot accumulate account/exit leases.
         self._detail_route.close()
         try:
-            route_context = self._detail_route.enter_context(self.route_operation(account_id))
+            route_context = self._detail_route.enter_context(self._acquire_route(account_id))
             self.fence()
             output = self.crawler.run_detail(platform=occurrence['platform'], content_id=occurrence['content_key'],
                 source_keyword=occurrence['source_keyword'], max_comments=self.bridge.p2.collection.detail_comment_limit,
@@ -217,6 +219,19 @@ class GeographicPipeline:
             return receipt
         finally:
             self._detail_route.close()
+
+    @contextmanager
+    def _acquire_route(self, account_id):
+        # Only entry failures prove the crawler has not started. Never reclassify
+        # an identical error raised by the crawler body or route cleanup.
+        with ExitStack() as stack:
+            try:
+                route = stack.enter_context(self.route_operation(account_id))
+            except CollectionRouteError as exc:
+                if exc.code in {"PROXY_BUSY", "SUPPLEMENT_DEFERRED"}:
+                    raise GeographicCaptureDeferred(exc.code) from exc
+                raise
+            yield route
 
     def run(self):
         try:

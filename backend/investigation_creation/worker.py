@@ -15,6 +15,7 @@ from backend.audit_agent.ingestion import (
     SELECTED_CONTENT_PAYLOAD_UNAVAILABLE,
     SelectedContentPayloadUnavailableError,
 )
+from backend.audit_agent.geographic_recovery import GeographicCaptureDeferred
 from backend.audit_agent.job_state import RECOVERABLE_CRAWL_FAILURE_CODES, failure_from_job
 from backend.hermes_runtime.service import HermesInvestigationAgentService
 
@@ -148,6 +149,9 @@ class InvestigationWorker:
                 run = self.store.mark_pipeline_returned(run.id, run.claim_token)
         except LeaseLostError:
             raise
+        except GeographicCaptureDeferred as exc:
+            return self.store.mark_interrupted(run.id, run.claim_token,
+                error_code="geographic_preflight_deferred", error_message=str(exc))
         except CrawlerAccountAuthenticationRequiredError as exc:
             self._invalidate_job_for_account(run, exc)
             return self.store.mark_failed(
@@ -188,6 +192,11 @@ class InvestigationWorker:
         return self._classify_job_result(run, job_id)
 
     def _recover_execution(self, run: InvestigationRun) -> InvestigationRun:
+        command = self.store.take_local_resume(run.id, run.claim_token)
+        if command:
+            if command["state"] == "cancelled":
+                return self._finish_cancelled_resume(run, command.get("cancel_action") or "stop_all")
+            return self._execute_local_resume(run, command)
         configuration = self._validated_configuration_or_fail(run)
         if isinstance(configuration, InvestigationRun):
             return configuration
@@ -225,6 +234,80 @@ class InvestigationWorker:
                 )
             return self._execute_claimed_run(run)
         return self._classify_job_result(run, deterministic_job_id, job_state=job_state)
+
+    def _finish_cancelled_resume(self, run, action):
+        jobs = self.execution_adapter.job_store
+        control = (jobs.get(run.job_id) or {}).get("control") or {}
+        if action == "stop_all":
+            jobs.update(run.job_id, status="stopped", crawl_status="stopped", analysis_status="stopped")
+            jobs.update_control(run.job_id, stop_all_requested=False)
+        elif action == "pause_crawl":
+            jobs.update(run.job_id, status="crawl_paused", crawl_status="stopped")
+        elif action == "pause_analysis":
+            jobs.update(run.job_id, status="analysis_paused", analysis_status="paused")
+        elif action == "stop_analysis":
+            jobs.update(run.job_id, status="analysis_stopped", analysis_status="stopped")
+        command = self.store.take_local_resume(run.id, run.claim_token)
+        if command:
+            self.store.finish_local_resume(run.id, run.claim_token, command["request_key"])
+        return self.store.mark_interrupted(run.id, run.claim_token,
+            error_code="audit_job_stopped", error_message="恢复排队后收到暂停或停止指令。")
+
+    def _execute_local_resume(self, run, command):
+        if command["action"] == "resume_crawl":
+            from backend.audit_agent.geographic_status import geographic_resume_blocker
+            jobs = self.execution_adapter.job_store
+            blocker = geographic_resume_blocker(jobs.get(run.job_id) or {}, jobs.db_path)
+            if blocker:
+                return self.store.mark_interrupted(run.id, run.claim_token,
+                    error_code=blocker, error_message="地域采集结果尚未确认，不能自动重复采集。")
+        configuration = self._validated_configuration_or_fail(run,
+            refresh_stale_routes=command["action"] == "resume_crawl",
+            validate_dynamic=command["action"] == "resume_crawl")
+        if isinstance(configuration, InvestigationRun):
+            return configuration
+        failure = self._verify_job_or_fail(run)
+        if failure is not None:
+            return failure
+        snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
+        configuration["_confirmed_analyze_limit"] = int(snapshot.execution.analyze_limit)
+        configuration["_authoritative_m3_contract"] = snapshot.schema_version in {
+            "investigation-run-config-v3", "investigation-run-config-v4", "investigation-run-config-v5"}
+        configuration["_resume_action"] = command["action"]
+        started = None
+        try:
+            with self._lease(run) as lease:
+                lease.assert_owned()
+                def prepare():
+                    jobs = self.execution_adapter.job_store
+                    if command["action"] == "resume_crawl":
+                        current = jobs.get(run.job_id) or {}
+                        epoch = int((current.get("control") or {}).get("crawl_epoch") or 0) + 1
+                        jobs.update_control(run.job_id, crawl_stop_requested=False,
+                            stop_all_requested=False, failure={}, crawl_epoch=epoch)
+                    else:
+                        jobs.update_control(run.job_id, analysis_paused=False,
+                            analysis_stop_requested=False, stop_all_requested=False)
+                started = self.store.take_local_resume(run.id, run.claim_token, start=True, prepare=prepare)
+                if started is not None:
+                    self.execution_adapter.run_pipeline(run.job_id, configuration)
+                lease.assert_owned()
+                if started is not None:
+                    self.store.finish_local_resume(run.id, run.claim_token, command["request_key"])
+            if started is None:
+                cancelled = self.store.take_local_resume(run.id, run.claim_token) or {}
+                return self._finish_cancelled_resume(run, cancelled.get("cancel_action") or "stop_all")
+            return self._classify_job_result(run, run.job_id)
+        except LeaseLostError:
+            raise
+        except GeographicCaptureDeferred as exc:
+            self.store.finish_local_resume(run.id, run.claim_token, command["request_key"])
+            return self.store.mark_interrupted(run.id, run.claim_token,
+                error_code="geographic_preflight_deferred", error_message=str(exc))
+        except Exception as exc:
+            return self.store.mark_interrupted(run.id, run.claim_token,
+                error_code="collection_result_unknown" if started is not None else "resume_preparation_failed",
+                error_message=str(exc))
 
     def _classify_job_result(
         self,
@@ -516,7 +599,7 @@ class InvestigationWorker:
         return None
 
     def _validated_configuration_or_fail(
-        self, run: InvestigationRun, *, refresh_stale_routes: bool = False
+        self, run: InvestigationRun, *, refresh_stale_routes: bool = False, validate_dynamic: bool = True
     ) -> dict[str, Any] | InvestigationRun:
         try:
             snapshot = parse_confirmed_configuration_snapshot(
@@ -537,7 +620,7 @@ class InvestigationWorker:
                     "validate_m3_configuration",
                     None,
                 )
-                if callable(validator):
+                if validate_dynamic and callable(validator):
                     validator(configuration, schema_version=snapshot.schema_version,
                               job_id=self.execution_adapter.job_id_for_run(run.id))
             return configuration

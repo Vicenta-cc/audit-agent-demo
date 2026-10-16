@@ -479,7 +479,7 @@ export function AgentCollaborationCard({
               ))}
             </dl>
           ) : null}
-          {run.error_message ? <p role="alert">{formatRunFailureMessage(run)}</p> : null}
+          {run.error_message || run.recovery_blocker ? <p role="alert">{formatRunFailureMessage(run)}</p> : null}
           {hasRuntimeControls || availableActions.end_task || ending ? (
             <div className="investigation-task-actions">
               {hasRuntimeControls ? (
@@ -500,7 +500,7 @@ export function AgentCollaborationCard({
                       结束采集并生成报告
                     </button>
                   ) : null}
-                  {!availableActions.resume_crawl && run.task_stats.collection_resumable === true ? (
+                  {!run.recovery_blocker && !availableActions.resume_crawl && run.task_stats.collection_resumable === true ? (
                     <small>暂无可用采集账号，请检查账号状态，恢复后可继续采集。</small>
                   ) : null}
                 </div>

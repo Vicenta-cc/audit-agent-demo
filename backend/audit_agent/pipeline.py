@@ -57,6 +57,30 @@ from .video_processor import DemoAudioProcessor, DemoFrameExtractor
 
 
 
+@contextmanager
+def _tracked_geographic_route_borrow(borrowed, pending):
+    released = threading.Event()
+    route = borrowed.__enter__()
+    pending.append(released)
+    try:
+        yield route
+    finally:
+        borrowed.__exit__(None, None, None)
+        # A failed release must not signal that the account/exit slot is free.
+        released.set()
+
+
+def _wait_for_geographic_route_borrows(pending, *, stop, fence, analysis_suspended=lambda: False):
+    while pending:
+        fence()
+        if stop():
+            raise CollectionRouteError("SUPPLEMENT_DEFERRED")
+        if analysis_suspended() and not pending[0].is_set():
+            raise CollectionRouteError("SUPPLEMENT_DEFERRED")
+        if pending[0].wait(0.1):
+            pending.pop(0)
+
+
 def _geographic_commit(method):
     @wraps(method)
     def guarded(self, *args, **kwargs):
@@ -451,6 +475,7 @@ class AuditPipeline:
                 analyze_limit = max(0, request.analyze_limit)
                 stream_queue: queue.Queue = queue.Queue()
                 stream_enqueue_lock = threading.Lock()
+                geographic_route_borrows: list[threading.Event] = []
                 analysis_errors: list[BaseException] = []
                 batch_writer = BatchWriter(
                     job_id=self.job_id,
@@ -562,8 +587,15 @@ class AuditPipeline:
                             bundle = None
                         borrowed = bundle.borrow() if bundle is not None else None
                         if borrowed is not None:
+                            if geographic:
+                                borrowed = _tracked_geographic_route_borrow(borrowed, geographic_route_borrows)
                             bundle = borrowed.__enter__()
-                        stream_queue.put(("route_entry", entry, bundle, borrowed))
+                        try:
+                            stream_queue.put(("route_entry", entry, bundle, borrowed))
+                        except BaseException:
+                            if borrowed is not None:
+                                borrowed.__exit__(None, None, None)
+                            raise
 
                 def enqueue_geographic_refs(refs) -> None:
                     # The geographic delivery ledger has already committed these
@@ -1003,6 +1035,22 @@ class AuditPipeline:
                                         if message := _geographic_progress_message(report):
                                             job_store.log(self.job_id, message, stage="crawl")
 
+                                    @contextmanager
+                                    def geographic_route_operation(selected_id):
+                                        def check_wait_fence():
+                                            self._assert_geographic_lease()
+                                            if analysis_errors:
+                                                raise analysis_errors[0]
+                                        def analysis_suspended_now():
+                                            current = control()
+                                            return bool(current.get("analysis_paused") or current.get("analysis_stop_requested"))
+                                        _wait_for_geographic_route_borrows(geographic_route_borrows,
+                                            stop=crawl_stop_requested, fence=check_wait_fence,
+                                            analysis_suspended=analysis_suspended_now)
+                                        with self._geographic_route_operation(request.platform, selected_id,
+                                                {item['id'] for item in rotation}) as route:
+                                            yield route
+
                                     runner = GeographicPipeline(plan=request.geographic_plan,
                                         binding=request._verified_geographic_binding,
                                         crawler=self.crawler, ingestion=self.ingestion,
@@ -1012,8 +1060,7 @@ class AuditPipeline:
                                         on_delivery=enqueue_geographic_refs, retire=self._retire_rotation_account,
                                         progress_callback=log_crawl_progress,
                                         on_progress=publish_geographic_progress,
-                                        route_operation=lambda selected_id: self._geographic_route_operation(
-                                            request.platform, selected_id, {item['id'] for item in rotation}),
+                                        route_operation=geographic_route_operation,
                                         state_lock=job_store._lock)
                                     summary = None
                                     try:
@@ -1688,7 +1735,17 @@ class AuditPipeline:
         if account_id not in leased_ids or (allowed is not None and account_id not in allowed):
             raise PermissionError("geographic account is not authorized and leased")
         if account_id not in {item['id'] for item in crawler_account_store.available_accounts(platform)}:
-            raise CollectionRouteError("SUPPLEMENT_DEFERRED")
+            # A long candidate/analysis stage can outlive the exit-observation
+            # TTL. Refresh only this already authorized leased account through
+            # the same claim/echo path used at dispatch; never relax eligibility.
+            owner = str((job_store.get(self.job_id) or {}).get("owner_user_id") or "local-user")
+            AccountRotationManager(crawler_account_store).refresh_authorized(platform, owner, {account_id})
+            self._assert_geographic_lease()
+            allowed = _authorized_crawler_account_ids(self.job_id)
+            if allowed is not None and account_id not in allowed:
+                raise PermissionError("geographic account authorization changed")
+            if account_id not in {item['id'] for item in crawler_account_store.available_accounts(platform)}:
+                raise CollectionRouteError("SUPPLEMENT_DEFERRED")
         with self._route_operation(account_id, retain_direct=True) as route:
             self._assert_geographic_lease()
             allowed = _authorized_crawler_account_ids(self.job_id)
@@ -1923,16 +1980,18 @@ class AuditPipeline:
             "rule_matches": [], "completion_status": "unreviewed",
         }
 
-    def resume_pending_analysis(self, analyze_limit: int = 0, analysis_batch_size: int = 5) -> None:
+    def resume_pending_analysis(self, analyze_limit: int = 0, analysis_batch_size: int = 5,
+                                *, preserve_control: bool = False) -> None:
         if settings.app_auth_mode == "required":
             from backend.task_admission.execution import assert_execution
             assert_execution(self.job_id)
             from backend.task_admission.execution import current_execution
             self._admission_execution = current_execution()
         with _analysis_lock_for(self.job_id):
-            self._resume_pending_analysis(analyze_limit, analysis_batch_size)
+            self._resume_pending_analysis(analyze_limit, analysis_batch_size, preserve_control=preserve_control)
 
-    def _resume_pending_analysis(self, analyze_limit: int = 0, analysis_batch_size: int = 5) -> None:
+    def _resume_pending_analysis(self, analyze_limit: int = 0, analysis_batch_size: int = 5,
+                                 *, preserve_control: bool = False) -> None:
         job_store = self._fenced_job_store()
         try:
             job = job_store.get(self.job_id)
@@ -1963,12 +2022,13 @@ class AuditPipeline:
                 self._prompt_category_from_source(job),
                 self._prompt_profile_from_source(job),
             )
-            job_store.update_control(
-                self.job_id,
-                analysis_paused=False,
-                analysis_stop_requested=False,
-                stop_all_requested=False,
-            )
+            if not preserve_control:
+                job_store.update_control(
+                    self.job_id,
+                    analysis_paused=False,
+                    analysis_stop_requested=False,
+                    stop_all_requested=False,
+                )
             if source_root.resolve() != (settings.outputs_dir / self.job_id).resolve():
                 job_store.log(self.job_id, f"继续分析复用已有输出媒体目录：{source_root.name}")
             if not collect_media:

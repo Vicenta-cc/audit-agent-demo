@@ -342,9 +342,11 @@ def _authorized_crawler_accounts(principal: Principal) -> list[dict]:
 
 
 def _authorized_available_crawler_accounts(
-    principal: Principal, platform: str
+    principal: Principal, platform: str, *, allow_stale: bool = False
 ) -> list[dict]:
     accounts = crawler_account_store.available_accounts(platform)
+    if allow_stale:
+        accounts = list({a["id"]: a for a in accounts + crawler_account_store.stale_route_candidates(platform)}.values())
     if _authz_enabled():
         accounts = [
             item
@@ -355,9 +357,9 @@ def _authorized_available_crawler_accounts(
 
 
 def _available_crawler_accounts_for_job(job: dict) -> list[dict]:
-    accounts = crawler_account_store.available_accounts(
-        str(job.get("platform") or "")
-    )
+    platform = str(job.get("platform") or "")
+    accounts = list({a["id"]: a for a in crawler_account_store.available_accounts(platform)
+        + crawler_account_store.stale_route_candidates(platform)}.values())
     if not _authz_enabled():
         return accounts
     owner_user_id = str(job.get("owner_user_id") or "").strip()
@@ -1345,6 +1347,12 @@ def enrich_job(job: dict) -> dict:
         # Keep the UI control in sync with the endpoint guard. A fresh GET will
         # reopen it when cooldown expires or a login refresh clears cooldown.
         actions["resume_crawl"] = False
+    from backend.audit_agent.geographic_status import geographic_resume_blocker
+    if actions.get("resume_crawl"):
+        blocker = geographic_resume_blocker(enriched, job_store.db_path)
+        if blocker:
+            actions["resume_crawl"] = False
+            enriched["recovery_blocker"] = blocker
     from backend.task_admission.presentation import admission_actions
     admission = investigation_creation_store.admission.for_task(job["id"]) if _authz_enabled() else None
     enriched["available_actions"] = admission_actions(actions, admission)
@@ -3278,6 +3286,12 @@ def control_job(
 
     stats = ingestion_store.stats_for_task(job_id)
     actions = available_job_actions(job, stats)
+    def check_geographic_recovery():
+        if request.action == "resume_crawl":
+            from backend.audit_agent.geographic_status import geographic_resume_blocker
+            blocker = geographic_resume_blocker(job, job_store.db_path)
+            if blocker:
+                raise HTTPException(409, detail={"code": blocker, "message": "地域采集结果尚未确认，不能自动重复采集，请核对执行记录。"})
 
     if _authz_enabled():
         admission = investigation_creation_store.admission
@@ -3291,12 +3305,13 @@ def control_job(
             if isinstance(idempotency_key,str) and replay_resume(admission,job_id,owner=principal.id,
                     action=request.action,key=idempotency_key,analyze_limit=request.analyze_limit):
                 return enrich_job(job)
+            check_geographic_recovery()
             if request.action == "resume_crawl":
                 crawl_request = crawl_request_from_job(job)
                 preferred = ((job.get("control") or {}).get("execution_account") or {}).get("id") or crawl_request.crawler_account_id
                 if preferred:
                     _require_crawler_account(str(preferred),principal,permission="use")
-                if not _authorized_available_crawler_accounts(principal,crawl_request.platform):
+                if not _authorized_available_crawler_accounts(principal,crawl_request.platform, allow_stale=True):
                     raise HTTPException(
                         409,
                         detail="当前没有已登录且结束冷却的公共或私有采集账号，请等待公共池资源或检查私有账号状态。",
@@ -3314,6 +3329,59 @@ def control_job(
             admission.cancel(job_id, job["owner_user_id"], on_cancel=_signal_admission_stop)
             return enrich_job(job_store.get(job_id))
 
+    bound_run = investigation_creation_store.get_run_for_job(job_id)
+    if bound_run and request.action in {"resume_crawl", "resume_analysis", "backfill_analysis"}:
+        if not isinstance(idempotency_key, str) or not idempotency_key.strip():
+            raise HTTPException(400, detail="恢复任务需要请求标识。")
+        try:
+            replay = investigation_creation_store.local_resume_replay(job_id, action=request.action,
+                request_key=idempotency_key, analyze_limit=request.analyze_limit)
+        except ValueError as exc:
+            raise HTTPException(409, detail=str(exc)) from exc
+        if replay:
+            return {**enrich_job(job), "recovery_status": "accepted"}
+        check_geographic_recovery()
+        if not actions.get(request.action):
+            raise HTTPException(409, detail="当前任务状态不允许恢复。")
+        if request.action == "resume_analysis" and bound_run.status == RunStatus.RUNNING and bound_run.claim_token:
+            if request.analyze_limit and request.analyze_limit != int(job.get("analyze_limit") or 0):
+                raise HTTPException(409, detail="恢复不能修改已确认的分析数量。")
+            job_store.update_control(job_id, analysis_paused=False, analysis_stop_requested=False)
+            return enrich_job(job_store.get(job_id))
+        if request.action == "resume_crawl":
+            preferred = ((job.get("control") or {}).get("execution_account") or {}).get("id") or job.get("crawler_account_id")
+            if preferred:
+                _require_crawler_account(str(preferred), principal, permission="use")
+            if preferred and not _authorized_available_crawler_accounts(principal, job["platform"], allow_stale=True):
+                raise HTTPException(409, detail="当前没有已登录且结束冷却的采集账号。")
+        try:
+            investigation_creation_store.enqueue_local_resume(job_id, action=request.action,
+                request_key=idempotency_key, analyze_limit=request.analyze_limit)
+        except ValueError as exc:
+            raise HTTPException(409, detail=str(exc)) from exc
+        return {**enrich_job(job_store.get(job_id)), "recovery_status": "queued"}
+
+    if bound_run and request.action in {"pause_crawl", "pause_analysis", "stop_analysis", "stop_all"}:
+        if request.action != "stop_all" and not actions.get(request.action):
+            raise HTTPException(409, detail="当前任务状态不允许暂停或停止该阶段。")
+        def signal_stop():
+            if request.action == "stop_all":
+                job_store.update_control(job_id, crawl_stop_requested=True, analysis_paused=False,
+                    analysis_stop_requested=True, stop_all_requested=True)
+                job_store.update(job_id, status="stopping", crawl_status="stopping", analysis_status="stopping")
+            elif request.action == "pause_crawl":
+                job_store.update_control(job_id, crawl_stop_requested=True)
+                job_store.update(job_id, status="crawl_pausing", crawl_status="pausing")
+            elif request.action == "pause_analysis":
+                job_store.update_control(job_id, analysis_paused=True, analysis_stop_requested=False)
+                job_store.update(job_id, status="analysis_pausing", analysis_status="pausing")
+            else:
+                job_store.update_control(job_id, analysis_paused=False, analysis_stop_requested=True)
+                job_store.update(job_id, status="analysis_stopping", analysis_status="stopping")
+        investigation_creation_store.cancel_queued_local_resume(job_id, action=request.action, signal=signal_stop)
+        job_store.log(job_id, "收到控制指令：在安全检查点暂停或停止", stage="control")
+        return enrich_job(job_store.get(job_id))
+    check_geographic_recovery()
     if request.action == "finish_collection":
         raise HTTPException(409, detail="该任务未接入统一执行队列，暂不支持结束采集并生成报告。")
     if request.action == "pause_crawl":
@@ -3335,7 +3403,7 @@ def control_job(
                 str(preferred_account_id), principal, permission="use"
             )
         available_accounts = _authorized_available_crawler_accounts(
-            principal, crawl_request.platform
+            principal, crawl_request.platform, allow_stale=True
         )
         if (_authz_enabled() or preferred_account_id) and not available_accounts:
             raise HTTPException(

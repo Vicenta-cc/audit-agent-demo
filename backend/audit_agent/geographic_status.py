@@ -2,6 +2,46 @@
 from copy import deepcopy
 import json
 import sqlite3
+from pathlib import Path
+
+from .geographic_recovery import snapshot_resume_blocker
+
+
+def geographic_resume_blocker(job, db_path):
+    """Read persisted execution evidence before offering or dispatching a resume.
+
+    Old failures without preflight evidence remain blocked. This performs no
+    network probes, creates no tables and never repairs a snapshot in place.
+    """
+    if not job.get('geographic_plan'):
+        return ''
+    summary = (job.get('control') or {}).get('geographic_selection')
+    if not summary:
+        # A pre-admission failure has not yet created a geographic execution.
+        return ''
+    try:
+        from .geographic_execution_store import GeographicExecutionStore
+        with sqlite3.connect(Path(db_path).resolve().as_uri() + '?mode=ro', uri=True) as db:
+            row = db.execute('SELECT snapshot FROM geographic_executions WHERE execution_id=?',
+                             (summary['execution_id'],)).fetchone()
+        if row is None:
+            return 'geographic_state_reconciliation_required'
+        snapshot = json.loads(row[0])
+        plan = snapshot['plan']
+        runtime = plan['runtime_binding']
+        raw_plan = job['geographic_plan']
+        identity = raw_plan['identity']
+        if (runtime['job_id'] != job['id'] or runtime['p2_plan_digest'] != raw_plan['plan_digest']
+                or plan['binding'] != {'owner': identity['owner'], 'session': identity['session_id'],
+                                       'draft': identity['draft_id'], 'revision': identity['revision']}):
+            return 'geographic_state_reconciliation_required'
+        validator = object.__new__(GeographicExecutionStore)
+        validator.expected_binding = plan['binding'] | runtime
+        validator.expected_plan_digest = summary['plan_digest']
+        validator._validate_snapshot(snapshot, summary['execution_id'])
+        return snapshot_resume_blocker(snapshot)
+    except (sqlite3.Error, OSError, ValueError, KeyError, TypeError):
+        return 'geographic_state_reconciliation_required'
 
 
 def classify_geographic_status(report):

@@ -762,6 +762,7 @@ class InvestigationCreationService:
             audit_results=list(projected.get("audit_results") or []),
             logs=list(projected.get("logs") or []),
             available_actions=dict(projected.get("available_actions") or {}),
+            recovery_blocker=str(projected.get("recovery_blocker") or ""),
             report_status=str(projected.get("report_status") or "pending"),
             report_version_id=str(
                 projected.get("report_version_id") or run.report_version_id

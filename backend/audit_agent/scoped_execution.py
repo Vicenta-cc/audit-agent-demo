@@ -12,6 +12,7 @@ from .crawler_adapter import (CrawlerAuthenticationError, CrawlerVerificationErr
                               CrawlerMediaDownloadError)
 from .scoped_selection import digest, eligible_tier, validate_plan
 from .triage import CandidateScore, rank_candidates
+from .geographic_recovery import GeographicCaptureDeferred, snapshot_resume_blocker
 
 
 class ScopedExecution:
@@ -59,6 +60,10 @@ class ScopedExecution:
                     raise ValueError('complete capture with account identity required')
                 self.store.record_query(self.execution_id, qid, 'captured', [], 'capture-end:' + qid,
                                         capture=captured, capture_account=captured['account_id'])
+            except GeographicCaptureDeferred as exc:
+                self.store.record_query(self.execution_id, qid, 'paused', [], 'capture-deferred:' + uuid4().hex,
+                                        error={'type': type(exc).__name__, 'stage': 'before_capture', 'code': exc.code})
+                raise
             except Exception as exc:
                 # A failed/incomplete capture is never a successful zero-candidate result.
                 self.store.record_query(self.execution_id, qid, 'failed', [], 'capture-failed:' + qid,
@@ -215,6 +220,10 @@ class ScopedExecution:
                     # Early callbacks stay in this local collector. Only a complete returned receipt can deliver.
                     content = self.detail(deepcopy(occurrence), deepcopy(attempt), account_id=account_id,
                                           content_callback=lambda *args, **kwargs: None)
+                except GeographicCaptureDeferred as exc:
+                    self.store.defer_attempt(self.execution_id, attempt['attempt_id'],
+                                             'defer:' + attempt['attempt_id'], exc.code)
+                    raise
                 except (CrawlerAuthenticationError, CrawlerVerificationError) as exc:
                     result = self.store.fail_attempt(self.execution_id, attempt['attempt_id'], 'auth',
                                                      'fail:' + attempt['attempt_id'])
@@ -295,6 +304,7 @@ class ScopedExecution:
         if any(o['geo']['result']['geo_tier'] in {'unresolved', 'conflict'} for o in rows):
             reasons.append('geographic_pending_or_conflict')
         return {'execution_id': self.execution_id, 'plan_digest': self.plan['plan_digest'],
+                'resume_blocked_reason': snapshot_resume_blocker(saved),
                 'validation_origin': self.plan['validation_origin'], 'candidate_occurrences': len(rows),
                 'excluded_occurrences': len(saved['excluded_occurrences']),
                 'ineligible_occurrences': sum(tier is None for tier in eligible),

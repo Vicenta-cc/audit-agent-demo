@@ -197,6 +197,15 @@ class InvestigationCreationStore:
                         REFERENCES investigation_draft_revisions(draft_id, revision)
                 );
 
+                CREATE TABLE IF NOT EXISTS investigation_resume_commands (
+                    request_key TEXT PRIMARY KEY,
+                    run_id TEXT NOT NULL REFERENCES investigation_runs(id),
+                    action TEXT NOT NULL,
+                    analyze_limit INTEGER NOT NULL,
+                    state TEXT NOT NULL DEFAULT 'queued',
+                    created_at TEXT NOT NULL,
+                    cancel_action TEXT NOT NULL DEFAULT ''
+                );
                 CREATE TABLE IF NOT EXISTS investigation_run_execution_holds (
                     run_id TEXT PRIMARY KEY REFERENCES investigation_runs(id),
                     source_name TEXT NOT NULL,
@@ -281,6 +290,7 @@ class InvestigationCreationStore:
         # both observe and alter the same missing column.
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            self._ensure_column(connection, "investigation_resume_commands", "cancel_action", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "investigation_creation_tool_receipts", "save_arguments_json", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "investigation_creation_tool_receipts", "committed_draft_id", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "investigation_creation_tool_receipts", "committed_draft_revision", "INTEGER NOT NULL DEFAULT 0")
@@ -1821,6 +1831,84 @@ class InvestigationCreationStore:
             not row["job_id"]
             and AuditPipelineExecutionAdapter.job_id_for_run(row["id"]) == job_id
         ) for row in rows)
+
+    def local_resume_replay(self, job_id, *, action, request_key, analyze_limit=0):
+        with self._connect() as db:
+            row = db.execute("""SELECT c.*,r.job_id FROM investigation_resume_commands c
+                JOIN investigation_runs r ON r.id=c.run_id WHERE c.request_key=?""", (request_key,)).fetchone()
+        if row is None:
+            return False
+        if (row["job_id"], row["action"], row["analyze_limit"]) != (job_id, action, analyze_limit):
+            raise ValueError("同一恢复请求不能改变内容")
+        return True
+
+    def enqueue_local_resume(self, job_id, *, action, request_key, analyze_limit=0):
+        """Persist an explicit recovery authorization before exposing it to a worker."""
+        from backend.audit_agent.job_state import RECOVERABLE_CRAWL_FAILURE_CODES
+        if action not in {"resume_crawl", "resume_analysis", "backfill_analysis"}:
+            raise ValueError("Unsupported recovery action")
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM investigation_runs WHERE job_id=?", (job_id,)).fetchone()
+            if row is None:
+                raise ValueError("Investigation Run missing")
+            old = db.execute("SELECT * FROM investigation_resume_commands WHERE request_key=?", (request_key,)).fetchone()
+            if old:
+                if (old["run_id"], old["action"], old["analyze_limit"]) != (row["id"], action, analyze_limit):
+                    raise ValueError("同一恢复请求不能改变内容")
+                return False
+            frozen = json.loads(row["confirmed_configuration_json"])["execution"]
+            if analyze_limit and analyze_limit != int(frozen.get("analyze_limit") or 0):
+                raise ValueError("恢复不能修改已确认的分析数量")
+            allowed = set(RECOVERABLE_CRAWL_FAILURE_CODES) | {"audit_job_stopped", "analysis_pending", "geographic_preflight_deferred", "resume_preparation_failed"}
+            analysis_completion = (action in {"resume_analysis", "backfill_analysis"}
+                and row["status"] == "AUDIT_COMPLETED" and not row["report_version_id"])
+            if not analysis_completion and (row["status"] not in {"INTERRUPTED", "FAILED"} or row["error_code"] not in allowed):
+                raise ValueError("调查当前状态或失败原因不支持自动恢复")
+            if db.execute("SELECT 1 FROM investigation_resume_commands WHERE run_id=? AND state='started'", (row["id"],)).fetchone():
+                raise ValueError("上次恢复结果尚未确定，不能重复执行")
+            db.execute("UPDATE investigation_resume_commands SET state='superseded' WHERE run_id=? AND state='queued'", (row["id"],))
+            db.execute("INSERT INTO investigation_resume_commands (request_key,run_id,action,analyze_limit,state,created_at) VALUES (?,?,?,?,?,?)",
+                       (request_key, row["id"], action, analyze_limit, "queued", self._now_text()))
+            db.execute("""UPDATE investigation_runs SET status='RUNNING', recovery_required=1,
+                claim_token='', claimed_by='', claimed_at='', heartbeat_at='', completed_at='', updated_at=?
+                WHERE id=?""", (self._now_text(), row["id"]))
+        return True
+
+    def cancel_queued_local_resume(self, job_id, *, action="stop_all", signal=None):
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            cancelled = db.execute("""UPDATE investigation_resume_commands SET state='cancelled',cancel_action=?
+                WHERE state IN ('queued','cancelled') AND rowid IN (
+                    SELECT MAX(c.rowid) FROM investigation_resume_commands c
+                    JOIN investigation_runs r ON r.id=c.run_id WHERE r.job_id=?
+                )""", (action, job_id)).rowcount
+            # A queued command is cancelled entirely in this database. Its worker
+            # materializes the stop projection from the durable action. Once a
+            # command started, prepare has committed and will not clear flags again.
+            if not cancelled and signal is not None:
+                signal()
+
+    def take_local_resume(self, run_id, claim_token, *, start=False, prepare=None):
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._owned_run(db, run_id, claim_token, RunStatus.RUNNING)
+            row = db.execute("SELECT * FROM investigation_resume_commands WHERE run_id=? ORDER BY rowid DESC LIMIT 1", (run_id,)).fetchone()
+            if row is None or row["state"] not in {"queued", "cancelled"}:
+                return None
+            if row["state"] == "cancelled":
+                return None if start else dict(row)
+            if start:
+                if prepare is not None:
+                    prepare()
+                db.execute("UPDATE investigation_resume_commands SET state='started' WHERE request_key=?", (row["request_key"],))
+            return dict(row)
+
+    def finish_local_resume(self, run_id, claim_token, request_key):
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._owned_run(db, run_id, claim_token, RunStatus.RUNNING)
+            db.execute("UPDATE investigation_resume_commands SET state='finished' WHERE request_key=? AND run_id=?", (request_key, run_id))
 
     def requeue_interrupted_run_for_job(self, job_id: str) -> bool:
         """Re-open a paused/stopped Run after its durable Job finishes resuming.

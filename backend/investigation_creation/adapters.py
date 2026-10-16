@@ -713,7 +713,19 @@ class AuditPipelineExecutionAdapter:
                 pipeline._geographic_lease_fence = geographic_lease_fence
                 from .geographic_runtime import hold_geographic_claim
                 pipeline._geographic_lease_guard = lambda: hold_geographic_claim(store, run.id, claim_token)
-        pipeline.run(request)
+        action = configuration.get("_resume_action")
+        if action:
+            job = self.job_store.get(job_id)
+            if job is None:
+                raise ValueError("Resume Job missing")
+            if action == "resume_crawl":
+                epoch = int((job.get("control") or {}).get("crawl_epoch") or 0)
+                pipeline.run(request, epoch)
+            else:
+                pipeline.resume_pending_analysis(int(configuration.get("analyze_limit") or 0),
+                    int(configuration.get("analysis_batch_size") or 5), preserve_control=True)
+        else:
+            pipeline.run(request)
 
     def get_job_state(self, job_id: str) -> dict[str, Any] | None:
         job = self.job_store.get(job_id)
@@ -843,6 +855,7 @@ class InvestigationRunProjector:
         audit_results: list[dict[str, Any]] = []
         logs: list[dict[str, Any]] = []
         actions: dict[str, bool] = {}
+        recovery_blocker = ""
         crawl_status = "pending"
         analysis_status = "pending"
         no_suspicious_content = False
@@ -866,6 +879,10 @@ class InvestigationRunProjector:
                     {**job, "crawl_status": crawl_status, "analysis_status": analysis_status},
                     task_stats,
                 )
+                from backend.audit_agent.geographic_status import geographic_resume_blocker
+                recovery_blocker = geographic_resume_blocker(job, self.job_store.db_path) if job.get("geographic_plan") else ""
+                if recovery_blocker or run.status == RunStatus.RUNNING:
+                    actions["resume_crawl"] = False
                 # Whether collection itself can continue, independent of whether an
                 # account happens to be free right now (the progress badge uses it).
                 task_stats = {**task_stats, "collection_resumable": bool(actions.get("resume_crawl"))}
@@ -877,9 +894,8 @@ class InvestigationRunProjector:
                 if (
                     actions.get("resume_crawl")
                     and preferred_account_id
-                    and not self.crawler_account_store.available_accounts(
-                        str(job.get("platform") or "")
-                    )
+                    and not (self.crawler_account_store.available_accounts(str(job.get("platform") or ""))
+                        or self.crawler_account_store.stale_route_candidates(str(job.get("platform") or "")))
                 ):
                     actions["resume_crawl"] = False
         else:
@@ -906,6 +922,7 @@ class InvestigationRunProjector:
             "audit_results": audit_results,
             "logs": logs,
             "available_actions": actions,
+            "recovery_blocker": recovery_blocker,
             "report_status": report_status,
         }
 

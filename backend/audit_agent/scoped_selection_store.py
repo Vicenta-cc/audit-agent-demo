@@ -372,6 +372,22 @@ class Store:
             return deepcopy(a)
         return self._transaction(execution_id, operation_id, dict(kind='settle', attempt_id=attempt_id), action)
 
+    def defer_attempt(self, execution_id, attempt_id, operation_id, code):
+        """Retain the reservation when route acquisition failed before collection."""
+        def action(s):
+            if code not in {'PROXY_BUSY', 'SUPPLEMENT_DEFERRED'}:
+                raise ValueError('not a preflight deferral')
+            attempt = s['attempts'][attempt_id]
+            reservation = s['reservations'][attempt['occurrence_id']]
+            if (attempt['status'] != 'collecting' or reservation['attempt_id'] != attempt_id
+                    or any(r['attempt_id'] == attempt_id for r in s['receipts'].values())):
+                raise ValueError('cannot defer an attempt with external results')
+            attempt.update(status='deferred', error={'stage': 'before_detail', 'code': code})
+            reservation['attempt_id'] = None
+            return deepcopy(attempt)
+        return self._transaction(execution_id, operation_id,
+                                 dict(kind='defer', attempt_id=attempt_id, code=code), action)
+
     def fail_attempt(self, execution_id, attempt_id, kind, operation_id):
         def action(s):
             if kind not in {'empty', 'media', 'auth', 'unknown', 'infrastructure'}:
