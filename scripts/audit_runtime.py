@@ -1,4 +1,4 @@
-"""Portable, fail-closed runtime entry point. Does not install or stop services."""
+"""Pinned local runtime: configuration, preflight and owned process lifecycle."""
 from __future__ import annotations
 
 import argparse
@@ -9,22 +9,34 @@ from pathlib import Path
 import plistlib
 import re
 import shutil
+import signal
+import socket
 import subprocess
 import sys
 import time
 
-SECRET_KEYS = {"DASHSCOPE_API_KEY", "RESOURCE_GENERATION_API_KEY", "REMOTE_INFERENCE_API_KEY", "CRAWLER_AUTH_ENCRYPTION_KEY"}
+SECRET_KEYS = {"DASHSCOPE_API_KEY", "RESOURCE_GENERATION_API_KEY", "CONVERSATION_API_KEY", "REMOTE_INFERENCE_API_KEY", "CRAWLER_AUTH_ENCRYPTION_KEY"}
 SETTING_KEYS = {
     "QWEN_TEXT_MODEL", "RESOURCE_GENERATION_MODEL", "QWEN_VL_MODEL", "QWEN_IMAGE_AUDIT_MODEL",
     "QWEN_CONTACT_SHEET_MODEL", "ASR_TRANSLATE_MODEL", "ASR_LANGUAGE", "DOLPHIN_LANG_SYM",
     "DOLPHIN_REGION_SYM", "INVESTIGATION_MAX_POSTS", "APP_AUTH_COOKIE_SECURE",
     "TASK_WORKER_PROCESSES", "TASK_EXECUTION_CAPACITY", "TASK_ANALYSIS_CAPACITY",
     "CRAWLER_LOGIN_HEADED", "CORS_ALLOW_ORIGINS",
+    "CONVERSATION_MODEL", "CONVERSATION_BASE_URL", "RESOURCE_GENERATION_BASE_URL", "DASHSCOPE_BASE_URL",
+    "APP_AUTH_COOKIE_NAME", "HERMES_CREATION_FAKE_RUNTIME", "INVESTIGATION_ACTIVITY_STREAM_ENABLED",
+    "INVESTIGATION_ANSWER_STREAM_ENABLED", "INVESTIGATION_CREATION_ANSWER_STREAM_ENABLED",
+    "INVESTIGATION_MULTI_ROUND_ENABLED", "CONTINUOUS_RESOURCE_SESSION_ENABLED", "REPORT_COLLECTION_ENABLED",
+    "REPORT_COLLECTION_AGENT_DRIVEN", "REPORT_COLLECTION_DIRECT_DELIVERY", "TRIAGE_MODE", "TRIAGE_MODEL",
+    "SEARCH_TERMS_MAX", "TRIAGE_CANDIDATES_PER_KEYWORD", "TRIAGE_CANDIDATE_COMMENTS", "TRIAGE_ACCOUNTS_PER_TASK",
+    "M3_COMMENTS_PER_POST", "M3_POSTS_PER_KEYWORD", "M3_ANALYZE_LIMIT", "CRAWLER_MAX_CONCURRENCY",
+    "REQUEST_CONCURRENCY", "HERMES_INVESTIGATION_MAX_WORKERS", "HERMES_TURN_TIMEOUT_SECONDS",
+    "REPORT_REQUEST_TIMEOUT", "QWEN_MAX_TOKENS", "QWEN_REPORT_MODEL", "DY_MEDIA_TIMEOUT_SECONDS",
 }
 FIELDS = {"schema_version", "environment_id", "repository", "commit", "runtime_root", "python", "node",
           "crawler_repository", "crawler_commit", "crawler_python", "ffmpeg", "probe_video",
           "api_port", "frontend_port", "secrets_file", "dolphin_url", "settings"}
 SERVICES = ("api", "worker", "frontend")
+OPTIONAL_FIELDS = {"model_proxy_url", "crawler_proxy_url", "managed_proxy", "geographic_runtime"}
 PROBE_STAGE = "configuration"
 
 
@@ -48,7 +60,9 @@ def initialize(directory):
                   crawler_python="/EDIT/media-crawler/.venv/bin/python", ffmpeg=shutil.which("ffmpeg") or "/EDIT/ffmpeg",
                   probe_video="/EDIT/non-sensitive-short-video.mp4", api_port=8398, frontend_port=3398,
                   secrets_file=str(root / "secrets.env"), dolphin_url="http://127.0.0.1:19001",
-                  settings={"QWEN_TEXT_MODEL": "qwen3.7-plus", "RESOURCE_GENERATION_MODEL": "qwen3.7-plus",
+                  settings={"QWEN_TEXT_MODEL": "qwen3.7-plus", "RESOURCE_GENERATION_MODEL": "deepseek-v4-pro-ga-260813",
+                            "RESOURCE_GENERATION_BASE_URL": "https://api.qhose.net/v1",
+                            "CONVERSATION_MODEL": "deepseek-v4-pro-ga-260813", "CONVERSATION_BASE_URL": "https://api.qhose.net/v1",
                             "QWEN_IMAGE_AUDIT_MODEL": "qwen3.6-flash", "QWEN_CONTACT_SHEET_MODEL": "qwen3.6-flash",
                             "APP_AUTH_COOKIE_SECURE": "false", "INVESTIGATION_MAX_POSTS": "30",
                             "ASR_LANGUAGE": "auto", "DOLPHIN_LANG_SYM": "auto", "TASK_WORKER_PROCESSES": "1"})
@@ -60,7 +74,7 @@ def initialize(directory):
 
 def load_config(path):
     config = json.loads(path.read_text())
-    if set(config) != FIELDS or config["schema_version"] != 1:
+    if FIELDS - set(config) or set(config) - FIELDS - OPTIONAL_FIELDS or config["schema_version"] != 1:
         raise ValueError("Unsupported runtime manifest fields/schema")
     if not re.fullmatch(r"[a-z][a-z0-9-]{0,48}", config["environment_id"]):
         raise ValueError("Invalid environment_id")
@@ -82,7 +96,7 @@ def load_config(path):
         if not re.fullmatch(r"[a-f0-9]{40}", config[key]):
             raise ValueError("Use full source SHA: " + key)
     if not isinstance(config["settings"], dict) or set(config["settings"]) - SETTING_KEYS:
-        raise ValueError("Unknown/protected setting; paths and providers belong to the manifest")
+        raise ValueError("Unknown/protected setting; runtime paths belong to the manifest")
     if any(not isinstance(v, str) for v in config["settings"].values()):
         raise ValueError("Settings values must be strings")
     from urllib.parse import urlsplit
@@ -91,6 +105,30 @@ def load_config(path):
         raise ValueError("Invalid Dolphin URL; credentials belong in secrets.env")
     if url.scheme == "http" and url.hostname not in ("127.0.0.1", "localhost", "::1"):
         raise ValueError("Use HTTPS for remote Dolphin or a loopback SSH tunnel")
+    for key in ("CONVERSATION_BASE_URL", "RESOURCE_GENERATION_BASE_URL", "DASHSCOPE_BASE_URL"):
+        if key in config["settings"]:
+            provider = urlsplit(config["settings"][key])
+            if provider.scheme != "https" or not provider.hostname or provider.username or provider.password or provider.query or provider.fragment:
+                raise ValueError("Provider URL must use HTTPS without credentials: " + key)
+    for key in ("model_proxy_url", "crawler_proxy_url"):
+        if key in config and not isinstance(config[key], str):
+            raise ValueError("Proxy URL must be a string: " + key)
+        if config.get(key):
+            proxy = urlsplit(config[key])
+            if proxy.scheme not in ("http", "https", "socks5", "socks5h") or proxy.hostname not in ("127.0.0.1", "localhost", "::1") or not proxy.port or proxy.username or proxy.password or proxy.query or proxy.fragment or proxy.path not in ("", "/"):
+                raise ValueError("Proxy must be an explicit loopback URL without credentials: " + key)
+    if "geographic_runtime" in config and type(config["geographic_runtime"]) is not bool:
+        raise ValueError("geographic_runtime must be boolean")
+    if "managed_proxy" in config:
+        proxy = config["managed_proxy"]
+        if not isinstance(proxy, dict) or set(proxy) != {"binary", "config", "port"}:
+            raise ValueError("managed_proxy requires binary, config and port")
+        if any(not isinstance(proxy[k], str) or not Path(proxy[k]).is_absolute() for k in ("binary", "config")):
+            raise ValueError("Managed proxy paths must be absolute")
+        if not Path(proxy["config"]).resolve().is_relative_to(root):
+            raise ValueError("Managed proxy config must be inside runtime_root")
+        if type(proxy["port"]) is not int or not 1024 <= proxy["port"] <= 65535 or proxy["port"] in (config["api_port"], config["frontend_port"]):
+            raise ValueError("Invalid managed proxy port")
     return config
 
 
@@ -126,23 +164,34 @@ def environment(config, *, frontend=False):
     secrets = dotenv_values(secret_file, interpolate=False)
     if set(secrets) - SECRET_KEYS:
         raise ValueError("secrets.env contains unknown keys; settings belong in runtime.json")
-    for key in SECRET_KEYS - {"CRAWLER_AUTH_ENCRYPTION_KEY"}:
+    required = SECRET_KEYS - {"CRAWLER_AUTH_ENCRYPTION_KEY", "CONVERSATION_API_KEY"}
+    if any(k.startswith("CONVERSATION_") for k in config["settings"]):
+        required.add("CONVERSATION_API_KEY")
+    for key in required:
         if not secrets.get(key) or str(secrets[key]).startswith(("REPLACE", "your_", "<")):
             raise ValueError("Missing private credential: " + key)
     if secrets["DASHSCOPE_API_KEY"] == secrets["RESOURCE_GENERATION_API_KEY"]:
         raise ValueError("Audit and resource-generation credentials must be separate")
     env.update({k: v for k, v in secrets.items() if v})
-    env.update(config["settings"])
     # Disable implicit checkout .env loading in python-dotenv >=1.2; no shell inheritance.
-    env.update(PYTHON_DOTENV_DISABLED="1", PYTHONPATH=f"{repo}:{repo}/hermes_m0",
+    env.update(PYTHON_DOTENV_DISABLED="1", PYTHONDONTWRITEBYTECODE="1", PYTHONPATH=f"{repo}:{repo}/hermes_m0",
+               AUDIT_RUNTIME_MANIFEST=str(root / "runtime.json"),
                XHS_AUDIT_DATA_DIR=str(root / "data"), XHS_AUDIT_OUTPUTS_DIR=str(root / "outputs"),
                APP_AUTH_DB=str(root / "data/investigation_creation.sqlite3"), HERMES_HOME=str(root / "hermes"),
-               CRAWLER_BROWSER_PROFILE_ROOT=str(root / "data/crawler_browser_profiles"),
+               CRAWLER_BROWSER_PROFILE_ROOT=str(root / "browser-profiles"), CRAWLER_AUTH_KEY_FILE=str(root / "data/crawler_auth.key"),
+               REQUEST_SCHEDULER_DB=str(root / "scheduler.sqlite3"), MEDIACRAWLER_REQUEST_SCHEDULER_DB=str(root / "scheduler.sqlite3"),
+               TASK_RESOURCE_LOCK_DIR=str(root / "resource-locks"),
                MEDIACRAWLER_DIR=config["crawler_repository"], CRAWLER_LOGIN_PYTHON=config["crawler_python"],
                APP_AUTH_MODE="required", DASHSCOPE_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1",
                RESOURCE_GENERATION_BASE_URL="https://www.dmxapi.cn/v1", FFMPEG_PATH=config["ffmpeg"],
                ASR_ENGINE="dolphin", USE_REMOTE_ASR="true", REMOTE_ASR_BASE_URL=config["dolphin_url"],
                ASR_TRANSLATE_ENABLE_THINKING="false", USE_REMOTE_VLM="false", USE_REMOTE_LLM="false")
+    env.update(config["settings"])
+    env["CRAWLER_PROXY_URL"] = config.get("crawler_proxy_url", "")
+    if config.get("model_proxy_url"):
+        for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+            env[key] = config["model_proxy_url"]
+    env["NO_PROXY"] = env["no_proxy"] = "127.0.0.1,localhost,::1"
     return env
 
 
@@ -206,14 +255,27 @@ def probe(config):
         raise ValueError("Audit provider JSON probe failed")
     # Unlike the old local probe, verify the resource provider's own credential too.
     PROBE_STAGE = "resource_provider"
-    response = requests.post(os.environ["RESOURCE_GENERATION_BASE_URL"] + "/chat/completions",
+    resource_model = os.environ.get("RESOURCE_GENERATION_MODEL", "qwen3.7-plus")
+    response = requests.post(os.environ["RESOURCE_GENERATION_BASE_URL"].rstrip("/") + "/chat/completions",
                              headers={"Authorization": "Bearer " + os.environ["RESOURCE_GENERATION_API_KEY"]},
-                             json={"model": os.environ.get("RESOURCE_GENERATION_MODEL", "qwen3.7-plus"),
+                             json={"model": resource_model,
                                    "messages": [{"role": "user", "content": "Reply only OK"}], "max_tokens": 64,
-                                   "enable_thinking": False}, timeout=45)
+                                   **({"thinking": {"type": "disabled"}} if resource_model.lower().startswith("deepseek") else {"enable_thinking": False})}, timeout=60)
     response.raise_for_status()
     if not response.json().get("choices", [{}])[0].get("message", {}).get("content"):
         raise ValueError("Resource provider returned no content")
+    conversation_checked = False
+    if os.environ.get("CONVERSATION_API_KEY"):
+        PROBE_STAGE = "conversation_provider"
+        response = requests.post(os.environ.get("CONVERSATION_BASE_URL", "https://api.qhose.net/v1").rstrip("/") + "/chat/completions",
+                                 headers={"Authorization": "Bearer " + os.environ["CONVERSATION_API_KEY"]},
+                                 json={"model": os.environ.get("CONVERSATION_MODEL", "deepseek-v4-pro-ga-260813"),
+                                       "messages": [{"role": "user", "content": "Reply only OK"}], "max_tokens": 64,
+                                       **({"thinking": {"type": "disabled"}} if os.environ.get("CONVERSATION_MODEL", "deepseek").lower().startswith("deepseek") else {})}, timeout=60)
+        response.raise_for_status()
+        if not response.json().get("choices", [{}])[0].get("message", {}).get("content"):
+            raise ValueError("Conversation provider returned no content")
+        conversation_checked = True
     PROBE_STAGE = "database_integrity"
     for filename in (root / "data/audit_index.sqlite3", root / "data/investigation_creation.sqlite3"):
         with sqlite3.connect(filename.as_uri() + "?mode=ro", uri=True) as db:
@@ -223,7 +285,8 @@ def probe(config):
             "crawler_commit": config["crawler_commit"], "node": node_version,
             "python": sys.version.split()[0], "hermes": hermes_cli.__version__, "cv2": cv2.__version__,
             "pydantic_core": pydantic_core.__version__, "dolphin_real_audio": "passed",
-            "audit_provider": "passed", "resource_provider": "passed", "checked_at": time.time()}
+            "audit_provider": "passed", "resource_provider": "passed",
+            "conversation_provider": "passed" if conversation_checked else "not_configured", "checked_at": time.time()}
 
 
 def child(config, action, extra=()):
@@ -235,6 +298,8 @@ def check(config):
     # API/worker/frontend supervisors can start together. Serialize the real
     # audio probe and atomic receipt so they never overwrite an in-use WAV.
     import fcntl
+    verify_source(config)
+    ensure_proxy(config)
     receipts = Path(config["runtime_root"]) / "receipts"
     receipts.mkdir(mode=0o700, exist_ok=True)
     with (receipts / "preflight.lock").open("a") as lock:
@@ -281,7 +346,7 @@ def serve(config, service):
     cwd = Path(config["repository"])
     if frontend:
         cwd /= "Audit_assistant"
-        command = [config["node"], "node_modules/vite/bin/vite.js", "--host", "127.0.0.1",
+        command = [config["node"], str(cwd / "node_modules/vite/bin/vite.js"), "--host", "127.0.0.1",
                    "--port", str(config["frontend_port"]), "--strictPort"]
     os.chdir(cwd)
     os.environ.clear()
@@ -307,6 +372,195 @@ def serve(config, service):
             principal_provider()  # Same authenticated principal as product APIs.
             return identity
         uvicorn.run(app, host="127.0.0.1", port=config["api_port"], access_log=False)
+
+
+def port_ready(port):
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.3):
+            return True
+    except OSError:
+        return False
+
+
+def process_snapshot(pid):
+    result = subprocess.run(["ps", "-ww", "-p", str(pid), "-o", "stat=", "-o", "pgid=", "-o", "lstart=", "-o", "args="],
+                            capture_output=True, text=True)
+    if result.returncode or not result.stdout.strip():
+        return None
+    parts = result.stdout.strip().split(None, 7)
+    if len(parts) != 8:
+        raise ValueError("Cannot establish process identity")
+    if parts[0].startswith("Z"):
+        return None
+    return {"pgid": int(parts[1]), "started": " ".join(parts[2:7]), "command": parts[7]}
+
+
+def process_file(config, service):
+    return Path(config["runtime_root"]) / "pids" / (service + ".json")
+
+
+def owned_process(config, service):
+    path = process_file(config, service)
+    if not path.exists():
+        return None
+    record = json.loads(path.read_text())
+    if type(record.get("pid")) is not int or record["pid"] <= 1 or record.get("service") != service or record.get("runtime_root") != config["runtime_root"]:
+        raise ValueError("Invalid process ownership record: " + service)
+    current = process_snapshot(record["pid"])
+    if current is None:
+        return None
+    if current != record.get("identity") or current["pgid"] != record["pid"]:
+        raise ValueError("Refusing unrelated/reused process: " + service)
+    command = current["command"]
+    if service == "frontend":
+        expected = str(Path(config["repository"]) / "Audit_assistant/node_modules/vite/bin/vite.js")
+    elif service == "proxy":
+        expected = config.get("managed_proxy", {}).get("config", "")
+    else:
+        expected = str(Path(config["runtime_root"]) / "runtime.json")
+        if "_serve " + service not in command:
+            raise ValueError("Refusing unexpected service command: " + service)
+    if not expected or expected not in command:
+        raise ValueError("Refusing unexpected service command: " + service)
+    return record
+
+
+def launch_owned(config, service, command, cwd, env, port=None):
+    existing = owned_process(config, service)
+    if existing:
+        if existing.get("manifest_sha256") != fingerprint(config):
+            raise ValueError("Running service uses another manifest; restart required: " + service)
+        if port and not port_ready(port):
+            raise ValueError("Owned process is running but its port is unavailable: " + service)
+        return False
+    if port and port_ready(port):
+        raise ValueError("Port already belongs to another process: " + service)
+    root = Path(config["runtime_root"])
+    for directory in ("pids", "logs", "receipts"):
+        (root / directory).mkdir(mode=0o700, exist_ok=True)
+    log_path = root / "logs" / (service + ".log")
+    with log_path.open("ab") as log:
+        log_path.chmod(0o600)
+        process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                                   stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    try:
+        deadline = time.monotonic() + (30 if port else 2)
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                raise ValueError("Service exited during startup; inspect private log: " + service)
+            if port and port_ready(port):
+                break
+            time.sleep(0.1)
+        if port and not port_ready(port):
+            raise ValueError("Service port did not become ready: " + service)
+        identity = process_snapshot(process.pid)
+        if not identity or identity["pgid"] != process.pid:
+            raise ValueError("Service process identity unavailable: " + service)
+        record = {"pid": process.pid, "service": service, "runtime_root": config["runtime_root"],
+                  "manifest_sha256": fingerprint(config), "identity": identity}
+        path = process_file(config, service)
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(record))
+        temporary.chmod(0o600)
+        temporary.replace(path)
+        return True
+    except BaseException:
+        # This process was just spawned by this call; never use a discovered PID.
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=5)
+        raise
+
+
+def stop_owned(config, service):
+    record = owned_process(config, service)
+    path = process_file(config, service)
+    if record:
+        pid = record["pid"]
+        os.killpg(pid, signal.SIGTERM)
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline and process_snapshot(pid) is not None:
+            time.sleep(0.1)
+        # Revalidate birth time, command and process group before escalating.
+        if process_snapshot(pid) is not None and owned_process(config, service):
+            os.killpg(pid, signal.SIGKILL)
+    path.unlink(missing_ok=True)
+
+
+def ensure_proxy(config):
+    proxy = config.get("managed_proxy")
+    if proxy:
+        if not os.access(proxy["binary"], os.X_OK):
+            raise ValueError("Missing managed proxy executable")
+        path = Path(proxy["config"])
+        if not path.is_file() or path.stat().st_mode & 0o077:
+            raise ValueError("Managed proxy config must be private (mode 600)")
+        launched = launch_owned(config, "proxy", [proxy["binary"], "-d", str(path.parent), "-f", str(path)],
+                                config["runtime_root"], environment(config, frontend=True), proxy["port"])
+    else:
+        launched = False
+    from urllib.parse import urlsplit
+    try:
+        for key in ("model_proxy_url", "crawler_proxy_url"):
+            if config.get(key) and not port_ready(urlsplit(config[key]).port):
+                raise ValueError("Configured proxy is unavailable: " + key)
+    except BaseException:
+        if launched:
+            stop_owned(config, "proxy")
+        raise
+
+
+def inspect(config):
+    processes = {}
+    for service in ("proxy", *SERVICES):
+        record = owned_process(config, service)
+        processes[service] = {"running": bool(record), "pid": record["pid"] if record else None,
+                              "manifest_matches": record.get("manifest_sha256") == fingerprint(config) if record else None}
+    return {"status": "inspected", "environment_id": config["environment_id"], "runtime_root": config["runtime_root"],
+            "commit": config["commit"], "crawler_commit": config["crawler_commit"], "processes": processes,
+            "ports": {"api": port_ready(config["api_port"]), "frontend": port_ready(config["frontend_port"])},
+            "model_proxy_url": config.get("model_proxy_url", ""), "crawler_proxy_url": config.get("crawler_proxy_url", ""),
+            "models": {key: value for key, value in config["settings"].items() if key.endswith("_MODEL") or key.endswith("_BASE_URL")}}
+
+
+def lifecycle(config, action):
+    import fcntl
+    root = Path(config["runtime_root"])
+    with (root / "controller.lock").open("a") as lock:
+        os.chmod(lock.name, 0o600)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if action == "inspect":
+            return inspect(config)
+        if action in ("down", "restart"):
+            # Validate all records before stopping anything.
+            for service in (*SERVICES, "proxy"):
+                owned_process(config, service)
+            for service in (*reversed(SERVICES), "proxy"):
+                stop_owned(config, service)
+        if action == "down":
+            return {"status": "stopped", "environment_id": config["environment_id"]}
+        verify_source(config)
+        started = []
+        try:
+            proxy_was_running = bool(owned_process(config, "proxy"))
+            ensure_proxy(config)
+            if config.get("managed_proxy") and not proxy_was_running:
+                started.append("proxy")
+            check(config)  # One real preflight for the complete stack.
+            for service in SERVICES:
+                port = config["api_port"] if service == "api" else config["frontend_port"] if service == "frontend" else None
+                if launch_owned(config, service, child(config, "_serve", [service]), config["repository"],
+                                environment(config, frontend=service == "frontend"), port):
+                    started.append(service)
+            return inspect(config)
+        except BaseException:
+            for service in reversed(started):
+                stop_owned(config, service)
+            raise
 
 
 def status(config, cookie):
@@ -356,7 +610,7 @@ def main():
     parser.add_argument("--config", type=Path)
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("init").add_argument("--directory", required=True, type=Path)
-    for name in ("check", "init-db", "_probe", "_init-db"):
+    for name in ("check", "init-db", "_probe", "_init-db", "up", "down", "restart", "inspect"):
         sub.add_parser(name)
     sub.add_parser("start").add_argument("service", choices=SERVICES)
     sub.add_parser("_serve").add_argument("service", choices=SERVICES)
@@ -370,7 +624,9 @@ def main():
         if not args.config or args.config.name != "runtime.json":
             parser.error("--config must point to runtime.json")
         config = load_config(args.config)
-        if args.action == "_probe":
+        if args.action in ("up", "down", "restart", "inspect"):
+            result = lifecycle(config, args.action)
+        elif args.action == "_probe":
             result = probe(config)
         elif args.action == "_init-db":
             from backend.audit_agent.job_store import JobStore

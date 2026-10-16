@@ -24,7 +24,7 @@ def config(tmp_path):
                  crawler_repository="/fixed/crawler", crawler_python="/fixed/crawler/.venv/bin/python",
                  ffmpeg="/fixed/bin/ffmpeg", probe_video="/fixed/probe.mp4")
     path.write_text(json.dumps(value))
-    Path(value["secrets_file"]).write_text("DASHSCOPE_API_KEY=test-audit\nRESOURCE_GENERATION_API_KEY=test-resource\nREMOTE_INFERENCE_API_KEY=test-dolphin\n")
+    Path(value["secrets_file"]).write_text("DASHSCOPE_API_KEY=test-audit\nRESOURCE_GENERATION_API_KEY=test-resource\nREMOTE_INFERENCE_API_KEY=test-dolphin\nCONVERSATION_API_KEY=test-conversation\n")
     return value
 
 
@@ -188,3 +188,113 @@ def test_receipt_saved_without_secrets(config, monkeypatch):
 
 def test_installed_dependency_check_works_without_pip():
     runtime.check_dependencies()
+
+
+def test_provider_settings_and_separate_proxy_environments(config, monkeypatch):
+    monkeypatch.setenv("HTTP_PROXY", "http://wrong-shell:9999")
+    monkeypatch.setenv("CRAWLER_PROXY_URL", "http://wrong-shell:9999")
+    config.update(model_proxy_url="http://127.0.0.1:17890", crawler_proxy_url="http://127.0.0.1:17891")
+    config["settings"].update(CONVERSATION_MODEL="deepseek-pro", CONVERSATION_BASE_URL="https://api.example/v1",
+                              RESOURCE_GENERATION_MODEL="deepseek-pro", RESOURCE_GENERATION_BASE_URL="https://resource.example/v1")
+    env = runtime.environment(config)
+    assert env["CONVERSATION_API_KEY"] == "test-conversation"
+    assert env["HTTP_PROXY"] == config["model_proxy_url"]
+    assert env["CRAWLER_PROXY_URL"] == config["crawler_proxy_url"]
+    assert env["CONVERSATION_BASE_URL"] == "https://api.example/v1"
+    assert env["RESOURCE_GENERATION_BASE_URL"] == "https://resource.example/v1"
+    assert env["AUDIT_RUNTIME_MANIFEST"] == config["runtime_root"] + "/runtime.json"
+    assert env["CRAWLER_AUTH_KEY_FILE"] == config["runtime_root"] + "/data/crawler_auth.key"
+    assert env["REQUEST_SCHEDULER_DB"] == env["MEDIACRAWLER_REQUEST_SCHEDULER_DB"]
+    frontend = runtime.environment(config, frontend=True)
+    assert "HTTP_PROXY" not in frontend and "CONVERSATION_API_KEY" not in frontend
+    config.pop("model_proxy_url")
+    config.pop("crawler_proxy_url")
+    direct = runtime.environment(config)
+    assert "HTTP_PROXY" not in direct and direct["CRAWLER_PROXY_URL"] == ""
+
+
+def test_legacy_manifest_without_conversation_remains_supported(config):
+    for key in ("CONVERSATION_MODEL", "CONVERSATION_BASE_URL"):
+        config["settings"].pop(key)
+    path = Path(config["secrets_file"])
+    path.write_text(path.read_text().replace("CONVERSATION_API_KEY=test-conversation\n", ""))
+    assert "CONVERSATION_API_KEY" not in runtime.environment(config)
+    config["settings"]["CONVERSATION_MODEL"] = "deepseek-pro"
+    with pytest.raises(ValueError, match="CONVERSATION_API_KEY"):
+        runtime.environment(config)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("model_proxy_url", "http://outside:7890"), ("crawler_proxy_url", "http://user:secret@127.0.0.1:7890"),
+    ("geographic_runtime", "true"), ("managed_proxy", {"binary": "/bin/proxy", "config": "/tmp/foreign", "port": 17890}),
+    ("settings", {"CONVERSATION_BASE_URL": "http://insecure/v1"}),
+])
+def test_new_manifest_fields_are_validated(config, field, value):
+    config[field] = value
+    path = Path(config["runtime_root"]) / "runtime.json"
+    path.write_text(json.dumps(config))
+    with pytest.raises(ValueError):
+        runtime.load_config(path)
+
+
+def test_stop_rejects_reused_or_unrelated_pid(config, monkeypatch):
+    path = runtime.process_file(config, "worker")
+    path.parent.mkdir()
+    identity = {"pgid": 12345, "started": "old-start", "command": config["runtime_root"] + "/runtime.json _serve worker"}
+    path.write_text(json.dumps({"pid": 12345, "service": "worker", "runtime_root": config["runtime_root"], "identity": identity}))
+    monkeypatch.setattr(runtime, "process_snapshot", lambda _: {**identity, "started": "new-start"})
+    kill = Mock()
+    monkeypatch.setattr(runtime.os, "killpg", kill)
+    with pytest.raises(ValueError, match="unrelated/reused"):
+        runtime.stop_owned(config, "worker")
+    kill.assert_not_called()
+    assert path.exists()
+
+
+def test_up_rolls_back_only_services_started_this_time(config, monkeypatch):
+    monkeypatch.setattr(runtime, "verify_source", lambda _: None)
+    monkeypatch.setattr(runtime, "ensure_proxy", lambda _: None)
+    monkeypatch.setattr(runtime, "check", lambda _: {"status": "passed"})
+    monkeypatch.setattr(runtime, "owned_process", lambda *_: None)
+    launch = Mock(side_effect=[False, True, ValueError("frontend failed")])
+    stop = Mock()
+    monkeypatch.setattr(runtime, "launch_owned", launch)
+    monkeypatch.setattr(runtime, "stop_owned", stop)
+    with pytest.raises(ValueError, match="frontend failed"):
+        runtime.lifecycle(config, "up")
+    stop.assert_called_once_with(config, "worker")
+
+
+def test_failed_check_rolls_back_new_managed_proxy(config, monkeypatch):
+    config["managed_proxy"] = {"binary": "/bin/proxy", "config": config["runtime_root"] + "/proxy.yaml", "port": 17890}
+    monkeypatch.setattr(runtime, "verify_source", lambda _: None)
+    monkeypatch.setattr(runtime, "ensure_proxy", lambda _: None)
+    monkeypatch.setattr(runtime, "owned_process", lambda *_: None)
+    monkeypatch.setattr(runtime, "check", Mock(side_effect=ValueError("provider failed")))
+    launch, stop = Mock(), Mock()
+    monkeypatch.setattr(runtime, "launch_owned", launch)
+    monkeypatch.setattr(runtime, "stop_owned", stop)
+    with pytest.raises(ValueError, match="provider failed"):
+        runtime.lifecycle(config, "up")
+    launch.assert_not_called()
+    stop.assert_called_once_with(config, "proxy")
+
+
+def test_real_owned_child_is_stopped_without_touching_other_processes(config):
+    import subprocess
+    config["python"] = os.sys.executable
+    command = [os.sys.executable, "-c", "import time; time.sleep(60)",
+               str(Path(config["runtime_root"]) / "runtime.json"), "_serve", "worker"]
+    assert runtime.launch_owned(config, "worker", command, config["runtime_root"], runtime.environment(config))
+    record = runtime.owned_process(config, "worker")
+    assert record["pid"] != os.getpid()
+    try:
+        assert not runtime.launch_owned(config, "worker", command, config["runtime_root"], runtime.environment(config))
+        runtime.stop_owned(config, "worker")
+        assert runtime.owned_process(config, "worker") is None
+        assert not runtime.process_file(config, "worker").exists()
+    finally:
+        try:
+            os.waitpid(record["pid"], os.WNOHANG)
+        except ChildProcessError:
+            pass
