@@ -146,3 +146,39 @@ def test_public_projection_rejects_backup_without_current_verified_profile_metad
     item=main._crawler_account_public_view(accounts.get(account['id']),principal[0])
     assert not item['collection_ready']
     assert item['collection_block_reason']=='ACCOUNT_LOGIN_REQUIRED'
+
+
+@pytest.mark.parametrize('protection', ['none', 'shared_pause', 'proxy_pause', 'generation', 'future_sample'])
+def test_stale_exit_projection_distinguishes_refreshable_route_without_io(api, monkeypatch, protection):
+    client, _, accounts, proxies, _, principal = api
+    monkeypatch.setattr(settings, 'crawler_safety_enabled', True)
+    account, resource = ready_account(client, accounts, proxies)
+    observed = accounts.observe_shared_exit('203.0.113.29')
+    stale_at = time.time() - settings.crawler_exit_observation_ttl - 10
+    with accounts._connect() as conn:
+        conn.execute('UPDATE proxy_resources SET shared_exit_key=?,shared_exit_generation=?,observed_exit_at=? WHERE id=?',
+                     (observed['shared_exit_key'], observed['shared_exit_generation'], stale_at, resource['id']))
+        conn.execute('UPDATE crawler_shared_exits SET observed_at=?', (stale_at,))
+        if protection == 'shared_pause':
+            conn.execute("UPDATE crawler_shared_exits SET pause_reason='ACCOUNT_CHALLENGE',paused_until=?", (time.time()+60,))
+        elif protection == 'proxy_pause':
+            conn.execute("UPDATE proxy_resources SET pause_reason='ACCOUNT_CHALLENGE',paused_until=?", (time.time()+60,))
+        elif protection == 'generation':
+            conn.execute('UPDATE crawler_shared_exits SET generation=generation+1')
+        elif protection == 'future_sample':
+            conn.execute('UPDATE proxy_resources SET observed_exit_at=?', (time.time()+60,))
+        before = list(conn.iterdump())
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError('account projection must not probe, claim or decrypt')
+
+    from backend.audit_agent import crawler_route
+    monkeypatch.setattr(proxies.cipher, 'decrypt', forbidden)
+    monkeypatch.setattr(accounts, 'claim_exit_refresh', forbidden)
+    monkeypatch.setattr(crawler_route, 'refresh_existing_route', forbidden)
+    item = main._crawler_account_public_view(accounts.get(account['id']), principal[0])
+    assert item['collection_ready'] is False
+    expected = 'EXIT_OBSERVATION_STALE' if protection == 'none' else 'SHARED_EXIT_UNAVAILABLE'
+    assert item['collection_block_reason'] == expected
+    with accounts._connect() as conn:
+        assert list(conn.iterdump()) == before

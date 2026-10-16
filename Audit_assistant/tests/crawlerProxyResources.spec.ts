@@ -137,3 +137,18 @@ test("backend network unavailable reason wins over pending login validation", as
   await expect(page.getByLabel("账号概况")).toContainText("0 可用");
   expect(calls).toEqual([]);
 });
+
+test("expired exit observations are distinct from protection and neither counts as ready", async ({ page }) => {
+  const calls = await forbidProxyManagement(page);
+  await page.route("**/api/crawler-accounts", route => route.fulfill({ json: {
+    items: [
+      account("出口待复查账号", { collection_ready: false, collection_block_reason: "EXIT_OBSERVATION_STALE" }),
+      account("出口保护账号", { collection_ready: false, collection_block_reason: "SHARED_EXIT_UNAVAILABLE" })
+    ]
+  } }));
+  await page.goto("/crawler-accounts");
+  await expect(page.getByText("采集网络待校验，任务启动时自动检查", { exact: true })).toBeVisible();
+  await expect(page.getByText("共享出口不可用，采集已暂停", { exact: true })).toBeVisible();
+  await expect(page.getByText("可用 0 / 异常 2", { exact: true })).toBeVisible();
+  expect(calls).toEqual([]);
+});

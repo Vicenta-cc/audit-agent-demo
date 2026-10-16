@@ -306,6 +306,11 @@ def _crawler_account_collection_block_reason(account: dict, principal: Principal
                 or resource["observed_exit_at"] is None
                 or not 0 <= now - resource["observed_exit_at"] <= settings.crawler_exit_observation_ttl
                 or not crawler_account_store._exit_allowed(conn, resource["shared_exit_key"], resource["shared_exit_generation"])):
+            # Only expired, otherwise eligible routes can be refreshed at dispatch.
+            # Listing accounts must remain a pure read and must not clear protection.
+            row = conn.execute("SELECT * FROM crawler_accounts WHERE id=?", (account["id"],)).fetchone()
+            if row and crawler_account_store._stale_route_candidate(conn, row) is not None:
+                return "EXIT_OBSERVATION_STALE"
             return "SHARED_EXIT_UNAVAILABLE"
     return ""
 

@@ -3729,3 +3729,110 @@ def test_structured_temporary_lexicon_rejects_projection_drift_and_allows_main_f
         lexicon_content=content,
     )
     assert plan.terms == plan.lexicon_content.search_terms() == ["色情服务"]
+
+
+@pytest.mark.parametrize("outcome", ["success", "failed", "paused", "disabled"])
+def test_local_worker_refreshes_stale_exit_before_account_validation(
+    m3_stack, monkeypatch, tmp_path, outcome
+):
+    import time
+    from backend.audit_agent import crawler_route
+    from backend.audit_agent.config import settings
+    from backend.audit_agent.auth_state_cipher import AuthStateCipher
+    from backend.audit_agent.crawler_proxy_store import CrawlerProxyStore
+    from crawler_auth_fixtures import mark_camoufox_login_verified
+
+    monkeypatch.setattr(settings, "app_auth_mode", "disabled")
+    monkeypatch.setattr(settings, "task_resource_lock_dir", tmp_path / "locks")
+    accounts = m3_stack["crawler_accounts"]
+    account = _account_for_platform(m3_stack, "dy")
+    draft = _create_draft(m3_stack, _douyin_configuration(m3_stack))
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id, expected_revision=draft.current_revision,
+            confirmed=True, idempotency_key="stale-exit:" + outcome,
+        ),
+        principal=_principal(m3_stack),
+    )
+    monkeypatch.setattr(settings, "crawler_safety_enabled", True)
+    mark_camoufox_login_verified(accounts, account["id"])
+    proxies = CrawlerProxyStore(accounts, cipher=AuthStateCipher(encryption_key="fixture"))
+    proxy = proxies.create(
+        display_name="fixture", endpoint="http://proxy.example:8080",
+        expires_at=time.time() + 3600,
+    )
+    proxies.bind(account["id"], proxy["id"], expected_binding_revision=0)
+    proxies.observe_exit(proxy["id"], "203.0.113.10")
+    proxies.mark_route_login_validated(
+        account["id"], expected_binding_revision=1, expected_config_revision=1
+    )
+    with accounts._connect() as db:
+        expired = time.time() - settings.crawler_exit_observation_ttl - 1
+        db.execute("UPDATE proxy_resources SET observed_exit_at=?", (expired,))
+        db.execute("UPDATE crawler_shared_exits SET observed_at=?", (expired,))
+    if outcome == "paused":
+        accounts.pause_account_exit(account["id"], until=time.time() + 300)
+    elif outcome == "disabled":
+        accounts.update(account["id"], status="disabled")
+    calls = []
+
+    def echo(account_id, *, account_store, owner_id):
+        assert account_store is accounts
+        assert owner_id == run.owner_principal
+        with accounts._connect() as db:
+            assert db.execute(
+                "SELECT state FROM crawler_exit_refreshes WHERE account_id=?", (account_id,)
+            ).fetchone()[0] == "claimed"
+        calls.append("refresh")
+        if outcome == "success":
+            proxies.observe_exit(proxy["id"], "203.0.113.10")
+            return True
+        return False
+
+    monkeypatch.setattr(crawler_route, "refresh_existing_route", echo)
+    assert accounts.available_accounts("dy") == []
+    adapter = AuditPipelineExecutionAdapter(
+        job_store=JobStore(m3_stack["resources"].resource_db_path),
+        crawler_account_store=accounts, test_provider_validator=lambda _: None,
+    )
+
+    def reached_job_creation(claimed):
+        assert accounts.available_accounts("dy")
+        calls.append("job")
+        raise RuntimeError("stop before external pipeline work")
+
+    monkeypatch.setattr(adapter, "ensure_job", reached_job_creation)
+    worker = InvestigationWorker(
+        m3_stack["store"], execution_adapter=adapter,
+        report_adapter=object(), session_adapter=object(),
+    )
+    result = worker.run_once()
+    assert result.id == run.id
+    assert result.pipeline_started_at == ""
+    if outcome == "success":
+        assert calls == ["refresh", "job"]
+        assert result.error_code == "job_creation_failed"
+    else:
+        assert calls == (["refresh"] if outcome == "failed" else [])
+        assert result.error_code == "crawler_account_login_required"
+
+
+@pytest.mark.parametrize("admission_enabled", [False, True])
+def test_worker_local_refresh_never_probes_in_required_auth_mode(
+    m3_stack, monkeypatch, admission_enabled
+):
+    from backend.audit_agent.account_rotation import AccountRotationManager
+    from backend.audit_agent.config import settings
+
+    def unexpected_refresh(*args, **kwargs):
+        pytest.fail("required-auth dispatch must own its refresh")
+
+    monkeypatch.setattr(settings, "app_auth_mode", "required")
+    monkeypatch.setattr(m3_stack["store"].admission, "enabled", admission_enabled)
+    monkeypatch.setattr(AccountRotationManager, "refresh_authorized", unexpected_refresh)
+    worker = InvestigationWorker(
+        m3_stack["store"],
+        execution_adapter=SimpleNamespace(crawler_account_store=m3_stack["crawler_accounts"]),
+        report_adapter=object(), session_adapter=object(),
+    )
+    worker._refresh_local_routes(SimpleNamespace(owner_principal="owner"), {"platform": "dy"})

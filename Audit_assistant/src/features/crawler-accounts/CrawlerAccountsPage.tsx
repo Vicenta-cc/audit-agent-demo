@@ -608,8 +608,11 @@ function accountStatus(account: CrawlerAccount, now: number): { label: string; c
   if (account.collectionBlockReason === "ACCOUNT_PAUSED") {
     return { label: `已暂停 · 至 ${formatDateTime(account.pausedUntil || "")}`, className: "is-cooling" };
   }
+  if (account.collectionBlockReason === "EXIT_OBSERVATION_STALE") {
+    return { label: "采集网络待校验，任务启动时自动检查", className: "is-login-required" };
+  }
   if (account.collectionBlockReason === "SHARED_EXIT_UNAVAILABLE") {
-    return { label: "共享出口保护中或待校验", className: "is-login-required" };
+    return { label: "共享出口不可用，采集已暂停", className: "is-login-required" };
   }
   if (account.collectionBlockReason === "ACCOUNT_ROUTE_BLOCKED") {
     return { label: "采集路由暂停", className: "is-login-required" };

@@ -113,7 +113,7 @@ class InvestigationWorker:
                 time.sleep(max(0.05, poll_seconds))
 
     def _execute_claimed_run(self, run: InvestigationRun) -> InvestigationRun:
-        configuration = self._validated_configuration_or_fail(run)
+        configuration = self._validated_configuration_or_fail(run, refresh_stale_routes=True)
         if isinstance(configuration, InvestigationRun):
             return configuration
         snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
@@ -516,7 +516,7 @@ class InvestigationWorker:
         return None
 
     def _validated_configuration_or_fail(
-        self, run: InvestigationRun
+        self, run: InvestigationRun, *, refresh_stale_routes: bool = False
     ) -> dict[str, Any] | InvestigationRun:
         try:
             snapshot = parse_confirmed_configuration_snapshot(
@@ -530,6 +530,8 @@ class InvestigationWorker:
                 "investigation-run-config-v4",
                 "investigation-run-config-v5",
             }:
+                if refresh_stale_routes:
+                    self._refresh_local_routes(run, configuration)
                 validator = getattr(
                     self.execution_adapter,
                     "validate_m3_configuration",
@@ -561,6 +563,35 @@ class InvestigationWorker:
                 error_code="invalid_confirmed_configuration",
                 error_message=str(exc),
             )
+
+    def _refresh_local_routes(
+        self, run: InvestigationRun, configuration: dict[str, Any]
+    ) -> None:
+        from backend.audit_agent.account_rotation import AccountRotationManager
+        from backend.audit_agent.config import settings
+
+        # Authenticated dispatch already refreshes under the scheduler. Local
+        # dispatch must do so before dynamic eligibility rejects a stale route.
+        if (
+            self.store.admission.enabled
+            or settings.app_auth_mode != "disabled"
+            or not configuration.get("run_crawler", True)
+            or configuration.get("platform") != "dy"
+        ):
+            return
+        account_store = getattr(self.execution_adapter, "crawler_account_store", None)
+        if account_store is None:
+            return
+        # Disabled-auth mode uses the same local pool as AuditPipeline and
+        # passes the frozen owner to the existing route authority. Refresh
+        # retains account leases, durable refresh claims and risk fences.
+        authorized_ids = {account["id"] for account in account_store.list(platform="dy")}
+        with self._lease(run) as lease:
+            lease.assert_owned()
+            AccountRotationManager(account_store).refresh_authorized(
+                "dy", run.owner_principal, authorized_ids
+            )
+            lease.assert_owned()
 
     def _validate_account_before_execution(
         self,
