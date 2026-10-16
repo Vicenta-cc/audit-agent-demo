@@ -738,6 +738,8 @@ def _load_report_graph(
     )
     if frozen_statistics.get("source_configuration"):
         snapshot_body["source_configuration_hash"] = _stable_hash(frozen_statistics["source_configuration"])
+    if frozen_statistics.get("geographic_coverage"):
+        snapshot_body["geographic_coverage_hash"] = _stable_hash(frozen_statistics["geographic_coverage"])
     snapshot_hash = _stable_hash(snapshot_body)
     if snapshot_hash != str(manifest["snapshot_hash"]):
         raise PublishedReportLoadError("Snapshot hash does not match frozen payloads")
