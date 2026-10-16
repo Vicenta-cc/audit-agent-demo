@@ -206,3 +206,74 @@ def test_expired_budget_never_resolves_dns(monkeypatch):
     with pytest.raises(TimeoutError):
         urls._read_share_redirect(SHORT, deadline=time.monotonic() - 1)
     lookup.assert_not_called()
+
+
+@pytest.fixture(autouse=True)
+def no_ambient_crawler_proxy(monkeypatch):
+    monkeypatch.delenv("CRAWLER_PROXY_URL", raising=False)
+
+
+def test_explicit_loopback_proxy_uses_connect_without_local_destination_dns(monkeypatch):
+    monkeypatch.setenv("CRAWLER_PROXY_URL", "http://127.0.0.1:17890")
+    monkeypatch.setenv("HTTPS_PROXY", "http://untrusted.example:1234")
+    lookup = Mock(side_effect=AssertionError("must not resolve destination through TUN DNS"))
+    monkeypatch.setattr(urls.socket, "getaddrinfo", lookup)
+    tls_context = Mock()
+    monkeypatch.setattr(urls.ssl, "create_default_context", lambda: tls_context)
+    response = Mock(status=302)
+    response.getheader.return_value = PROFILE
+    connection = Mock()
+    connection.getresponse.return_value = response
+    constructor = Mock(return_value=connection)
+    monkeypatch.setattr(urls.http.client, "HTTPSConnection", constructor)
+    assert urls._read_share_redirect(SHORT, deadline=time.monotonic() + 10) == PROFILE
+    assert constructor.call_args.args == ("127.0.0.1", 17890)
+    assert constructor.call_args.kwargs["context"] is tls_context
+    connection.set_tunnel.assert_called_once_with("v.douyin.com", 443)
+    lookup.assert_not_called()
+    response.read.assert_not_called()
+    connection.close.assert_called_once()
+
+
+@pytest.mark.parametrize("proxy", [
+    "http://proxy.example:17890", "http://192.168.1.1:17890",
+    "https://127.0.0.1:17890", "http://127.0.0.1", "http://127.0.0.1:bad",
+    "http://user:secret@127.0.0.1:17890", "http://127.0.0.1:17890/path",
+    "http://127.0.0.1:17890?token=secret", "http://127.0.0.1:17890#fragment",
+])
+def test_untrusted_proxy_configuration_is_rejected_without_connection(monkeypatch, proxy):
+    monkeypatch.setenv("CRAWLER_PROXY_URL", proxy)
+    constructor = Mock()
+    monkeypatch.setattr(urls.http.client, "HTTPSConnection", constructor)
+    with pytest.raises(ValueError):
+        urls._read_share_redirect(SHORT, deadline=time.monotonic() + 10)
+    constructor.assert_not_called()
+
+
+def test_ambient_proxy_is_ignored_and_direct_dns_is_still_validated(monkeypatch):
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:17890")
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:17890")
+    monkeypatch.setenv("ALL_PROXY", "socks5://127.0.0.1:17890")
+    monkeypatch.setattr(urls.socket, "getaddrinfo", lambda *a, **kw: [address("198.18.0.1")])
+    with pytest.raises(ValueError, match="public addresses"):
+        urls._read_share_redirect(SHORT, deadline=time.monotonic() + 10)
+
+
+def test_proxy_does_not_allow_non_douyin_transport_destinations(monkeypatch):
+    monkeypatch.setenv("CRAWLER_PROXY_URL", "http://127.0.0.1:17890")
+    constructor = Mock()
+    monkeypatch.setattr(urls.http.client, "HTTPSConnection", constructor)
+    with pytest.raises(urls.CreatorUrlValidationError):
+        urls._read_share_redirect("https://127.0.0.1/private", deadline=time.monotonic() + 10)
+    constructor.assert_not_called()
+
+
+def test_tls_context_adds_existing_ca_bundle_without_disabling_verification(monkeypatch):
+    context = urls.ssl.create_default_context()
+    original_mode, original_hostname = context.verify_mode, context.check_hostname
+    context_mock = Mock(wraps=context)
+    monkeypatch.setattr(urls.ssl, "create_default_context", lambda: context_mock)
+    assert urls._share_tls_context() is context_mock
+    context_mock.load_verify_locations.assert_called_once_with(cafile=urls.certifi.where())
+    assert context.verify_mode == original_mode == urls.ssl.CERT_REQUIRED
+    assert context.check_hostname is original_hostname is True

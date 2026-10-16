@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import http.client
 import ipaddress
+import os
 import re
 import socket
 import ssl
 import time
 from urllib.parse import parse_qs, urljoin, urlsplit, urlunsplit
+
+import certifi
 
 
 class CreatorUrlValidationError(ValueError):
@@ -230,12 +233,20 @@ def _remaining_share_time(deadline: float) -> float:
     return min(3.0, remaining)
 
 
+def _share_tls_context() -> ssl.SSLContext:
+    # Keep platform roots and add the CA bundle already used by HTTPX/requests.
+    # Some Python installations have no configured system cafile.
+    context = ssl.create_default_context()
+    context.load_verify_locations(cafile=certifi.where())
+    return context
+
+
 class _ShareHTTPSConnection(http.client.HTTPSConnection):
     """Pin a validated public address while retaining hostname TLS verification."""
 
     def __init__(self, host: str, address: str, *, timeout: float) -> None:
         self._share_address = address
-        self._share_context = ssl.create_default_context()
+        self._share_context = _share_tls_context()
         super().__init__(host, timeout=timeout, context=self._share_context)
 
     def connect(self) -> None:
@@ -247,21 +258,48 @@ class _ShareHTTPSConnection(http.client.HTTPSConnection):
             raise
 
 
-def _read_share_redirect(url: str, *, deadline: float) -> str:
-    parsed = urlsplit(url)
+def _share_connection(host: str, *, deadline: float):
+    # This explicit runtime setting is independent of ambient HTTP(S)_PROXY.
+    # A trusted local CONNECT proxy resolves the allowlisted Douyin host outside
+    # TUN fake DNS; TLS still authenticates that host end to end.
+    proxy_url = os.getenv("CRAWLER_PROXY_URL", "").strip()
+    if proxy_url:
+        proxy = urlsplit(proxy_url)
+        try:
+            loopback = ipaddress.ip_address(proxy.hostname or "").is_loopback
+            port = proxy.port
+        except ValueError as exc:
+            raise ValueError("creator URL proxy must be a loopback HTTP endpoint") from exc
+        if (
+            proxy.scheme != "http" or not loopback or port is None or port < 1
+            or proxy.username is not None or proxy.password is not None
+            or proxy.path not in {"", "/"} or proxy.query or proxy.fragment
+        ):
+            raise ValueError("creator URL proxy must be a loopback HTTP endpoint")
+        connection = http.client.HTTPSConnection(
+            proxy.hostname, port, timeout=_remaining_share_time(deadline),
+            context=_share_tls_context(),
+        )
+        connection.set_tunnel(host, 443)
+        return connection
+
     _remaining_share_time(deadline)
     addresses = {
         item[4][0]
-        for item in socket.getaddrinfo(parsed.hostname, 443, type=socket.SOCK_STREAM)
+        for item in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
     }
     if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
         raise ValueError("share host must resolve to public addresses")
     # Pin the chosen address to prevent a second DNS lookup/rebinding. Prefer
     # IPv4 where both families are advertised but IPv6 routing is unavailable.
     address = min(addresses, key=lambda item: (":" in item, item))
-    connection = _ShareHTTPSConnection(
-        parsed.hostname, address, timeout=_remaining_share_time(deadline),
-    )
+    return _ShareHTTPSConnection(host, address, timeout=_remaining_share_time(deadline))
+
+
+def _read_share_redirect(url: str, *, deadline: float) -> str:
+    # Keep transport safe even if it is called separately from the resolver.
+    parsed = urlsplit(_share_hop_url(url))
+    connection = _share_connection(parsed.hostname, deadline=deadline)
     try:
         connection.connect()
         connection.sock.settimeout(_remaining_share_time(deadline))
