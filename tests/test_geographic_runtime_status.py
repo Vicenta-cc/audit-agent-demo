@@ -28,6 +28,8 @@ def test_empty_differs_from_positive_complete():
     ('capture_started', {'query':'克拉玛依大火'}, '地域预筛：正在抓取候选「克拉玛依大火」'),
     ('risk_started', {'query':'克拉玛依大火','rank':2}, '地域预筛：正在对「克拉玛依大火」第 2 条候选进行风险筛选'),
     ('geo_started', {'query':'克拉玛依大火','rank':2}, '地域预筛：正在对「克拉玛依大火」第 2 条候选进行地域判断'),
+    ('before_detail', {'attempt_id':'one'}, '地域精选：已选中候选，正在采集详情和下载媒体'),
+    ('after_detail', {'attempt_id':'one'}, '地域精选：详情采集完成，正在复核并交付审核'),
 ])
 def test_geographic_progress_is_visible_in_pipeline_logs(stage, progress, expected):
     assert _geographic_progress_message({'stage':stage,'progress':progress}) == expected

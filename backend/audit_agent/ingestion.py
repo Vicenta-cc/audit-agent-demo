@@ -1272,6 +1272,8 @@ class IngestionStore:
             "item": item if isinstance(item, dict) else {},
             "comments": comments if isinstance(comments, list) else [],
             "raw_item_path": str(raw_path),
+            **({"geographic_binding": dict(payload["geographic_binding"])}
+               if isinstance(payload.get("geographic_binding"), dict) else {}),
             "result_path": str(membership["result_path"] or ""),
             "audit_result_id": membership["audit_result_id"],
             "analyze_status": str(membership["analyze_status"] or "queued"),

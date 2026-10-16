@@ -143,3 +143,101 @@ def test_detail_auth_failure_cannot_restart_outer_account_sweep(confirmed, tmp_p
     assert sorted(retired) == ['second', 'test-account']
     assert [e[0] for e in events].count('detail') == 2
     assert runner.execution.snapshot()['state']['total_success'] == 0
+
+
+def test_approved_detail_media_is_found_by_audit_and_after_restart(confirmed, tmp_path):
+    from backend.audit_agent.pipeline import AuditPipeline
+    events = []
+    class WithMedia(Crawler):
+        def run_detail(self, **kw):
+            output = super().run_detail(**kw)
+            folder = kw['save_root'] / 'douyin' / 'videos' / 'same'
+            folder.mkdir(parents=True)
+            (folder / 'video.mp4').write_bytes(b'\x00\x00\x00\x18ftypmp42')
+            output.contents[0].update(video_download_url='https://remote.test/video.mp4',
+                                      note_download_url='https://remote.test/cover.jpg')
+            return output
+    def make_runner():
+        runner, _, _ = runtime(confirmed, tmp_path, events=events, crawler=WithMedia(events))
+        runner.root = tmp_path / 'crawler' / 'geographic'
+        runner.sink.raw_root = runner.root / 'delivered'
+        return runner
+    runner = make_runner()
+    report, output = runner.run()
+    assert report['handed_off'] == 1
+    # Earlier failed attempts and other content must never become audit inputs.
+    failed = runner.root / 'details' / 'failed' / 'douyin' / 'videos' / 'same'
+    failed.mkdir(parents=True)
+    (failed / 'bad.mp4').write_bytes(b'\x00\x00\x00\x18ftypmp42')
+    def subject():
+        pipeline = AuditPipeline.__new__(AuditPipeline)
+        pipeline.job_id = runner.bridge.plan['runtime_binding']['job_id']
+        pipeline.rule_snapshot = {}
+        pipeline.ingestion = runner.ingestion
+        return pipeline._build_subjects('dy', output.contents, [], tmp_path)[0]
+    first = subject()
+    assert len(first.local_video_paths) == 1
+    assert '/failed/' not in first.local_video_paths[0]
+    assert first.video_urls == first.image_urls == []
+    assert make_runner().run()[0] == report
+    assert subject().local_video_paths == first.local_video_paths
+    assert [kind for kind, _ in events].count('detail') == 1
+    # The approved ledger cannot be reused for another post's files.
+    pipeline = AuditPipeline.__new__(AuditPipeline)
+    pipeline.job_id = runner.bridge.plan['runtime_binding']['job_id']
+    pipeline.ingestion = runner.ingestion
+    assert pipeline._find_local_media(tmp_path, 'dy', 'unapproved', 'videos', {'.mp4'}) == []
+    # A symlink under the approved attempt may not escape this task's media root.
+    video = Path(first.local_video_paths[0])
+    outside = tmp_path.parent / (tmp_path.name + '-outside.mp4')
+    outside.write_bytes(video.read_bytes())
+    try:
+        video.unlink()
+        video.symlink_to(outside)
+        with pytest.raises(ValueError):
+            subject()
+    finally:
+        outside.unlink()
+
+
+def test_unapproved_detail_media_is_not_discovered(confirmed, tmp_path):
+    from backend.audit_agent.pipeline import AuditPipeline
+    events = []
+    class Outside(Crawler):
+        def run_detail(self, **kw):
+            output = super().run_detail(**kw)
+            output.contents[0]['title'] = '北京市欠薪'
+            folder = kw['save_root'] / 'douyin' / 'videos' / 'same'
+            folder.mkdir(parents=True)
+            (folder / 'video.mp4').write_bytes(b'\x00\x00\x00\x18ftypmp42')
+            return output
+    runner, _, _ = runtime(confirmed, tmp_path, crawler=Outside(events))
+    runner.root = tmp_path / 'crawler' / 'geographic'
+    runner.sink.raw_root = runner.root / 'delivered'
+    assert runner.run()[0]['handed_off'] == 0
+    pipeline = AuditPipeline.__new__(AuditPipeline)
+    pipeline.job_id = runner.bridge.plan['runtime_binding']['job_id']
+    pipeline.ingestion = runner.ingestion
+    assert pipeline._find_local_media(tmp_path, 'dy', 'same', 'videos', {'.mp4'}) == []
+
+
+@pytest.mark.parametrize('changes', [
+    {'attempt_id': '../escape'}, {'attempt_id': ''}, {'job_id': 'other-job'},
+    {'content_key': 'other-post'}, {'platform': 'xhs'},
+])
+def test_geographic_media_binding_must_match_exact_task_and_safe_attempt(tmp_path, changes):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from backend.audit_agent.pipeline import AuditPipeline
+    geographic = tmp_path / 'crawler' / 'geographic'
+    geographic.mkdir(parents=True)
+    binding = dict(job_id='job', platform='dy', content_key='same', attempt_id='approved') | changes
+    ref = dict(platform='dy', content_key='same', geographic_binding=binding,
+               raw_item_path=str(geographic / 'delivered' / 'receipt.json'))
+    validated = Mock(return_value=([], [ref]))
+    pipeline = AuditPipeline.__new__(AuditPipeline)
+    pipeline.job_id = 'job'
+    pipeline.ingestion = SimpleNamespace(validated_selection_for_task=validated)
+    with pytest.raises(ValueError, match='binding'):
+        pipeline._find_local_media(tmp_path, 'dy', 'same', 'videos', {'.mp4'})
+    validated.assert_called_once_with('job')

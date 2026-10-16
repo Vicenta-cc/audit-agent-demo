@@ -101,6 +101,10 @@ def _geographic_progress_message(report: dict) -> str:
         return f"地域预筛：正在对「{query}」第 {rank} 条候选进行风险筛选"
     if report.get("stage") == "geo_started" and query and type(rank) is int:
         return f"地域预筛：正在对「{query}」第 {rank} 条候选进行地域判断"
+    if report.get("stage") == "before_detail":
+        return "地域精选：已选中候选，正在采集详情和下载媒体"
+    if report.get("stage") == "after_detail":
+        return "地域精选：详情采集完成，正在复核并交付审核"
     return ""
 
 
@@ -2863,6 +2867,30 @@ class AuditPipeline:
             media_root / "crawler" / platform_dir / media_type / note_id,
             media_root / "assets" / note_id / media_type,
         ]
+        geographic_root = media_root / "crawler" / "geographic"
+        ingestion = getattr(self, "ingestion", None)
+        if geographic_root.is_dir() and ingestion is not None:
+            # Only a validated, approved delivery may identify its exact detail
+            # attempt. Never search candidate, failed-attempt or sibling folders.
+            _, refs = ingestion.validated_selection_for_task(self.job_id)
+            for ref in refs:
+                if ref["platform"] != platform or ref["content_key"] != note_id:
+                    continue
+                binding = ref.get("geographic_binding")
+                if not binding:
+                    continue
+                attempt_id = binding.get("attempt_id")
+                if (binding.get("job_id") != self.job_id or binding.get("platform") != platform
+                        or binding.get("content_key") != note_id
+                        or not isinstance(attempt_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", attempt_id)
+                        or not re.fullmatch(r"[A-Za-z0-9_-]+", note_id)):
+                    raise ValueError("invalid geographic media delivery binding")
+                folder = geographic_root / "details" / attempt_id / platform_dir / media_type / note_id
+                Path(ref["raw_item_path"]).resolve().relative_to((geographic_root / "delivered").resolve())
+                folder.resolve().relative_to(media_root.resolve())
+                for path in folder.iterdir() if folder.is_dir() else ():
+                    path.resolve().relative_to(media_root.resolve())
+                candidates.append(folder)
         files: list[Path] = []
         for folder in candidates:
             if folder.exists():
