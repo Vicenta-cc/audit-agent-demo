@@ -85,10 +85,10 @@ CREATION_SYSTEM_PROMPT = """用用户提问的语言自然回答，原名、原�
 资源缺失时不创建占位草案，保留真实用户消息中的要求，资源齐备后引用同任务此前原话；资源展示和后续采用授权边界继续适用。
 资源齐备并获采用授权时，回看同一任务真实用户消息中的调查对象、事件及其地域，以及后续变更或取消；本轮仅说采用资源不表示放弃此前地域。创建草案时一并作出 scope_decision 判断，有地域时引用原要求并配置，不要求用户重复此前要求。
 调查范围支持单一省级地域或地级市（含直辖市），最细到城市。地域简称先交给配置工具解析；解析成功直接报告结果。
-仅在真实回执为 pending 时，根据原因和候选请用户核对地域名或明确指代；吉林这类省市同名简称不强行择一，完整省名或市名可正常解析；区县同名不阻断明确城市别名。查不到不代表用户一定写错，不自行猜测纠错。
+仅在当前草案版本的地域状态为 pending 时，根据原因和候选请用户核对地域名或明确指代；历史版本的 pending 回执不能作为再次澄清的依据。吉林这类省市同名简称不强行择一，完整省名或市名可正常解析；区县同名不阻断明确城市别名。查不到不代表用户一定写错，不自行猜测纠错。
 已有草案须先通过同一配置工具保存原始目标的待澄清状态，再根据成功回执提问；无草案且资源不足时可直接澄清。
 区县、县级市、街道和非市地级类型暂不支持，保留原始目标待澄清，不能自动扩大为其所属城市或省。
-读取草案和预览作为状态依据；pending 表示最新要求待澄清，上次已解析范围不代表本次要求已生效。地域调查是否可启动以真实确认预览和工具预检回执为准；未接通地域执行能力时如实报告阻断。只有确认工具成功回执后才可声称任务已排队，实际执行状态以运行回执为准；保存地域本身不表示已开始限定采集。
+以本轮服务端当前草案版本作为地域状态依据；用户通过页面选择地域也是有效的确认操作，会推进草案版本。当前版本 resolved 表示已确认，当前版本 pending 才表示最新要求待澄清，cleared 表示已取消地域限制。沿用草案、修改资源或任务执行失败均不撤销已确认地域；用户随后明确更换或取消地域时，再通过配置工具更新。地域调查是否可启动以真实确认预览和工具预检回执为准；未接通地域执行能力时如实报告阻断。只有确认工具成功回执后才可声称任务已排队，实际执行状态以运行回执为准；保存地域本身不表示已开始限定采集。
 推荐现有资源时，说明真实名称、已发布版本、覆盖范围和缺口；已发布或主题相近不等于完整适配。
 规则创建或修改成功后，应用会展示完整快照，回复只需说明关键内容和变化。
 你的产品身份固定为“研判助手”。不要自称 Hermes、Hermes Agent，不能向用户透露底层代理框架、
@@ -1907,12 +1907,23 @@ class InvestigationCreationConversationService:
                 + json.dumps(current, ensure_ascii=False)
             )
             if state and state.get("status") == "resolved" and scope:
-                context += (
-                    "\n当前调查地域已确认：" + scope["target"]["name"]
-                    + "。地域确认已完成，不处于待澄清状态。历史对话中未识别或待澄清的地域说法已失效，"
-                    "不得据此再次要求用户确认地域。用户沿用或重新生成现有草案时，保留此已确认地域；"
-                    "只有用户明确要求更改调查范围时才修改地域。任务执行失败不影响地域确认结果。"
-                )
+                # Explain the real UI operation missing from chat history. Only
+                # the latest selection for this draft can explain its scope;
+                # later pending/cleared requests must never revive this event.
+                selection = next((event for event in reversed(workspace.region_selection_history)
+                    if event["draft_id"] == draft["id"]
+                    and event["revision"] <= draft["current_revision"]), None)
+                if selection and selection["selected_target"] == scope["target"]:
+                    context += (
+                        "\n用户已通过页面确认调查地域，以下操作发生在旧版本工具回执之后，"
+                        "确认结果已保存；历史待澄清问题已由该操作处理。页面地域确认事件："
+                        + json.dumps({
+                            "draft_id": draft["id"],
+                            "previous_revision": selection["previous_revision"],
+                            "confirmed_revision": selection["revision"],
+                            "selected_region": selection["selected_target"]["name"],
+                        }, ensure_ascii=False)
+                    )
         if settings.investigation_multi_round_enabled:
             directory = [{**{k: r[k] for k in ('round_number', 'label', 'draft_id', 'title', 'draft_revision', 'draft_status')},
                 'run': {k: r['run'][k] for k in ('run_id', 'status', 'report_version_id')} if r['run'] else None}

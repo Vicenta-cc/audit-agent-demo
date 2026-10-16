@@ -67,8 +67,12 @@ def test_latest_saved_scope_in_real_next_turn_context(creation_stack, content, c
     assert current['status'] == 'DRAFT'
     assert current['relevance_scope']['target']['name'] == '吉林省'
     assert current['relevance_scope_state']['status'] == 'resolved'
-    assert '当前调查地域已确认：吉林省。' in text
-    assert '不得据此再次要求用户确认地域' in text
+    assert '用户已通过页面确认调查地域' in text
+    event = json.JSONDecoder().raw_decode(text.split('页面地域确认事件：', 1)[1])[0]
+    assert event == {
+        'draft_id': draft_id, 'previous_revision': 1, 'confirmed_revision': 2,
+        'selected_region': '吉林省',
+    }
     assert current['selection_policy'] == 'local_first_with_supplement'
     assert '克拉玛依' not in text
     assert all(key not in text for key in ['source_quote', 'source_turn_id', 'principal_id', 'task_anchor', 'source_kind', 'source_operation_id'])
@@ -129,7 +133,7 @@ def test_continuous_cached_agent_reads_new_selection_without_stale_context(
     latest = summary(cached.scope_contexts[-1])
     assert latest['current_revision'] == 2
     assert latest['relevance_scope']['target']['name'] == '吉林省'
-    assert '当前调查地域已确认：吉林省。' in cached.scope_contexts[-1]
+    assert '用户已通过页面确认调查地域' in cached.scope_contexts[-1]
     assert '克拉玛依' not in cached.scope_contexts[-1]
     assert cached.ephemeral_system_prompt == ''
 
@@ -169,3 +173,39 @@ def test_failed_agent_restores_ephemeral_context(creation_stack, content, catalo
     assert stack['conversation'].store.get_turn(turn.id).status == 'interrupted'
     assert summary(observed[0])['draft_id'] == result['data']['draft']['id']
     assert agent.ephemeral_system_prompt == ''
+
+
+@pytest.mark.parametrize('later_change', ['title', 'pending', 'cleared'])
+def test_ui_confirmation_event_survives_resource_edits_but_not_new_scope_request(
+    creation_stack, content, catalog, monkeypatch, later_change
+):
+    stack = creation_stack
+    first, _, _, _, _, _, result, _ = setup_geo(stack, content)
+    sid, draft_id = first['session_id'], result['data']['draft']['id']
+    flow(stack, sid, {'operation': 'update', 'draft_id': draft_id,
+        'expected_revision': 1, 'relevance_scope_change': change('吉林', '改查吉林')}, '改查吉林')
+    stack['app_service'].select_relevance_scope(draft_id, session_id=sid,
+        expected_revision=2, operation_id='resolve-city', target_text='吉林市', principal=P)
+    args = {'operation': 'update', 'draft_id': draft_id, 'expected_revision': 3}
+    if later_change == 'title':
+        args['title'] = '调整调查标题'
+        message = '只修改标题为调整调查标题'
+    elif later_change == 'pending':
+        args['relevance_scope_change'] = change('吉林', '改查吉林')
+        message = '改查吉林'
+    else:
+        args['relevance_scope_change'] = {'action': 'clear', 'source_quote': '不限制地域'}
+        message = '不限制地域'
+    flow(stack, sid, args, message)
+    context, run = capture_continue(stack, sid, monkeypatch)
+    assert summary(context)['current_revision'] == 4
+    if later_change == 'title':
+        event = json.JSONDecoder().raw_decode(context.split('页面地域确认事件：', 1)[1])[0]
+        assert event['previous_revision'] == 2
+        assert event['confirmed_revision'] == 3
+        assert event['selected_region'] == '吉林市'
+        assert summary(context)['relevance_scope_state']['status'] == 'resolved'
+    else:
+        assert '页面地域确认事件：' not in context
+        assert summary(context)['relevance_scope'] is None
+    assert not any('页面地域确认事件：' in str(m) for m in run['agent'].conversation_histories[0])
