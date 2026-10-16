@@ -61,14 +61,15 @@ def _adapter(stack):
 
 @pytest.mark.parametrize('formal_rules', [False, True])
 @pytest.mark.parametrize('formal_lexicon', [False, True])
-def test_confirm_job_roundtrip_and_live_drift(creation_stack, content, monkeypatch, tmp_path, formal_rules, formal_lexicon):
+@pytest.mark.parametrize('ui', [False, True])
+def test_confirm_job_roundtrip_and_live_drift(creation_stack, content, monkeypatch, tmp_path, formal_rules, formal_lexicon, ui):
     from backend.audit_agent.config import settings
     from backend.investigation_creation.geographic_runtime import IsolatedGeographicCapability
     from backend.investigation_creation.errors import ConfigurationValidationError
     from backend.investigation_creation.contracts import parse_confirmed_configuration_snapshot
     from backend.investigation_creation.frozen_preview import confirmed_run_preview
     monkeypatch.setattr(settings, 'triage_mode', 'select')
-    authority = make_authority(creation_stack, content, formal_rules=formal_rules, formal_lexicon=formal_lexicon)
+    authority = make_authority(creation_stack, content, formal_rules=formal_rules, formal_lexicon=formal_lexicon, ui=ui)
     app = creation_stack['app_service']
     command = _command(authority['identity'])
     with pytest.raises(ConfigurationValidationError, match='地域执行能力'):
@@ -81,6 +82,13 @@ def test_confirm_job_roundtrip_and_live_drift(creation_stack, content, monkeypat
     preview = confirmed_run_preview(run)
     assert preview.draft_id == run.draft_id
     assert preview.resolved_search_terms == frozen.resolved_search_terms
+    frozen_configuration = frozen.execution.geographic_plan['inputs']['configuration']
+    assert preview.relevance_scope.model_dump(mode='json') == frozen_configuration['relevance_scope']
+    public_state = preview.relevance_scope_state.model_dump(mode='json')
+    assert public_state['status'] == 'resolved'
+    assert public_state == {key: frozen_configuration['relevance_scope_state'][key] for key in public_state}
+    assert 'source_operation_id' not in public_state
+    assert 'source_user_message_id' not in public_state
     adapter = _adapter(creation_stack)
     job_id = adapter.ensure_job(run)
     assert job_id == adapter.job_id_for_run(run.id)
@@ -89,6 +97,8 @@ def test_confirm_job_roundtrip_and_live_drift(creation_stack, content, monkeypat
     monkeypatch.setattr(settings, 'triage_mode', 'off')
     monkeypatch.setattr(app.resource_service, 'resolve_confirmation', lambda *a, **k: pytest.fail('live resolver after freeze'))
     assert app.confirm_and_queue(command, principal=P).id == run.id
+    assert app.get_confirmation_preview(run.draft_id, principal=P) == preview
+    assert app.store.get_run(run.id, principal=P.id).confirmed_configuration == run.confirmed_configuration
     verified = adapter.verify_run_job(run)
     assert verified['geographic_plan'] == frozen.execution.geographic_plan
     assert verified['_verified_geographic_binding'] == {**authority['identity'], 'run_id': run.id, 'job_id': job_id, 'config_hash': frozen.config_hash, 'p2_digest': frozen.execution.geographic_plan['plan_digest']}

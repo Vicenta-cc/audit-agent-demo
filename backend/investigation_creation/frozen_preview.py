@@ -3,11 +3,13 @@ from backend.audit_agent.search_terms_cap import unused_terms_notice
 from .contracts import (
     ConfirmationPreview,
     ConfirmedConfigurationSnapshotV4,
+    InvestigationDraftConfiguration,
     InvestigationRun,
     InvestigationTaskParameters,
     RecallPlanPreview,
     parse_confirmed_configuration_snapshot,
 )
+from .scope_intent import project_state
 
 
 def confirmed_run_preview(run: InvestigationRun) -> ConfirmationPreview:
@@ -44,7 +46,18 @@ def confirmed_run_preview(run: InvestigationRun) -> ConfirmationPreview:
     total = execution.max_total_notes or snapshot.max_notes
     parameters["max_total_notes"] = total
     effective = InvestigationTaskParameters.model_validate(parameters)
+    # The snapshot parser has validated the v5 plan and its binding to this run.
+    # Restore geography from that frozen input, never the current mutable draft.
+    geographic_configuration = (
+        InvestigationDraftConfiguration.model_validate(
+            execution.geographic_plan["inputs"]["configuration"]
+        ) if execution.geographic_plan is not None else None
+    )
     return ConfirmationPreview(
+        relevance_scope=(geographic_configuration.relevance_scope
+                         if geographic_configuration is not None else None),
+        relevance_scope_state=(project_state(geographic_configuration.relevance_scope_state)
+                               if geographic_configuration is not None else None),
         draft_id=snapshot.draft_id,
         draft_revision=snapshot.draft_revision,
         title=snapshot.title,

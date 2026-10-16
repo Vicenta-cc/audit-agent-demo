@@ -92,6 +92,8 @@ def test_confirmed_workspace_keeps_frozen_configuration(creation_stack, monkeypa
         assert response.status_code == 200, response.text
         state = response.json()
         preview = state['draft_artifact']['confirmation_preview']
+        assert 'relevance_scope' not in preview
+        assert 'relevance_scope_state' not in preview
         assert preview['blockers'] == []
         assert preview['can_confirm'] is False
         assert preview['resolved_search_terms'] == frozen['resolved_search_terms']
