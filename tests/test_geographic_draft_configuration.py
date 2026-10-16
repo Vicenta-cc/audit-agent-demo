@@ -22,6 +22,20 @@ from test_unified_draft_configuration import P, prepare, call
 QUOTE = '调查克拉玛依'
 
 
+def test_geographic_prompt_uses_actual_readiness_and_execution_receipts():
+    from backend.investigation_creation.configure import DESCRIPTION
+    from backend.investigation_creation.conversation import CREATION_SYSTEM_PROMPT
+
+    for prompt in (DESCRIPTION, CREATION_SYSTEM_PROMPT):
+        assert '真实确认预览和工具预检回执为准' in prompt
+        assert '未接通地域执行能力时如实报告阻断' in prompt
+        assert '只有确认工具成功回执后才可声称任务已排队' in prompt
+        assert '实际执行状态以运行回执为准' in prompt
+        assert '保存地域本身不表示已开始限定采集' in prompt
+        assert '地域执行尚未接通，不能启动地域调查' not in prompt
+        assert '地域仅保存和展示，执行尚未接通' not in prompt
+
+
 def change(target='克拉玛依', quote=QUOTE, policy='local_first_with_supplement'):
     return {'action': 'set', 'target_text': target, 'source_quote': quote, 'selection_policy': policy}
 
