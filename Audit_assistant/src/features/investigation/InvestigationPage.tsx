@@ -537,6 +537,9 @@ function restoreSessionFromAnalysisProgress(
 export function InvestigationPage({ initialSubView = null }: InvestigationPageProps) {
   const { user: applicationUser } = useApplicationAuth();
   const { investigationId } = useParams();
+  // Background recovery may finish after a user has selected another URL.
+  const selectedInvestigationIdRef = useRef(investigationId);
+  selectedInvestigationIdRef.current = investigationId;
   const location = useLocation();
   const navigate = useNavigate();
   // Legacy navigation payloads have no owner identity. Authenticated views reload
@@ -666,6 +669,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       const requestedHistorical = investigationId
         ? historicalSessions.find((session) => session.id === investigationId)
         : null;
+      if (selectedInvestigationIdRef.current !== investigationId) return;
       if (requestedHistorical) {
         setActiveSessionId(requestedHistorical.id);
       } else if (!investigationId && historicalSessions[0] && !new URLSearchParams(window.location.search).has("view")) {
@@ -698,13 +702,17 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           && session.creationBinding?.workspaceSessionId !== restored.id
         ))
       ]));
-      setActiveSessionId(restored.id);
-      setActiveDrawer(null);
+      if (selectedInvestigationIdRef.current === investigationId) {
+        setActiveSessionId(restored.id);
+        setActiveDrawer(null);
+      }
     }).catch((error) => {
       if (deletedSessionIdsRef.current.has(investigationId)) return;
       if (error instanceof ApiError && error.status === 404) {
-        setDeletionNotice("会话不存在或已删除。");
-        navigate("/investigation", { replace: true });
+        if (selectedInvestigationIdRef.current === investigationId) {
+          setDeletionNotice("会话不存在或已删除。");
+          navigate("/investigation", { replace: true });
+        }
         return;
       }
       const message = error instanceof Error ? error.message : "无法读取调查工作区";
@@ -723,7 +731,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           ))
         ]);
       });
-      setActiveSessionId(investigationId);
+      if (selectedInvestigationIdRef.current === investigationId) setActiveSessionId(investigationId);
     });
   }, [investigationId]);
 
