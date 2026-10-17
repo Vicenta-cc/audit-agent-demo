@@ -95,6 +95,33 @@ def test_runtime_uses_frozen_parameters_and_rejects_stale_fence(confirmed, tmp_p
     assert events == []
 
 
+def test_invalid_geo_persists_three_attempts_and_remains_pending_after_restart(confirmed, tmp_path):
+    from backend.audit_agent.geographic_status import classify_geographic_status
+    runner, events, _ = runtime(confirmed, tmp_path)
+    class InvalidGeography:
+        def __init__(self): self.calls = []
+        def audit_text(self, prompt, **kwargs):
+            self.calls.append(prompt)
+            return {'status': 'located', 'locations': [{'field': 'title', 'place': '新疆克拉玛依市'}]}
+    invalid = InvalidGeography()
+    runner.bridge.geo_client = invalid
+    result, output = runner.run()
+    saved = runner.execution.snapshot()
+    assert result['geographic_evaluation_pending'] == len(runner.bridge.plan['queries'])
+    assert classify_geographic_status(result)['reason'] == 'geographic_evaluation_pending'
+    assert not output.contents and not any(e[0] == 'detail' for e in events)
+    for query in saved['queries'].values():
+        assert query['status'] == 'captured'
+        for oid, parts in query['evaluations'].items():
+            assert len(query['geo_attempts'][oid]) == 3
+            assert query['geo_attempts'][oid] == parts['geo']['attempts']
+            assert all(a['state'] == 'completed' for a in query['geo_attempts'][oid])
+    before = deepcopy(events)
+    restarted, _, new_model = runtime(confirmed, tmp_path, events=events)
+    again, _ = restarted.run()
+    assert again == result and not new_model.calls and events == before
+
+
 def test_partial_stopped_capture_never_reaches_detail(confirmed, tmp_path):
     stopped = [False]
     events = []

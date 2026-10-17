@@ -49,6 +49,8 @@ def classify_geographic_status(report):
         return {'status':'incomplete', 'reason':'geographic_state_missing'}
     if not isinstance(report.get('unfinished_queries'), list) or not isinstance(report.get('reasons'), list):
         return {'status':'incomplete', 'reason':'geographic_state_invalid'}
+    if report.get('geographic_evaluation_pending') or 'geographic_evaluation_pending' in report['reasons']:
+        return {'status':'incomplete', 'reason':'geographic_evaluation_pending'}
     if report.get('unfinished_queries'):
         return {'status':'incomplete', 'reason':'geographic_queries_unfinished'}
     for key in ('reserved','collected','handed_off','collected_not_delivered'):
@@ -67,6 +69,8 @@ def classify_geographic_status(report):
 def geographic_completion_failure(report):
     classification = classify_geographic_status(report)
     if classification['status'] == 'incomplete':
+        if classification['reason'] == 'geographic_evaluation_pending':
+            return classification['reason'], '部分帖子地域预筛未完成，已保留待判定记录，报告暂不能完成。'
         return classification['reason'], '地域采集或交付尚未完成，请先核对执行记录。'
     return None
 
@@ -117,7 +121,11 @@ def selection_page(service, run_id, principal, *, offset=0, limit=50, tier=None)
     validator._validate_snapshot(state,expected['execution_id'])
     rows=[]
     for query in state['queries'].values():
-        for occurrence in query['occurrences']:
+        occurrences = query['occurrences']
+        if query['status'] != 'evaluated' and query.get('capture'):
+            occurrences = [deepcopy(o) | deepcopy(query['evaluations'].get(o['occurrence_id'], {}))
+                           for o in query['capture']['occurrences']]
+        for occurrence in occurrences:
             geo = occurrence.get('geo',{}).get('result',{})
             geo_tier = geo.get('geo_tier')
             if tier is not None and geo_tier != tier:
@@ -125,7 +133,10 @@ def selection_page(service, run_id, principal, *, offset=0, limit=50, tier=None)
             score = occurrence.get('risk',{}).get('score',{})
             rows.append({key:occurrence.get(key) for key in ('occurrence_id','query_id','content_key','rank','source_keyword')} |
                         {'geo_tier':geo_tier,'geo_status':geo.get('status'),
-                         'risk_band':score.get('band'), 'risk_score':score.get('score')})
+                         'risk_band':score.get('band'), 'risk_score':score.get('score'),
+                         'evaluation_status':geo.get('evaluation_status'),
+                         'pending_reason':'geographic_response_invalid'
+                             if geo.get('evaluation_status') == 'invalid_response' else None})
     return {'run_id':run.id, **classify_geographic_status(summary),
-            'summary':{k:summary.get(k) for k in ('candidate_occurrences','reserved','collected','handed_off','collected_not_delivered','unfinished_queries','reasons')},
+            'summary':{k:summary.get(k) for k in ('candidate_occurrences','geographic_evaluation_pending','reserved','collected','handed_off','collected_not_delivered','unfinished_queries','reasons')},
             'items':rows[offset:offset+limit], 'total':len(rows), 'offset':offset,'limit':limit}

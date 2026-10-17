@@ -12,6 +12,7 @@ const reasons: Record<string, string> = {
   geographic_execution_incomplete: '执行尚未完成，请核对任务状态', no_candidates: '未获取候选内容',
   no_eligible_risk: '无符合初筛条件的候选', no_eligible_geographic_content: '无符合地域与初筛条件的内容',
   geographic_pending_or_conflict: '部分候选地域待核实或存在冲突', collected_not_delivered: '部分精采内容未获准交付',
+  geographic_evaluation_pending: '部分帖子地域预筛未完成，已保留待判定记录，报告暂不能完成',
   collection_failed: '部分内容采集未完成', query_failed: '候选采集或评估失败', paused: '任务已暂停',
   awaiting_account_resolution: '等待解决采集账号状态'
 };
@@ -25,12 +26,13 @@ export function GeographicSelectionView({ page }: { page: GeographicSelectionPag
   return h('section', { 'aria-label': '地域筛选记录', style: { fontSize: 13, lineHeight: 1.75, overflowWrap: 'anywhere' } },
     h('h3', { style: { fontSize: 14 } }, status),
     page.summary && h('p', null, `候选记录 ${page.summary.candidate_occurrences} · 精采成功 ${page.summary.collected} · 已交付审核 ${page.summary.handed_off} · 精采后未交付 ${page.summary.collected_not_delivered}`),
+    !!page.summary?.geographic_evaluation_pending && h('p', null, `地域预筛待判定 ${page.summary.geographic_evaluation_pending} 条`),
     detailReasons.length > 0 && h('p', null, detailReasons.join('；')),
     h('p', null, '以下为候选的地域与初筛依据；正式风险结论以审核结果为准。'),
     h('ul', null, page.items.map(item => h('li', { key: item.occurrence_id },
-      h('strong', null, item.geo_tier ? tiers[item.geo_tier] : '地域待核实'),
+      h('strong', null, item.pending_reason === 'geographic_response_invalid' ? '地域预筛待判定' : item.geo_tier ? tiers[item.geo_tier] : '地域待核实'),
       h('div', null, `搜索词：${item.source_keyword} · 原始序位：${item.rank}`),
-      h('div', null, `内容：${item.content_key} · 初筛：${item.risk_band === 'strong' ? '强疑似' : item.risk_band === 'weak' ? '弱疑似' : '未入选'}`)
+      h('div', null, `内容：${item.content_key} · 初筛：${item.risk_band == null ? '待初筛' : item.risk_band === 'strong' ? '强疑似' : item.risk_band === 'weak' ? '弱疑似' : '未入选'}`)
     ))),
     page.total > 0 && h('p', null, `候选依据 ${page.offset + 1}–${Math.min(page.offset + page.items.length, page.total)} / ${page.total}`)
   );

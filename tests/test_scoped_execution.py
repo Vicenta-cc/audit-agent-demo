@@ -87,6 +87,78 @@ def test_local_delivery_streams_before_next_query_capture_and_callback_stays_iso
     assert result['collected'] == result['handed_off'] == 2
 
 
+def test_invalid_geo_is_pending_and_other_evaluations_survive_restart(tmp_path):
+    from experiments.geographic_selection.bridge import prepare_geo
+    from audit_agent.geographic_status import classify_geographic_status, geographic_completion_failure
+    h = Harness(tmp_path, rows={'A': [('x', '克拉玛依欠薪'), ('z', '克拉玛依欠薪')],
+                               'B': [('y', '克拉玛依欠薪')]})
+    invalid = h.items['A'][0]
+    invalid['geo'] = prepare_geo(invalid['geo']['request']['context'], invalid['candidate'],
+        {'status': 'located', 'locations': [{'field': 'desc', 'place': '北京市'}]})
+    result = h.runner().run()
+    saved = h.store.load(h.plan['execution_id'], h.plan['plan_digest'])
+    assert saved['queries']['A']['status'] == 'captured'
+    assert saved['queries']['B']['status'] == 'evaluated'
+    assert len(saved['queries']['A']['evaluations']) == 2
+    assert result['candidate_occurrences'] == 3
+    assert result['geographic_evaluation_pending'] == 1
+    assert result['pending_evaluations'][0]['occurrence_id'] == invalid['occurrence_id']
+    assert result['resume_blocked_reason'] == 'geographic_evaluation_reconciliation_required'
+    assert 'no_eligible_geographic_content' not in result['reasons']
+    assert 'no_eligible_risk' not in result['reasons']
+    assert not [c for c in h.calls if c[0] == 'detail']
+    assert classify_geographic_status(result) == {'status': 'incomplete', 'reason': 'geographic_evaluation_pending'}
+    assert geographic_completion_failure(result)[0] == 'geographic_evaluation_pending'
+    calls = list(h.calls)
+    again = h.runner().run()
+    assert again['geographic_evaluation_pending'] == 1
+    assert h.calls == calls  # no recapture, model retry, or implicit budget reset
+
+
+def test_legitimate_insufficient_context_is_a_completed_judgment(tmp_path):
+    from experiments.geographic_selection.bridge import prepare_geo
+    h = Harness(tmp_path)
+    row = h.items['A'][0]
+    row['geo'] = prepare_geo(row['geo']['request']['context'], row['candidate'],
+                            {'status': 'insufficient_context', 'locations': []})
+    result = h.runner().run()
+    assert result['geographic_evaluation_pending'] == 0
+    assert not result['unfinished_queries']
+    assert result['handed_off'] == 1
+
+
+def test_geo_attempt_claim_survives_interruption_and_cannot_reset(tmp_path):
+    h = Harness(tmp_path)
+    seen = []
+    class WorkerLost(BaseException):
+        pass
+    def geo(plan, query, occurrence, *, attempt_state, on_attempt):
+        seen.append(deepcopy(attempt_state))
+        if not attempt_state:
+            on_attempt([{'state': 'started', 'prompt': 'fixture'}])
+            raise WorkerLost()
+        on_attempt([{'state': 'interrupted', 'prompt': 'fixture'}])
+        record = h.geo(plan, query, occurrence)
+        record['attempts'] = [{'state': 'interrupted', 'prompt': 'fixture'}]
+        return record
+    runner = h.runner()
+    runner.geo, runner.durable_geo_attempts = geo, True
+    with pytest.raises(WorkerLost):
+        runner.run()
+    assert runner.snapshot()['queries']['A']['status'] == 'captured'
+    attempts = runner.snapshot()['queries']['A']['geo_attempts'][h.items['A'][0]['occurrence_id']]
+    assert attempts == [{'state': 'started', 'prompt': 'fixture'}]
+    with pytest.raises(ValueError, match='budget'):
+        h.store.record_geo_attempts(h.plan['execution_id'], 'A', h.items['A'][0]['occurrence_id'], [], 'reset')
+    def resume_geo(plan, query, occurrence, **kwargs):
+        return geo(plan, query, occurrence, **kwargs) if query['query_id'] == 'A' else h.geo(plan, query, occurrence)
+    resumed = h.runner()
+    resumed.geo, resumed.durable_geo_attempts = resume_geo, True
+    assert resumed.run()['handed_off'] == 2
+    assert seen == [[], [{'state': 'started', 'prompt': 'fixture'}]]
+    assert len([c for c in h.calls if c == ('capture', 'A')]) == 1
+
+
 def test_supplement_is_selected_inside_its_query_before_next_query_capture(tmp_path):
     h = Harness(tmp_path, rows={'A': [('x', '新疆欠薪')], 'B': [('y', '克拉玛依欠薪')]}, task_limit=2)
     result = h.runner().run()

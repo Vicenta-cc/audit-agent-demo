@@ -99,6 +99,10 @@ class Store:
             raise ValueError('snapshot binding or integrity mismatch')
         self._validate_plan(snap['plan'])
         for qid, query in snap['queries'].items():
+            for oid, attempts in query.get('geo_attempts', {}).items():
+                if oid not in Store._capture_index(query):
+                    raise ValueError('geographic attempt outside captured occurrences')
+                self._validate_geo_attempts(attempts)
             if query['evaluations']:
                 captured = Store._capture_index(query)
                 for oid, parts in query['evaluations'].items():
@@ -255,6 +259,9 @@ class Store:
                 raise ValueError('occurrence binding mismatch')
             if part == 'risk':
                 validate_risk_record(s['plan'], captured[occurrence_id], value)
+            if part == 'geo' and occurrence_id in q.get('geo_attempts', {}):
+                if value.get('attempts') != q['geo_attempts'][occurrence_id]:
+                    raise ValueError('geographic attempt ledger mismatch')
             parts = q['evaluations'].setdefault(occurrence_id, {})
             if part in parts and parts[part] != value:
                 raise ValueError('evaluation input is immutable')
@@ -263,6 +270,47 @@ class Store:
         return self._transaction(execution_id, operation_id,
                                  dict(kind='evaluation', query_id=query_id, occurrence_id=occurrence_id,
                                       part=part, value=value), action)
+
+    @staticmethod
+    def _validate_geo_attempts(attempts):
+        if not isinstance(attempts, list) or not 1 <= len(attempts) <= 3:
+            raise ValueError('invalid geographic correction budget')
+        for index, attempt in enumerate(attempts):
+            if (not isinstance(attempt, dict) or attempt.get('state') not in {'started', 'completed', 'interrupted'}
+                    or (index < len(attempts) - 1 and attempt['state'] == 'started')):
+                raise ValueError('invalid geographic attempt state')
+
+    def record_geo_attempts(self, execution_id, query_id, occurrence_id, attempts, operation_id):
+        """Spend before invoking a model; append-only progress survives worker loss."""
+        self._validate_geo_attempts(attempts)
+        def action(s):
+            query = s['queries'][query_id]
+            captured = self._capture_index(query)
+            if query['status'] != 'captured' or occurrence_id not in captured:
+                raise ValueError('captured occurrence required for geographic attempt')
+            if 'geo' in query['evaluations'].get(occurrence_id, {}):
+                raise ValueError('geographic evaluation already sealed')
+            previous = query.setdefault('geo_attempts', {}).get(occurrence_id, [])
+            if attempts == previous:
+                return deepcopy(attempts)
+            appended = len(attempts) == len(previous) + 1
+            settled = len(attempts) == len(previous) and bool(previous)
+            if appended:
+                if attempts[:-1] != previous or attempts[-1]['state'] != 'started' or (
+                        previous and previous[-1]['state'] == 'started'):
+                    raise ValueError('geographic attempt must be claimed before call')
+            elif settled:
+                old, new = previous[-1], attempts[-1]
+                if (attempts[:-1] != previous[:-1] or old['state'] != 'started'
+                        or new['state'] not in {'completed', 'interrupted'}
+                        or any(new.get(k) != v for k, v in old.items() if k != 'state')):
+                    raise ValueError('geographic attempt history is immutable')
+            else:
+                raise ValueError('geographic correction budget cannot reset')
+            query['geo_attempts'][occurrence_id] = deepcopy(attempts)
+            return deepcopy(attempts)
+        return self._transaction(execution_id, operation_id,
+            dict(kind='geo_attempts', query_id=query_id, occurrence_id=occurrence_id, attempts=attempts), action)
 
     def reserve_next(self, execution_id, operation_id):
         def action(s):

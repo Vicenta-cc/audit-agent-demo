@@ -12,6 +12,7 @@ def report(**changes):
     {'unfinished_queries':['q']},{'reserved':1},{'collected_not_delivered':1},
     {'handed_off':0},{'reasons':['awaiting_reconciliation']},{'reasons':['collection_failed']},
     {'reserved':True},{'collected':-1},
+    {'geographic_evaluation_pending': 1}, {'reasons': ['geographic_evaluation_pending']},
 ])
 def test_incomplete_cannot_publish(changes):
     assert geographic_completion_failure(report(**changes))
@@ -53,6 +54,8 @@ def test_worker_gate_rejects_pending_before_audit_completion(monkeypatch):
     run=SimpleNamespace(job_id='job',confirmed_configuration={})
     state={'control':{'geographic_selection':report(reserved=1)},'task_stats':{'ingested_count':1,'completed_analysis_count':1}}
     assert worker._completion_gate_failure(run,state=state)[0]=='geographic_receipt_pending'
+    state['control']['geographic_selection']=report(geographic_evaluation_pending=1)
+    assert worker._completion_gate_failure(run,state=state)[0]=='geographic_evaluation_pending'
     state['control']['geographic_selection']=report(handed_off=0,collected=0)
     assert worker._completion_gate_failure(run,state=state)[0]=='geographic_membership_count_mismatch'
 

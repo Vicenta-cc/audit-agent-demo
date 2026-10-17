@@ -9,6 +9,7 @@ import json
 import re
 
 from backend.audit_agent import geographic_p3_runtime as p3
+from backend.audit_agent import geographic_response as response_adapter
 from backend.audit_agent.frozen_risk import build_frozen_engine, validate_risk_inputs
 from backend.audit_agent.scoped_selection import digest, validate_plan, validate_risk_record
 
@@ -171,36 +172,74 @@ class GeographicBridge:
         validate_risk_record(plan, occurrence, record)
         return record
 
-    def _evaluate_geo(self, candidate):
+    def _evaluate_geo(self, candidate, *, attempt_state=None, on_attempt=None):
         state = self._p2.inputs.configuration.relevance_scope_state.model_dump(mode='json')
         profile = self._p2.inputs.p3_inputs
         request = p3.prepare(state, profile, candidate)
         invocation = profile['model']['invocation_config']
-        attempts = []
-        for attempt_index in range(3):
-            prompt = _geo_attempt_prompt(request, attempt_index)
+        attempts = deepcopy(attempt_state) if attempt_state is not None else []
+        self._validate_attempts(request, attempts, allow_started=True)
+        if attempts and attempts[-1]['state'] == 'started':
+            attempts[-1]['state'] = 'interrupted'
+            if on_attempt:
+                on_attempt(deepcopy(attempts))
+        while len(attempts) < response_adapter.MAX_ATTEMPTS:
+            if attempts and attempts[-1].get('evaluation_status') == 'completed':
+                break
+            prompt = response_adapter.attempt_prompt(request, attempts)
+            attempts.append({'state': 'started', 'prompt': prompt})
+            if on_attempt:
+                on_attempt(deepcopy(attempts))
             raw = self.geo_client.audit_text(prompt, model=profile['model']['identifier'],
                 **{key: invocation[key] for key in ('max_tokens', 'enable_thinking', 'request_timeout')})
             raw, model_meta = _p3_response_payload(raw)
-            result = p3.consume(request, raw)
-            attempts.append({'prompt': prompt, 'raw_response': deepcopy(raw), 'model_meta': deepcopy(model_meta),
+            result, bindings = response_adapter.consume(request, raw)
+            attempts[-1] = {'state': 'completed', 'prompt': prompt,
+                'raw_response': deepcopy(raw), 'model_meta': deepcopy(model_meta),
+                'normalization_bindings': bindings,
                 'evaluation_status': result.get('evaluation_status'),
-                'errors': deepcopy(result.get('errors', []))})
-            if result.get('evaluation_status') != 'invalid_response':
-                break
+                'errors': deepcopy(result.get('errors', []))}
+            if on_attempt:
+                on_attempt(deepcopy(attempts))
+        final = attempts[-1]
+        result, bindings = response_adapter.consume(request, final.get('raw_response'))
         record = {'evidence_digest': request['raw_evidence_digest'], 'scope_digest': request['scope_digest'],
             'policy_digest': request['policy_digest'], 'request_digest': digest(request),
-            'p3_version': p3.COMMIT, 'result': result, 'request': request, 'attempts': attempts}
-        if model_meta is not None:
-            record['model_meta'] = model_meta
+            'p3_version': p3.COMMIT, 'response_adapter_version': response_adapter.VERSION,
+            'result': result, 'request': request, 'attempts': attempts,
+            'original_raw_response': deepcopy(final.get('raw_response')),
+            'normalization_bindings': bindings}
+        if final.get('model_meta') is not None:
+            record['model_meta'] = deepcopy(final['model_meta'])
         self.validate_geo(self._plan, request['candidate'], record)
         return record
 
-    def geo(self, plan, query, occurrence):
+    def geo(self, plan, query, occurrence, *, attempt_state=None, on_attempt=None):
         self._check(plan, query)
         if occurrence['query_id'] != query['query_id']:
             raise ValueError('runtime_occurrence_query_mismatch')
-        return self._evaluate_geo(occurrence['candidate'])
+        return self._evaluate_geo(occurrence['candidate'], attempt_state=attempt_state, on_attempt=on_attempt)
+
+    @staticmethod
+    def _validate_attempts(request, attempts, *, allow_started=False):
+        if not isinstance(attempts, list) or len(attempts) > response_adapter.MAX_ATTEMPTS:
+            raise ValueError('runtime_geo_attempts_mismatch')
+        for index, attempt in enumerate(attempts):
+            if (not isinstance(attempt, dict)
+                    or attempt.get('prompt') != response_adapter.attempt_prompt(request, attempts[:index])):
+                raise ValueError('runtime_geo_attempt_prompt_mismatch')
+            state = attempt.get('state')
+            if state in {'interrupted', 'started'}:
+                if (set(attempt) != {'state', 'prompt'}
+                        or state == 'started' and (not allow_started or index != len(attempts) - 1)):
+                    raise ValueError('runtime_geo_attempt_result_mismatch')
+                continue
+            evaluated, bindings = response_adapter.consume(request, attempt.get('raw_response'))
+            if (state != 'completed' or attempt.get('evaluation_status') != evaluated.get('evaluation_status')
+                    or attempt.get('errors') != evaluated.get('errors')
+                    or attempt.get('normalization_bindings') != bindings
+                    or index < len(attempts) - 1 and evaluated.get('evaluation_status') != 'invalid_response'):
+                raise ValueError('runtime_geo_attempt_result_mismatch')
 
     def review(self, plan, occurrence, content):
         self._check(plan)
@@ -219,25 +258,43 @@ class GeographicBridge:
         if geo.get('request') != expected_request or geo.get('request_digest') != digest(expected_request):
             raise ValueError('runtime_geo_request_mismatch')
         result = geo.get('result')
-        if not isinstance(result, dict) or p3.consume(expected_request, result.get('raw_response')) != result:
-            raise ValueError('runtime_geo_result_mismatch')
-        attempts = geo.get('attempts')
-        if attempts is not None:
-            if not isinstance(attempts, list) or not 1 <= len(attempts) <= 3:
+        if geo.get('response_adapter_version') is not None:
+            if geo['response_adapter_version'] != response_adapter.VERSION:
+                raise ValueError('runtime_geo_adapter_version_mismatch')
+            expected_result, bindings = response_adapter.consume(expected_request, geo.get('original_raw_response'))
+            if result != expected_result or geo.get('normalization_bindings') != bindings:
+                raise ValueError('runtime_geo_result_mismatch')
+            attempts = geo.get('attempts')
+            self._validate_attempts(expected_request, attempts)
+            if not attempts:
                 raise ValueError('runtime_geo_attempts_mismatch')
-            for index, attempt in enumerate(attempts):
-                expected_prompt = _geo_attempt_prompt(expected_request, index)
-                if not isinstance(attempt, dict) or attempt.get('prompt') != expected_prompt:
-                    raise ValueError('runtime_geo_attempt_prompt_mismatch')
-                evaluated = p3.consume(expected_request, attempt.get('raw_response'))
-                if (attempt.get('evaluation_status') != evaluated.get('evaluation_status')
-                        or attempt.get('errors') != evaluated.get('errors')
-                        or (index < len(attempts) - 1
-                            and evaluated.get('evaluation_status') != 'invalid_response')):
-                    raise ValueError('runtime_geo_attempt_result_mismatch')
-            if (attempts[-1].get('raw_response') != result.get('raw_response')
-                    or geo.get('model_meta') != attempts[-1].get('model_meta')):
+            final = attempts[-1]
+            if (geo.get('original_raw_response') != final.get('raw_response')
+                    or geo.get('model_meta') != final.get('model_meta')
+                    or final.get('state') == 'interrupted' and len(attempts) < response_adapter.MAX_ATTEMPTS
+                    or result.get('evaluation_status') == 'invalid_response'
+                        and len(attempts) < response_adapter.MAX_ATTEMPTS):
                 raise ValueError('runtime_geo_final_attempt_mismatch')
+        else:
+            if not isinstance(result, dict) or p3.consume(expected_request, result.get('raw_response')) != result:
+                raise ValueError('runtime_geo_result_mismatch')
+            attempts = geo.get('attempts')
+            if attempts is not None:
+                if not isinstance(attempts, list) or not 1 <= len(attempts) <= 3:
+                    raise ValueError('runtime_geo_attempts_mismatch')
+                for index, attempt in enumerate(attempts):
+                    expected_prompt = _geo_attempt_prompt(expected_request, index)
+                    if not isinstance(attempt, dict) or attempt.get('prompt') != expected_prompt:
+                        raise ValueError('runtime_geo_attempt_prompt_mismatch')
+                    evaluated = p3.consume(expected_request, attempt.get('raw_response'))
+                    if (attempt.get('evaluation_status') != evaluated.get('evaluation_status')
+                            or attempt.get('errors') != evaluated.get('errors')
+                            or (index < len(attempts) - 1
+                                and evaluated.get('evaluation_status') != 'invalid_response')):
+                        raise ValueError('runtime_geo_attempt_result_mismatch')
+                if (attempts[-1].get('raw_response') != result.get('raw_response')
+                        or geo.get('model_meta') != attempts[-1].get('model_meta')):
+                    raise ValueError('runtime_geo_final_attempt_mismatch')
         for key, expected in (('p3_version', p3.COMMIT), ('scope_digest', plan['scope_digest']),
                               ('policy_digest', plan['policy_digest']), ('evidence_digest', digest(candidate))):
             if geo.get(key) != expected:

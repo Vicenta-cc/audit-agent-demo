@@ -31,6 +31,21 @@ test('unscoped result leaves existing task display unchanged', () => {
   expect(renderToStaticMarkup(createElement(GeographicSelectionView, { page: { ...base, status: 'not_applicable' } }))).toBe('');
 });
 
+test('technical geography pending stays distinct from exclusion and completed reporting', () => {
+  const page: GeographicSelectionPage = { ...base, status: 'incomplete', reason: 'geographic_evaluation_pending',
+    summary: { ...base.summary!, geographic_evaluation_pending: 1, reasons: ['geographic_evaluation_pending'] },
+    items: [{ ...base.items[0], geo_tier: 'unresolved', evaluation_status: 'invalid_response', pending_reason: 'geographic_response_invalid' }] };
+  const html = renderToStaticMarkup(createElement(GeographicSelectionView, { page }));
+  expect(html).toContain('地域预筛待判定 1 条');
+  expect(html).toContain('报告暂不能完成');
+  expect(html).not.toContain('其他地域');
+  expect(html).not.toContain('无符合地域');
+  const waiting = renderToStaticMarkup(createElement(GeographicSelectionView, { page: {
+    ...page, items: [{ ...page.items[0], risk_band: null, risk_score: null }] } }));
+  expect(waiting).toContain('待初筛');
+  expect(waiting).not.toContain('未入选');
+});
+
 import { GeographicPostBasis, GeographicReportEvidence } from '../src/features/investigation/GeographicReportEvidence';
 import type { GeographicSelectionBasis } from '../src/types/reports';
 const selected: GeographicSelectionBasis = { target_name: '克拉玛依市', province_name: '新疆维吾尔自治区', source_job_id: 'frozen-job-a', content_key: 'dy:frozen-post', occurrence_id: 'o', query_id: 'q', source_keyword: '冻结原词', rank: 3,

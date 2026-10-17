@@ -17,7 +17,8 @@ from .geographic_recovery import GeographicCaptureDeferred, snapshot_resume_bloc
 
 class ScopedExecution:
     def __init__(self, store, plan, *, capture, risk, geo, detail, review, deliver,
-                 validate_geo, account, rotate, stop, checkpoint=lambda stage, payload: None):
+                 validate_geo, account, rotate, stop, checkpoint=lambda stage, payload: None,
+                 durable_geo_attempts=False):
         validate_plan(plan)
         self.store = store
         self.plan = deepcopy(plan)
@@ -27,6 +28,7 @@ class ScopedExecution:
         self.validate_geo = validate_geo
         self.account, self.rotate, self.stop = account, rotate, stop
         self.checkpoint = checkpoint
+        self.durable_geo_attempts = durable_geo_attempts
         self.store.create(self.plan)
 
     def snapshot(self):
@@ -81,9 +83,17 @@ class ScopedExecution:
                 cache = self.snapshot()['queries'][qid]['evaluations'].get(oid, {})
                 if part in cache:
                     occurrence[part] = deepcopy(cache[part])
+                    if part == 'geo':
+                        self.validate_geo(self.plan, occurrence['candidate'], occurrence[part])
                 else:
                     try:
-                        value = evaluate(deepcopy(self.plan), deepcopy(query), deepcopy(occurrence))
+                        kwargs = {}
+                        if part == 'geo' and self.durable_geo_attempts:
+                            kwargs = {'attempt_state': deepcopy(self.snapshot()['queries'][qid]
+                                .get('geo_attempts', {}).get(oid, [])),
+                                'on_attempt': lambda attempts, oid=oid: self.store.record_geo_attempts(
+                                    self.execution_id, qid, oid, attempts, 'geo-attempt:' + uuid4().hex)}
+                        value = evaluate(deepcopy(self.plan), deepcopy(query), deepcopy(occurrence), **kwargs)
                         if part == 'geo':
                             self.validate_geo(self.plan, occurrence['candidate'], value)
                         self.store.record_evaluation(self.execution_id, qid, oid, part, value,
@@ -94,6 +104,10 @@ class ScopedExecution:
                         raise
                     occurrence[part] = deepcopy(value)
                     self.checkpoint('after_' + part, {'occurrence_id': oid})
+            if occurrence['geo']['result'].get('evaluation_status') == 'invalid_response':
+                # A protocol failure is neither a geographic exclusion nor a failed capture.
+                # Its immutable evidence and spent correction budget remain in the cache.
+                continue
             try:
                 eligible_tier(self.plan, occurrence)  # legitimate exclusions are still completed judgments
             except Exception as exc:
@@ -101,6 +115,8 @@ class ScopedExecution:
                                         error={'type': type(exc).__name__, 'stage': 'evaluation_contract'})
                 raise
             occurrences.append(occurrence)
+        if len(occurrences) != len(saved['capture']['occurrences']):
+            return 'geographic_evaluation_pending'
         # Use exactly the original engine's order, preserving original rank and every score field.
         ordered_scores = rank_candidates([CandidateScore(**o['risk']['score']) for o in occurrences])
         # CandidateScore objects carry no occurrence ID; content/rank identify a per-query occurrence.
@@ -266,14 +282,19 @@ class ScopedExecution:
         # Resume durable receipts/batches before starting any later keyword. Each
         # evaluated keyword then completes selection/detail/delivery before the
         # next keyword capture, matching the legacy per-keyword streaming order.
-        reasons = self._collect_ready()
+        evaluation_pending = any(parts.get('geo', {}).get('result', {}).get('evaluation_status') == 'invalid_response'
+            for q in saved['queries'].values() for parts in q['evaluations'].values())
+        reasons = ['geographic_evaluation_pending'] if evaluation_pending else self._collect_ready()
         if 'awaiting_reconciliation' in reasons or 'paused' in reasons:
             return self.report(reasons)
         for query in self.plan['queries']:
             status = self._capture_query(query)
-            if status:
+            if status and status != 'geographic_evaluation_pending':
                 return self.report([status])
-            reasons = self._collect_ready()
+            evaluation_pending = evaluation_pending or status == 'geographic_evaluation_pending'
+            # Continue analysis, but do not let a later query overtake an unresolved
+            # earlier one or silently change the existing tier/rank ordering.
+            reasons = ['geographic_evaluation_pending'] if evaluation_pending else self._collect_ready()
             if 'awaiting_reconciliation' in reasons or 'paused' in reasons:
                 return self.report(reasons)
         return self.report(reasons)
@@ -281,10 +302,20 @@ class ScopedExecution:
     def report(self, reasons=()):
         saved = self.snapshot()
         rows = [o for q in saved['queries'].values() for o in q['occurrences']]
+        pending = []
+        for qid, query in saved['queries'].items():
+            for oid, parts in query['evaluations'].items():
+                geo = parts.get('geo', {}).get('result', {})
+                if geo.get('evaluation_status') == 'invalid_response':
+                    pending.append({'query_id': qid, 'occurrence_id': oid,
+                                    'reason': 'geographic_response_invalid',
+                                    'errors': deepcopy(geo.get('errors', []))})
         unfinished = [q for q, v in saved['queries'].items() if v['status'] != 'evaluated']
         collected = saved['state']['total_success']
         handed_off = len(saved['deliveries'])
         reasons = list(reasons)
+        if pending:
+            reasons.append('geographic_evaluation_pending')
         eligible = []
         for occurrence in rows:
             try:
@@ -297,15 +328,18 @@ class ScopedExecution:
             reasons.append('collection_failed')
         if collected > handed_off:
             reasons.append('collected_not_delivered')
-        if rows and not any(o['risk']['score']['score'] > 0 for o in rows):
+        if not unfinished and rows and not any(o['risk']['score']['score'] > 0 for o in rows):
             reasons.append('no_eligible_risk')
-        if rows and not any(eligible):
+        if not unfinished and rows and not any(eligible):
             reasons.append('no_eligible_geographic_content')
         if any(o['geo']['result']['geo_tier'] in {'unresolved', 'conflict'} for o in rows):
             reasons.append('geographic_pending_or_conflict')
         return {'execution_id': self.execution_id, 'plan_digest': self.plan['plan_digest'],
                 'resume_blocked_reason': snapshot_resume_blocker(saved),
-                'validation_origin': self.plan['validation_origin'], 'candidate_occurrences': len(rows),
+                'validation_origin': self.plan['validation_origin'],
+                'candidate_occurrences': sum(len(q['capture']['occurrences']) if q.get('capture') else 0
+                                             for q in saved['queries'].values()),
+                'geographic_evaluation_pending': len(pending), 'pending_evaluations': pending,
                 'excluded_occurrences': len(saved['excluded_occurrences']),
                 'ineligible_occurrences': sum(tier is None for tier in eligible),
                 'geographic_pending_or_conflict': sum(o['geo']['result']['geo_tier'] in {'unresolved', 'conflict'}

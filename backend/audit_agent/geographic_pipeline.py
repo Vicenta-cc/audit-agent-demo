@@ -46,7 +46,8 @@ class GeographicPipeline:
         self.execution = ScopedExecution(self.store, projection, capture=self.capture,
             risk=self.risk, geo=self.geo, detail=self.detail, review=self.review,
             deliver=self.deliver, validate_geo=self.bridge.validate_geo,
-            account=self.account, rotate=self.rotate, stop=stop, checkpoint=self.progress)
+            account=self.account, rotate=self.rotate, stop=stop, checkpoint=self.progress,
+            durable_geo_attempts=True)
 
     def progress(self, stage, payload):
         if stage == 'after_settle':
@@ -154,11 +155,11 @@ class GeographicPipeline:
             'occurrence_id': occurrence['occurrence_id'], 'rank': occurrence['rank']})
         return self.bridge.risk(plan, query, occurrence)
 
-    def geo(self, plan, query, occurrence):
+    def geo(self, plan, query, occurrence, *, attempt_state=None, on_attempt=None):
         self.fence()
         self.progress('geo_started', {'query_id': query['query_id'], 'query': query['query'],
             'occurrence_id': occurrence['occurrence_id'], 'rank': occurrence['rank']})
-        return self.bridge.geo(plan, query, occurrence)
+        return self.bridge.geo(plan, query, occurrence, attempt_state=attempt_state, on_attempt=on_attempt)
 
     def review(self, plan, occurrence, content):
         self.fence()

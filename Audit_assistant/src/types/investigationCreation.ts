@@ -393,6 +393,7 @@ export interface GeographicSelectionPage {
   reason?: string;
   summary?: {
     candidate_occurrences: number;
+    geographic_evaluation_pending?: number;
     reserved: number;
     collected: number;
     handed_off: number;
@@ -408,6 +409,8 @@ export interface GeographicSelectionPage {
     source_keyword: string;
     geo_tier: GeographicTier | null;
     geo_status: string | null;
+    evaluation_status?: string | null;
+    pending_reason?: string | null;
     risk_band: string | null;
     risk_score: number | null;
   }>;

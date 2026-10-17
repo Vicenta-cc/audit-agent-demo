@@ -272,17 +272,14 @@ def test_geo_retries_only_invalid_evidence_with_fixed_protocol_reminder(
     expected_count = min(invalid_count + 1, 3)
     assert len(calls) == expected_count
     invocation = bridge.p2.inputs.p3_inputs['model']
-    from backend.audit_agent.geographic_bridge import _GEO_RETRY_REMINDER
-    allowed = {source['field']: [place['name'] for place in source['places']]
-        for source in record['request']['model_input']['sources']}
-    assert all('新疆克拉玛依市' not in names for names in allowed.values())
-    retry_suffix = (_GEO_RETRY_REMINDER
-        + '\n只允许的 field/place 组合（这是完整白名单，不能输出其他字符串）：'
-        + json.dumps(allowed, ensure_ascii=False))
-    assert calls == [{'prompt': record['request']['prompt'] + (retry_suffix if index else ''),
+    from backend.audit_agent.geographic_response import attempt_prompt
+    assert calls == [{'prompt': attempt_prompt(record['request'], record['attempts'][:index]),
         'kwargs': {'model': invocation['identifier'], **{key: invocation['invocation_config'][key]
             for key in ('max_tokens', 'enable_thinking', 'request_timeout')}}}
         for index in range(expected_count)]
+    if expected_count > 1:
+        assert 'LOCATION_SOURCE_MISMATCH_OR_DUPLICATE' in calls[1]['prompt']
+        assert '新疆克拉玛依市' in calls[1]['prompt']
     assert record['model_meta'] == {'attempt': expected_count}
     assert len(record['attempts']) == expected_count
     for index, attempt in enumerate(record['attempts']):
@@ -336,3 +333,114 @@ def test_geo_retry_does_not_swallow_exceptions(
             bridge.review(plan, occurrence, occurrence['candidate'])
     assert caught.value is error
     assert len(geo_client.calls) == 1
+
+
+@pytest.mark.parametrize('title,model_place,expected', [
+    ('新疆克拉玛依市收费', '新疆克拉玛依市', 'completed'),
+    ('新疆维吾尔自治区克拉玛依市收费', '新疆维吾尔自治区克拉玛依市', 'completed'),
+    ('浙江省杭州市收费', '浙江省杭州市', 'completed'),
+    ('浙江杭州收费', '浙江杭州', 'completed'),
+    ('克拉玛依市收费', '新疆克拉玛依市', 'invalid_response'),
+    ('浙江克拉玛依市收费', '浙江克拉玛依市', 'invalid_response'),
+    ('新疆 克拉玛依市收费', '新疆克拉玛依市', 'invalid_response'),
+])
+def test_geo_compound_binding_requires_exact_source_and_matching_parent(
+        creation_stack, content, monkeypatch, tmp_path, title, model_place, expected):
+    bridge, _, client, _, _ = confirmed_bridge(creation_stack, content, monkeypatch, tmp_path)
+    plan = bridge.plan
+    query = plan['queries'][0]
+    occurrence = bridge.occurrence(query['query_id'], 'dy:compound', 0,
+        {'post_id': 'compound', 'title': title, 'source_keyword': query['query']})
+    client.response = response(model_place)
+    record = bridge.geo(plan, query, occurrence)
+    assert record['result']['evaluation_status'] == expected
+    assert record['original_raw_response'] == response(model_place)
+    assert bool(record['normalization_bindings']) == (expected == 'completed')
+    assert len(client.calls) == (1 if expected == 'completed' else 3)
+    bridge.validate_geo(plan, occurrence['candidate'], record)
+    tampered = deepcopy(record)
+    tampered['normalization_bindings'] = [{'forged': True}]
+    with pytest.raises(ValueError, match='runtime_geo_result_mismatch'):
+        bridge.validate_geo(plan, occurrence['candidate'], tampered)
+
+
+def test_geo_attempt_budget_survives_interrupted_calls(
+        creation_stack, content, monkeypatch, tmp_path):
+    bridge, _, client, _, _ = confirmed_bridge(creation_stack, content, monkeypatch, tmp_path)
+    plan = bridge.plan
+    query = plan['queries'][0]
+    occurrence = bridge.occurrence(query['query_id'], 'dy:interrupt', 0,
+        {'post_id': 'interrupt', 'title': '新疆克拉玛依市收费', 'source_keyword': query['query']})
+    persisted = []
+    def save(attempts):
+        persisted[:] = deepcopy(attempts)
+    client.response = RuntimeError('offline provider interruption')
+    for index in range(3):
+        with pytest.raises(RuntimeError, match='offline provider interruption'):
+            bridge.geo(plan, query, occurrence, attempt_state=persisted, on_attempt=save)
+        assert len(persisted) == index + 1
+        assert persisted[-1]['state'] == 'started'
+    record = bridge.geo(plan, query, occurrence, attempt_state=persisted, on_attempt=save)
+    assert len(client.calls) == 3
+    assert [a['state'] for a in record['attempts']] == ['interrupted'] * 3
+    assert record['result']['evaluation_status'] == 'invalid_response'
+    bridge.validate_geo(plan, occurrence['candidate'], record)
+    replay = bridge.geo(plan, query, occurrence, attempt_state=persisted)
+    assert replay == record
+    assert len(client.calls) == 3
+
+
+def test_geo_completed_attempt_replays_without_model_call(
+        creation_stack, content, monkeypatch, tmp_path):
+    bridge, _, client, _, _ = confirmed_bridge(creation_stack, content, monkeypatch, tmp_path)
+    plan = bridge.plan
+    query = plan['queries'][0]
+    occurrence = bridge.occurrence(query['query_id'], 'dy:cached', 0,
+        {'post_id': 'cached', 'title': '新疆克拉玛依市收费', 'source_keyword': query['query']})
+    client.response = response('新疆克拉玛依市')
+    record = bridge.geo(plan, query, occurrence)
+    assert bridge.geo(plan, query, occurrence, attempt_state=record['attempts']) == record
+    assert len(client.calls) == 1
+
+
+def test_geo_adapter_does_not_move_evidence_between_fields():
+    from backend.audit_agent import geographic_p3_runtime as p3
+    from backend.audit_agent.geographic_response import consume
+    profile = runtime_profile()
+    request = p3.prepare(state(profile, '650200'), profile,
+                         candidate('新疆克拉玛依市收费', desc='克拉玛依市收费'))
+    raw = {'status': 'located', 'locations': [{'field': 'desc', 'place': '新疆克拉玛依市'}]}
+    result, bindings = consume(request, raw)
+    assert result['evaluation_status'] == 'invalid_response'
+    assert bindings == []
+
+
+def test_geo_legacy_record_remains_replayable(creation_stack, content, monkeypatch, tmp_path):
+    from backend.audit_agent.geographic_bridge import _geo_attempt_prompt
+    bridge, _, client, _, _ = confirmed_bridge(creation_stack, content, monkeypatch, tmp_path)
+    plan = bridge.plan
+    query = plan['queries'][0]
+    occurrence = bridge.occurrence(query['query_id'], 'dy:legacy', 0,
+        {'post_id': 'legacy', 'title': '克拉玛依市收费', 'source_keyword': query['query']})
+    record = bridge.geo(plan, query, occurrence)
+    legacy = {key: value for key, value in record.items() if key not in {
+        'response_adapter_version', 'original_raw_response', 'normalization_bindings'}}
+    legacy['attempts'] = [{key: value for key, value in attempt.items()
+                           if key not in {'state', 'normalization_bindings'}} for attempt in record['attempts']]
+    legacy['attempts'][0]['prompt'] = _geo_attempt_prompt(record['request'], 0)
+    bridge.validate_geo(plan, occurrence['candidate'], legacy)
+
+
+def test_geo_compound_binding_is_independent_of_target_and_keeps_duplicate_protection():
+    from backend.audit_agent import geographic_p3_runtime as p3
+    from backend.audit_agent.geographic_response import consume
+    profile = runtime_profile()
+    request = p3.prepare(state(profile, '440300'), profile, candidate('新疆克拉玛依市收费'))
+    result, bindings = consume(request, response('新疆克拉玛依市'))
+    assert result['evaluation_status'] == 'completed'
+    assert result['geo_tier'] == 'other_region'
+    assert len(bindings) == 1
+    duplicated = response('新疆克拉玛依市')
+    duplicated['locations'].append({'field': 'title', 'place': '克拉玛依市'})
+    result, _ = consume(request, duplicated)
+    assert result['evaluation_status'] == 'invalid_response'
