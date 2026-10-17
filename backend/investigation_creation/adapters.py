@@ -880,7 +880,10 @@ class InvestigationRunProjector:
                     task_stats,
                 )
                 from backend.audit_agent.geographic_status import geographic_resume_blocker
-                recovery_blocker = geographic_resume_blocker(job, self.job_store.db_path) if job.get("geographic_plan") else ""
+                # In-flight records are expected in an active run, including one
+                # awaiting worker recovery; reconciliation gates explicit resume.
+                if run.status != RunStatus.RUNNING and job.get("geographic_plan"):
+                    recovery_blocker = geographic_resume_blocker(job, self.job_store.db_path)
                 if recovery_blocker or run.status == RunStatus.RUNNING:
                     actions["resume_crawl"] = False
                 # Whether collection itself can continue, independent of whether an

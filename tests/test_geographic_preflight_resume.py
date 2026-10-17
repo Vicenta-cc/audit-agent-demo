@@ -1,6 +1,7 @@
 """Recovery retains exact evidence and budgets; unknown effects stay blocked."""
 from contextlib import contextmanager
 from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
 
@@ -142,3 +143,58 @@ def test_resume_qualification_reads_snapshot_not_optimistic_projection(confirmed
     assert geographic_resume_blocker({**job, 'id': 'other-job'}, jobs.db_path) == 'geographic_state_reconciliation_required'
     job['control']['geographic_selection']['plan_digest'] = 'wrong'
     assert geographic_resume_blocker(job, jobs.db_path) == 'geographic_state_reconciliation_required'
+
+
+@pytest.mark.parametrize('run_status,query_status', [
+    ('RUNNING', 'capturing'),
+    ('INTERRUPTED', 'capturing'),
+    ('FAILED', 'capturing'),
+    ('INTERRUPTED', 'paused'),
+])
+def test_projector_only_checks_reconciliation_when_not_running(
+    confirmed, tmp_path, monkeypatch, run_status, query_status,
+):
+    import backend.audit_agent.geographic_status as geographic_status
+    from backend.investigation_creation.adapters import InvestigationRunProjector
+    from backend.investigation_creation.contracts import RunStatus
+
+    runner, _, _ = runtime(confirmed, tmp_path)
+    adapter, _ = confirmed
+    jobs = adapter.job_store
+    job_id = runner.bridge.plan['runtime_binding']['job_id']
+    qid = runner.bridge.plan['queries'][0]['query_id']
+    error = {'stage': 'before_capture', 'code': 'PROXY_BUSY'} if query_status == 'paused' else None
+    runner.store.record_query(runner.execution.execution_id, qid, query_status, [],
+                             'projection-state', error=error)
+    jobs.update_control(job_id, geographic_selection=runner.execution.report())
+    # Even a stale Job view offering resume must not enable it for a live Run.
+    jobs.update(job_id, status='crawl_paused')
+    before = deepcopy(runner.execution.snapshot())
+    calls = []
+    guard = geographic_status.geographic_resume_blocker
+
+    def checked_guard(job, path):
+        assert run_status != 'RUNNING', 'live Run must not probe resume reconciliation'
+        calls.append(job['id'])
+        return guard(job, path)
+
+    monkeypatch.setattr(geographic_status, 'geographic_resume_blocker', checked_guard)
+    projector = InvestigationRunProjector(
+        job_store=jobs, ingestion_store=adapter.ingestion_store,
+        audit_result_store=adapter.audit_result_store,
+        crawler_account_store=adapter.crawler_account_store,
+        report_store=SimpleNamespace(),
+    )
+    result = projector.project(SimpleNamespace(
+        job_id=job_id, status=RunStatus(run_status), report_version_id='',
+    ))
+    expected_blocker = (
+        'geographic_capture_reconciliation_required'
+        if run_status != 'RUNNING' and query_status == 'capturing' else ''
+    )
+    assert result['recovery_blocker'] == expected_blocker
+    assert calls == ([] if run_status == 'RUNNING' else [job_id])
+    if run_status == 'RUNNING' or expected_blocker:
+        assert result['available_actions']['resume_crawl'] is False
+        assert result['task_stats']['collection_resumable'] is False
+    assert runner.execution.snapshot() == before
