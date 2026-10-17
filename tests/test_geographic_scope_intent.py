@@ -75,6 +75,48 @@ def test_resolution_exact_names_and_real_types(catalog):
         assert geo.resolve_region(name)['status'] == 'pending'
 
 
+@pytest.mark.parametrize('text', [
+    '新疆克拉玛依', '新疆克拉玛依市', '新疆维吾尔自治区克拉玛依',
+    '新疆维吾尔自治区克拉玛依市', ' 新疆克拉玛依市 ',
+])
+def test_compound_province_city_uses_catalog_parent_and_aliases(catalog, text):
+    result = geo.resolve_region(text)
+    assert result['status'] == 'resolved'
+    assert result['target_code'] == '6502'
+    assert result['province_code'] == '65'
+    assert result['target'].name == '克拉玛依市'
+
+
+@pytest.mark.parametrize('text', [
+    '辽宁克拉玛依市', '新疆朝阳市', '新疆克拉玛', '新疆克拉玛依市附近',
+    '新疆石河子市', '新疆伊犁', '北京朝阳区', '新疆克拉玛依和北京',
+    '新疆克拉玛依市、吉林市', '新疆克拉玛依市朝阳区', '调查新疆克拉玛依市',
+])
+def test_compound_never_guesses_drops_remainder_or_broadens_unsupported(catalog, text):
+    result = geo.resolve_region(text)
+    assert result['status'] == 'pending'
+    assert 'target_code' not in result
+
+
+def test_province_qualification_disambiguates_without_changing_bare_name(catalog):
+    assert geo.resolve_region('吉林')['status'] == 'pending'
+    for text in ('吉林吉林', '吉林省吉林', '吉林吉林市', '吉林省吉林市'):
+        result = geo.resolve_region(text)
+        assert result['status'] == 'resolved'
+        assert result['target_code'] == '2202'
+    assert geo.resolve_region('新疆吉林市')['status'] == 'pending'
+
+
+def test_compound_still_requires_unique_supported_identity(catalog):
+    catalog.append({'code': '6501', 'name': '测试市', 'aliases': ['克拉玛依'],
+        'level': 'prefecture', 'kind': '地级市', 'province_code': '65'})
+    geo.CATALOG_PATH.write_text(json.dumps({'version': 'test-fixture', 'records': catalog}))
+    result = geo.resolve_region('新疆克拉玛依')
+    assert result['status'] == 'pending'
+    assert {candidate.name for candidate in result['candidates']} == {'克拉玛依市', '测试市'}
+    assert geo.resolve_region('新疆克拉玛依市')['target_code'] == '6502'
+
+
 def test_missing_catalog_explicit_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(geo, 'CATALOG_PATH', tmp_path / 'missing')
     with pytest.raises(ConfigurationValidationError, match='名录') as error:

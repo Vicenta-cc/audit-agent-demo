@@ -2,6 +2,7 @@
 
 This module validates facts and input shape; the conversation agent owns intent.
 No inferred geography, suffix stripping, or natural-language intent rules live here.
+Province/city compounds use complete catalog names/aliases and parent identities.
 """
 from __future__ import annotations
 
@@ -132,10 +133,33 @@ def _catalog():
 
 
 def resolve_region(target_text: str) -> dict:
-    """Resolve one supported province or prefecture city by exact name/alias."""
+    """Resolve an exact name/alias, optionally qualified by its catalog province."""
     catalog, indexed = _catalog()
     text = target_text.strip()
     named = [r for r in indexed.values() if text == r['name'] or text in r['aliases']]
+    parent_conflict = False
+    if not named:
+        # Match complete tokens, not substrings or guessed suffixes. Consider all
+        # possible splits so alias collisions cannot become a first-match win.
+        names = {}
+        for record in indexed.values():
+            for name in (record['name'], *record['aliases']):
+                names.setdefault(name, []).append(record)
+        qualified = {}
+        for province in indexed.values():
+            if province['level'] != 'province':
+                continue
+            for prefix in (province['name'], *province['aliases']):
+                if not text.startswith(prefix):
+                    continue
+                for child in names.get(text[len(prefix):], []):
+                    if child['level'] == 'province':
+                        continue
+                    if child['province_code'] == province['code']:
+                        qualified[child['code']] = child
+                    else:
+                        parent_conflict = True
+        named = list(qualified.values())
     # Only supported province/city identities participate in ambiguity. County
     # aliases do not shadow cities, and unsupported names never fall back upward.
     matches = [r for r in named if r['level'] == 'province'
@@ -148,6 +172,8 @@ def resolve_region(target_text: str) -> dict:
             reason = '地域名称存在歧义，请明确选择省级地域或地级市，并提供完整名称。'
         elif named:
             reason = '当前支持省级地域和地级市；区县、街道及其他地级类型暂待解析，请明确调查范围。'
+        elif parent_conflict:
+            reason = '省级地域与下级地名的行政归属不一致，请核对调查范围。'
         else:
             reason = '未找到该地域，请核对名称或补充完整名称；当前支持单一省级地域或地级市。'
         return {**base, 'status': 'pending', 'reason': reason}

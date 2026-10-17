@@ -57,6 +57,10 @@ def test_production_catalog_supported_names_and_cross_level_aliases():
     ('台湾', '台湾省', '台湾省'), ('香港', '香港特别行政区', '香港特别行政区'),
     ('澳门', '澳门特别行政区', '澳门特别行政区'),
     ('大庆', '大庆市', '黑龙江省'),
+    ('新疆克拉玛依市', '克拉玛依市', '新疆维吾尔自治区'),
+    ('新疆维吾尔自治区克拉玛依', '克拉玛依市', '新疆维吾尔自治区'),
+    ('浙江省杭州市', '杭州市', '浙江省'), ('浙江杭州', '杭州市', '浙江省'),
+    ('浙江省杭州', '杭州市', '浙江省'), ('浙江杭州市', '杭州市', '浙江省'),
     ('深圳', '深圳市', '广东省'), ('宁波', '宁波市', '浙江省'),
     ('北京', '北京市', '北京市'), ('天津', '天津市', '天津市'),
     ('上海', '上海市', '上海市'), ('重庆', '重庆市', '重庆市'),
@@ -72,9 +76,34 @@ def test_real_catalog_examples(text, name, province):
     '吉林', '朝阳区', '北京市朝阳区', '朝阳县',
     '石河子市', '济源市', '五指山市', '阿拉善盟', '阿坝藏族羌族自治州', '阿里地区',
     '朝阳街道', '克拉玛', '克拉玛依和北京', '北京、上海', '不存在的测试地域',
+    '新疆杭州市', '浙江克拉玛依市', '浙江省杭州市西湖区', '浙江省西湖区',
+    '新疆石河子市', '新疆伊犁哈萨克自治州', '浙江杭州和宁波',
 ])
 def test_real_catalog_unsupported_or_ambiguous_never_broadens(text):
     assert geo.resolve_region(text)['status'] == 'pending'
+
+
+def test_all_packaged_city_province_name_alias_combinations(monkeypatch):
+    # Validate the real package before reusing the same immutable test snapshot;
+    # production still validates the catalog on each resolver entry.
+    catalog, indexed = geo._catalog()
+    monkeypatch.setattr(geo, '_catalog', lambda: (catalog, indexed))
+    cases = {}
+    for city in indexed.values():
+        if city['level'] != 'prefecture' or city['kind'] not in {'地级市', 'prefecture_city'}:
+            continue
+        province = indexed[city['province_code']]
+        for prefix in (province['name'], *province['aliases']):
+            for name in (city['name'], *city['aliases']):
+                cases.setdefault(prefix + name, set()).add(city['code'])
+    assert len(cases) >= 1000
+    for text, codes in cases.items():
+        result = geo.resolve_region(text)
+        assert result['status'] == ('resolved' if len(codes) == 1 else 'pending'), (text, result)
+        if len(codes) == 1:
+            code = next(iter(codes))
+            assert result['target_code'] == code, text
+            assert result['province_code'] == indexed[code]['province_code'], text
 
 
 def test_real_catalog_service_persistence_projection_and_confirmation(creation_stack, content, tmp_path):
