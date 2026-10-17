@@ -105,6 +105,36 @@ def test_two_rounds_copy_edit_confirm_publish_and_query(rounds):
     assert len(compared['data']['configs']) == 2
 
 
+@pytest.mark.parametrize('blocker', ['', 'geographic_state_reconciliation_required'])
+def test_workspace_serializes_recovery_blocker_in_current_and_historical_runs(rounds, monkeypatch, blocker):
+    s = rounds
+    run = publish_round(s, first(s), idempotency_key='public-recovery-state')
+    original_get_run = s['app_service'].get_run
+
+    def get_run(*args, **kwargs):
+        result = original_get_run(*args, **kwargs)
+        return result.model_copy(update={'recovery_blocker': blocker})
+
+    monkeypatch.setattr(s['app_service'], 'get_run', get_run)
+    response = s['client'].get(f"/api/investigation-workspaces/{s['sid']}/state")
+    assert response.status_code == 200, response.text
+    state = response.json()
+    assert state['run']['run_id'] == run['run_id']
+    assert state['run']['recovery_blocker'] == blocker
+    assert state['rounds'][0]['run']['recovery_blocker'] == blocker
+    assert 'report_session_id' not in state['run']
+    assert 'report_session_id' not in state['rounds'][0]['run']
+    direct = s['client'].get(f"/api/investigation-runs/{run['run_id']}")
+    assert direct.status_code == 200, direct.text
+    assert direct.json()['recovery_blocker'] == blocker
+    from backend.investigation_creation.public_projection import run_artifact
+    artifact = run_artifact(get_run(run['run_id'], principal=OWNER)).model_dump(mode='json')
+    assert artifact['run']['recovery_blocker'] == blocker
+    assert 'report_session_id' not in artifact['run']
+    s['principals'].current = Principal('another-account')
+    assert s['client'].get(f"/api/investigation-workspaces/{s['sid']}/state").status_code in (403, 404)
+
+
 def test_pending_draft_and_other_chat_are_not_copied(rounds):
     s=rounds; a=first(s); source=a['terminal']['artifact']['draft_id']
     assert copy(s, source)['error']['code'] == 'INVALID_ROUND_SOURCE'
