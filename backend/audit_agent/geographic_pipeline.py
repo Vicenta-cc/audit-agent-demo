@@ -19,12 +19,14 @@ class GeographicPipeline:
                  risk_client, geo_client, accounts, lease_fence, stop, route_operation,
                  on_delivery=lambda refs: None, retire=lambda account, error: None,
                  started_callback=None, progress_callback=None, on_progress=lambda report: None,
-                 state_lock=None):
+                 state_lock=None, prepare_delivery=None):
         self.crawler, self.ingestion = crawler, ingestion
         self.root = Path(save_root) / 'geographic'
         self.stop, self.on_delivery, self.retire = stop, on_delivery, retire
         self.route_operation = route_operation
         self._detail_route = ExitStack()
+        self._detail_route_context = None
+        self.prepare_delivery = prepare_delivery
         self.started_callback, self.progress_callback = started_callback, progress_callback
         self.on_progress = on_progress
         self.accounts = {a['id']: deepcopy(a) for a in accounts if a.get('id')}
@@ -179,6 +181,7 @@ class GeographicPipeline:
         self._detail_route.close()
         try:
             route_context = self._detail_route.enter_context(self._acquire_route(account_id))
+            self._detail_route_context = route_context
             self.fence()
             output = self.crawler.run_detail(platform=occurrence['platform'], content_id=occurrence['content_key'],
                 source_keyword=occurrence['source_keyword'], max_comments=self.bridge.p2.collection.detail_comment_limit,
@@ -215,11 +218,22 @@ class GeographicPipeline:
 
     def deliver(self, content, *, idempotency_key, binding):
         try:
+            self.fence()
+            if self.prepare_delivery is not None:
+                self.prepare_delivery(content,
+                    binding=binding | self.bridge.plan['binding'] | self.bridge.plan['runtime_binding'],
+                    root=self.root, route=self._detail_route_context, fence=self.fence)
             receipt = self.sink.deliver(content, idempotency_key=idempotency_key, binding=binding)
+            # Whole audit only consumes durable local media. Close the original
+            # route before queueing so the next capture can acquire its capacity.
+            self._detail_route.close()
+            self._detail_route_context = None
+            self.fence()
             self.on_delivery(receipt['refs'])
             return receipt
         finally:
             self._detail_route.close()
+            self._detail_route_context = None
 
     @contextmanager
     def _acquire_route(self, account_id):

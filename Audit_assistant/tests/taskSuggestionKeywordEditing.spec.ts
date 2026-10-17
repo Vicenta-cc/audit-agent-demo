@@ -62,7 +62,7 @@ test("suggestion Draft opens the structured keyword drawer instead of editing in
   ).keywordEditingTest.events)).toEqual(["open-keyword-editor"]);
 });
 
-test("started task explains that its search terms are frozen", async ({ page }) => {
+test("confirmed task with a failed launch keeps terms locked without claiming collection started", async ({ page }) => {
   await page.route("**/api/**", route => route.fulfill({ json: { items: [] } }));
   await page.goto("/");
   await page.evaluate(async () => {
@@ -75,7 +75,7 @@ test("started task explains that its search terms are frozen", async ({ page }) 
     const host = document.createElement("div");
     document.body.replaceChildren(host);
     createRoot(host).render(React.createElement(TaskSuggestionCard, {
-      assistantContent: "任务已完成。",
+      assistantContent: "采集账号需要重新登录，调查未能启动。",
       shouldStream: false,
       showSuggestionCard: true,
       onStreamingComplete: () => {},
@@ -114,7 +114,8 @@ test("started task explains that its search terms are frozen", async ({ page }) 
   });
 
   const card = page.getByRole("region", { name: "任务建议卡片" });
-  await expect(card.getByText("任务已启动，搜索词已冻结；如需修改，请新建调查。", { exact: true })).toBeVisible();
+  await expect(card.getByText("配置已确认，搜索词已锁定；如需修改，请新建调查。", { exact: true })).toBeVisible();
+  await expect(card.getByText("任务已启动", { exact: false })).toHaveCount(0);
   await expect(card.getByRole("button", { name: "编辑主题与变体" })).toHaveCount(0);
 });
 

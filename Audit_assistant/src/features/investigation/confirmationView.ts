@@ -120,6 +120,9 @@ export function formatConfirmationBlockerMessage(code: string, message: string) 
 
 export function formatCreationErrorMessage(message: string) {
   const normalized = message.toUpperCase();
+  if (normalized.includes("DRAFT_ALREADY_CONFIRMED")) {
+    return "此调查配置已确认并锁定，不能直接修改；如需调整，请新建调查。";
+  }
   if (normalized.includes("DAILY_REPORT_LIMIT") || /今日三次任务额度已用完/.test(message)) {
     return "今日三次任务额度已用完，北京时间次日 00:00 重置。";
   }

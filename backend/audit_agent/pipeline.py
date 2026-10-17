@@ -379,6 +379,7 @@ class AuditPipeline:
                 self._set_prompt_context(self._prompt_category_from_source(request), self._prompt_profile_from_source(request))
 
             collect_media = bool(getattr(request, "collect_media", True))
+            self._geographic_collect_media = collect_media
             if not collect_media:
                 job_store.log(
                     self.job_id,
@@ -580,7 +581,7 @@ class AuditPipeline:
                         if analysis_errors and not (settings.crawler_safety_enabled and request.platform == 'dy'
                                 and all(isinstance(error, CollectionRouteError) for error in analysis_errors)):
                             return
-                        bundle = getattr(self, "_collection_route_context", None)
+                        bundle = None if geographic else getattr(self, "_collection_route_context", None)
                         source_item = entry.get("item") if isinstance(entry, dict) else next(iter(entry[0]), {})
                         source = (source_item or {}).get("collection_route_provenance") or {}
                         if bundle is not None and source.get("source_account_id") != bundle.account_id:
@@ -1061,7 +1062,8 @@ class AuditPipeline:
                                         progress_callback=log_crawl_progress,
                                         on_progress=publish_geographic_progress,
                                         route_operation=geographic_route_operation,
-                                        state_lock=job_store._lock)
+                                        state_lock=job_store._lock,
+                                        prepare_delivery=self._prepare_geographic_delivery)
                                     summary = None
                                     try:
                                         summary, result = runner.run()
@@ -2010,6 +2012,7 @@ class AuditPipeline:
                 self.authoritative_m3 = True
             platform = str(job.get("platform") or "xhs")
             collect_media = bool(job.get("collect_media", True))
+            self._geographic_collect_media = collect_media
             source_root = self._resume_source_root(job)
             refs = self.ingestion.pending_for_task(self.job_id, limit=max(0, analyze_limit))
             existing_items = job.get("items") or []
@@ -2446,6 +2449,12 @@ class AuditPipeline:
     def _should_analyze_subject(self, subject: AuditSubject) -> bool:
         if self._analysis_media_scope() != "image_text":
             return True
+        if getattr(self, "_geographic_entry", False) and getattr(self, "_geographic_collect_media", True):
+            _, refs = self.ingestion.validated_selection_for_task(self.job_id)
+            source = next((ref["item"] for ref in refs if ref["platform"] == subject.platform
+                           and ref["content_key"] == subject.note_id), {})
+            if self._video_urls(source, subject.platform):
+                return False
         has_image = bool(subject.local_image_paths or subject.image_urls)
         has_video = bool(subject.local_video_paths or subject.video_urls)
         return has_image and not has_video
@@ -3033,6 +3042,44 @@ class AuditPipeline:
             job_store.log(self.job_id, f"继续分析：已有输出媒体目录不可用，回退当前任务目录：{exc}")
             return current_root
 
+    def _geographic_media_policy(self, item, platform, collect_media):
+        return dict(collect_media=collect_media, image_urls=self._image_urls(item, platform),
+            video_urls=self._video_urls(item, platform), image_limit=settings.max_images_per_note,
+            analysis_scope=self._analysis_media_scope())
+
+    def _prepare_geographic_delivery(self, content, *, binding, root, route, fence):
+        from .geographic_media import GeographicMediaReadiness
+        item = content["raw_source"]["post"]
+        policy = self._geographic_media_policy(item, binding["platform"], self._geographic_collect_media)
+        lease_fence = fence
+        def check_ready_fence():
+            lease_fence()
+            self._assert_geographic_lease()
+            current = (job_store.get(self.job_id) or {}).get("control") or {}
+            if current.get("stop_all_requested") or current.get("crawl_stop_requested"):
+                raise CollectionRouteError("SUPPLEMENT_DEFERRED")
+        job = job_store.get(self.job_id) or {}
+        def download(url, target):
+            check_ready_fence()
+            return download_url_with_error(url, target, platform=binding["platform"],
+                referer=self._content_url(item, binding["platform"]),
+                collection_route_provenance=item.get("collection_route_provenance"),
+                owner_id=str(job.get("owner_user_id") or "local-user"), execution_id=self.job_id,
+                route_context=route, required_route=True)
+        return GeographicMediaReadiness(root).prepare(binding, **policy, route=route,
+            download=download, ffmpeg=self.audio._resolve_ffmpeg(), fence=check_ready_fence)
+
+    def _geographic_ready_media(self, platform, note_id, media_root, collect_media):
+        from .geographic_media import GeographicMediaNotReady, GeographicMediaReadiness
+        self._assert_geographic_lease()
+        _, refs = self.ingestion.validated_selection_for_task(self.job_id)
+        ref = next((r for r in refs if r["platform"] == platform and r["content_key"] == note_id), None)
+        if ref is None or not ref.get("geographic_binding"):
+            raise GeographicMediaNotReady("approved geographic delivery is missing")
+        return GeographicMediaReadiness(media_root / "crawler" / "geographic").load(
+            ref["geographic_binding"], **self._geographic_media_policy(ref["item"], platform, collect_media),
+            fence=self._assert_geographic_lease)
+
     def _build_subjects(
         self,
         platform: str,
@@ -3052,7 +3099,11 @@ class AuditPipeline:
         subjects = []
         for item in contents:
             note_id = self._content_id(item, platform)
-            if include_media:
+            if getattr(self, "_geographic_entry", False):
+                ready = self._geographic_ready_media(platform, note_id, media_root, include_media)
+                local_video_paths, local_image_paths = ready["videos"], ready["images"]
+                image_urls, video_urls = [], []
+            elif include_media:
                 local_video_paths = self._valid_local_video_paths(
                     note_id,
                     self._find_local_media(
@@ -3251,6 +3302,11 @@ class AuditPipeline:
         return False
 
     def _analyze_subject(self, subject: AuditSubject) -> dict:
+        if getattr(self, "_geographic_entry", False):
+            ready = self._geographic_ready_media(subject.platform, subject.note_id,
+                settings.outputs_dir / self.job_id, self._geographic_collect_media)
+            subject.local_image_paths, subject.local_video_paths = ready["images"], ready["videos"]
+            subject.image_urls, subject.video_urls = [], []
         from backend.task_admission.resources import analysis_capacity
         with analysis_capacity(self._capacity_stop_requested) if settings.app_auth_mode == "required" else nullcontext():
             return self._analyze_subject_with_capacity(subject)
@@ -8382,15 +8438,10 @@ class AuditPipeline:
         owner_id = str(job.get("owner_user_id") or "local-user")
         route_context = getattr(getattr(self, "_media_route_context", None), "value", None)
         if getattr(self, "_geographic_entry", False):
-            source = subject.collection_route_provenance or {}
-            # Only the capability retained at approved Geo delivery may authorize
-            # a supplement. A producer's current account is not its source.
-            if (route_context is None or getattr(route_context, "snapshot", None) is None
-                    or not source.get("source_account_id")
-                    or source["source_account_id"] != route_context.account_id):
-                raise CollectionRouteError("SUPPLEMENT_DEFERRED")
-        else:
-            route_context = route_context or getattr(self, "_collection_route_context", None)
+            # Geographic media must be ready before the producer releases its
+            # source route. An audit consumer never performs platform network I/O.
+            raise CollectionRouteError("SUPPLEMENT_DEFERRED")
+        route_context = route_context or getattr(self, "_collection_route_context", None)
         configured_account = crawler_account_store.get(str(job.get("crawler_account_id") or ""))
         required_route = bool((job.get("control") or {}).get("collection_proxy_required") or
                               job.get("proxy_required") or (configured_account or {}).get("proxy_required"))

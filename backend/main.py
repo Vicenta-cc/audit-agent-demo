@@ -3364,21 +3364,26 @@ def control_job(
     if bound_run and request.action in {"pause_crawl", "pause_analysis", "stop_analysis", "stop_all"}:
         if request.action != "stop_all" and not actions.get(request.action):
             raise HTTPException(409, detail="当前任务状态不允许暂停或停止该阶段。")
-        def signal_stop():
+        def signal_stop(*, settled=False):
             if request.action == "stop_all":
                 job_store.update_control(job_id, crawl_stop_requested=True, analysis_paused=False,
-                    analysis_stop_requested=True, stop_all_requested=True)
-                job_store.update(job_id, status="stopping", crawl_status="stopping", analysis_status="stopping")
+                    analysis_stop_requested=True, stop_all_requested=not settled)
+                phase = "stopped" if settled else "stopping"
+                job_store.update(job_id, status=phase, crawl_status=phase, analysis_status=phase)
             elif request.action == "pause_crawl":
                 job_store.update_control(job_id, crawl_stop_requested=True)
-                job_store.update(job_id, status="crawl_pausing", crawl_status="pausing")
+                job_store.update(job_id, status="crawl_paused" if settled else "crawl_pausing",
+                    crawl_status="stopped" if settled else "pausing")
             elif request.action == "pause_analysis":
                 job_store.update_control(job_id, analysis_paused=True, analysis_stop_requested=False)
-                job_store.update(job_id, status="analysis_pausing", analysis_status="pausing")
+                job_store.update(job_id, status="analysis_paused" if settled else "analysis_pausing",
+                    analysis_status="paused" if settled else "pausing")
             else:
                 job_store.update_control(job_id, analysis_paused=False, analysis_stop_requested=True)
-                job_store.update(job_id, status="analysis_stopping", analysis_status="stopping")
-        investigation_creation_store.cancel_queued_local_resume(job_id, action=request.action, signal=signal_stop)
+                job_store.update(job_id, status="analysis_stopped" if settled else "analysis_stopping",
+                    analysis_status="stopped" if settled else "stopping")
+        investigation_creation_store.cancel_queued_local_resume(job_id, action=request.action,
+            signal=signal_stop, settle=lambda: signal_stop(settled=True))
         job_store.log(job_id, "收到控制指令：在安全检查点暂停或停止", stage="control")
         return enrich_job(job_store.get(job_id))
     check_geographic_recovery()

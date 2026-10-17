@@ -2,12 +2,9 @@
 
 Crawler/model output and exit observation are fixtures; production geographic
 execution, durable ingestion, queue transfer and lease ownership are exercised.
-The report source is explicitly checkpointed as a static fixture; live-WAL
-report visibility is a separate pre-existing production defect, not covered here.
+Report generation uses the production adapter without a checkpoint fixture.
 """
-import os
 import queue
-import sqlite3
 import threading
 import time
 
@@ -22,12 +19,11 @@ from test_geographic_runtime_worker import (
 )
 
 
-def test_geographic_worker_borrow_survives_owner_close_until_delayed_analysis(
+def test_geographic_worker_releases_source_route_before_local_analysis(
         confirmed, creation_stack, content, tmp_path, monkeypatch, request):
     from backend.audit_agent import crawler_route, pipeline
     from backend.audit_agent.geographic_pipeline import GeographicPipeline
-    from backend.investigation_creation.adapters import R31ReportAdapter
-    from backend.task_admission.resources import BorrowedRouteContext, acquire_account_handle
+    from backend.task_admission.resources import acquire_account_handle
 
     monkeypatch.setattr(pipeline.settings, 'crawler_proxy_enabled', False)
     monkeypatch.setattr(pipeline.settings, 'crawler_camoufox_state_root', tmp_path / 'physical-profiles')
@@ -51,10 +47,10 @@ def test_geographic_worker_borrow_survives_owner_close_until_delayed_analysis(
         def close_and_signal():
             close()
             if bundle in detail_bundles:
-                # Owner closure must forbid new borrows, while the queued borrow
-                # retains these same FDs until the real consumer finally drains.
+                # The durable media handoff, rather than the whole model audit,
+                # is the last user of this source route.
                 observed.append('owner_closed')
-                assert bundle.pass_fds
+                assert not bundle.pass_fds
                 closed_owner.set()
         bundle.close = close_and_signal
         return bundle
@@ -97,49 +93,34 @@ def test_geographic_worker_borrow_survives_owner_close_until_delayed_analysis(
         def put(self, entry, *args, **kwargs):
             if isinstance(entry, tuple) and entry and entry[0] == 'route_entry':
                 _, ref, borrowed, borrow_context = entry
-                assert isinstance(borrowed, BorrowedRouteContext), 'durable source lost its route borrow'
-                assert borrow_context is not None
-                assert ref['item']['collection_route_provenance']['source_account_id'] == borrowed.account_id
+                assert borrowed is None and borrow_context is None
+                assert closed_owner.is_set(), 'source route must close before enqueueing audit'
+                source_account = ref['item']['collection_route_provenance']['source_account_id']
+                assert source_account == detail_bundles[-1].account_id
                 # Production callback is downstream of the durable SQL commit.
                 with confirmed[0].ingestion_store._connect() as db:
                     assert db.execute('SELECT 1 FROM geographic_deliveries WHERE content_id=?',
                         (ref['content_id'],)).fetchone()
-                assert borrowed.pass_fds
+                assert not detail_bundles[-1].pass_fds
                 observed.append('queued')
             return super().put(entry, *args, **kwargs)
         def get(self, *args, **kwargs):
             entry = super().get(*args, **kwargs)
             if isinstance(entry, tuple) and entry and entry[0] == 'route_entry':
                 assert closed_owner.wait(10), 'geographic source owner never closed'
-                borrowed = entry[2]
-                for fd in borrowed.pass_fds:
-                    os.fstat(fd)
-                assert borrowed.pass_fds
-                assert acquire_account_handle('dy', borrowed.account_id) is None
-                with borrowed.borrow(account_id=borrowed.account_id) as nested:
-                    assert nested.pass_fds == borrowed.pass_fds
+                assert entry[2] is None and entry[3] is None
+                # The investigation's outer account lease still excludes other
+                # jobs. Only the per-operation route FDs have been released.
+                handle = acquire_account_handle('dy', detail_bundles[-1].account_id)
+                assert handle is None
                 observed.append('consumed_after_owner_closed')
             return entry
     monkeypatch.setattr(pipeline.queue, 'Queue', DelayedAnalysisQueue)
 
-    generate_report = R31ReportAdapter.generate
-    def generate_from_static_fixture(self, *args, **kwargs):
-        # This test proves route/audit lifetime through a real static report.
-        # CanonicalReportSource's immutable reader does not consume live WAL;
-        # do not mistake this fixture boundary for validation of that behavior.
-        with sqlite3.connect(creation_stack['resource_db']) as db:
-            busy, log_frames, checkpointed = db.execute(
-                'PRAGMA wal_checkpoint(TRUNCATE)').fetchone()
-            assert busy == 0 and log_frames == checkpointed
-        observed.append('static_report_checkpoint')
-        return generate_report(self, *args, **kwargs)
-    monkeypatch.setattr(R31ReportAdapter, 'generate', generate_from_static_fixture)
-
     try:
         _run_worker('confirmed', 'disabled', request, creation_stack, tmp_path, monkeypatch)
-        assert observed.index('review') < observed.index('settled') < observed.index('queued')
-        assert observed.index('queued') < observed.index('owner_closed') < observed.index('consumed_after_owner_closed')
-        assert observed.index('consumed_after_owner_closed') < observed.index('static_report_checkpoint')
+        assert observed.index('review') < observed.index('settled') < observed.index('owner_closed')
+        assert observed.index('owner_closed') < observed.index('queued') < observed.index('consumed_after_owner_closed')
         assert len(detail_bundles) == 1
         assert all(not bundle.pass_fds for bundle in bundles)
         assert handles and all(handle.closed for handle in handles)

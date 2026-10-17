@@ -195,7 +195,7 @@ class InvestigationWorker:
         command = self.store.take_local_resume(run.id, run.claim_token)
         if command:
             if command["state"] == "cancelled":
-                return self._finish_cancelled_resume(run, command.get("cancel_action") or "stop_all")
+                return self._finish_cancelled_resume(run)
             return self._execute_local_resume(run, command)
         configuration = self._validated_configuration_or_fail(run)
         if isinstance(configuration, InvestigationRun):
@@ -235,21 +235,25 @@ class InvestigationWorker:
             return self._execute_claimed_run(run)
         return self._classify_job_result(run, deterministic_job_id, job_state=job_state)
 
-    def _finish_cancelled_resume(self, run, action):
+    def _finish_cancelled_resume(self, run):
         jobs = self.execution_adapter.job_store
-        control = (jobs.get(run.job_id) or {}).get("control") or {}
-        if action == "stop_all":
-            jobs.update(run.job_id, status="stopped", crawl_status="stopped", analysis_status="stopped")
-            jobs.update_control(run.job_id, stop_all_requested=False)
-        elif action == "pause_crawl":
-            jobs.update(run.job_id, status="crawl_paused", crawl_status="stopped")
-        elif action == "pause_analysis":
-            jobs.update(run.job_id, status="analysis_paused", analysis_status="paused")
-        elif action == "stop_analysis":
-            jobs.update(run.job_id, status="analysis_stopped", analysis_status="stopped")
-        command = self.store.take_local_resume(run.id, run.claim_token)
-        if command:
-            self.store.finish_local_resume(run.id, run.claim_token, command["request_key"])
+
+        def project(action):
+            if action == "stop_all":
+                jobs.update(run.job_id, status="stopped", crawl_status="stopped", analysis_status="stopped")
+                jobs.update_control(run.job_id, stop_all_requested=False)
+            elif action == "pause_crawl":
+                jobs.update(run.job_id, status="crawl_paused", crawl_status="stopped")
+            elif action == "pause_analysis":
+                jobs.update(run.job_id, status="analysis_paused", analysis_status="paused")
+            elif action == "stop_analysis":
+                jobs.update(run.job_id, status="analysis_stopped", analysis_status="stopped")
+
+        # The creation-DB writer fence serializes all Job writes and command
+        # completion with claim replacement and new pause/stop instructions.
+        self.store.finish_cancelled_local_resume(
+            run.id, run.claim_token, run.job_id, project=project)
+        # This transition rechecks ownership after the projection fence releases.
         return self.store.mark_interrupted(run.id, run.claim_token,
             error_code="audit_job_stopped", error_message="恢复排队后收到暂停或停止指令。")
 
@@ -295,8 +299,7 @@ class InvestigationWorker:
                 if started is not None:
                     self.store.finish_local_resume(run.id, run.claim_token, command["request_key"])
             if started is None:
-                cancelled = self.store.take_local_resume(run.id, run.claim_token) or {}
-                return self._finish_cancelled_resume(run, cancelled.get("cancel_action") or "stop_all")
+                return self._finish_cancelled_resume(run)
             return self._classify_job_result(run, run.job_id)
         except LeaseLostError:
             raise

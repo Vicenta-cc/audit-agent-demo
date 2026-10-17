@@ -272,7 +272,7 @@ def test_geographic_media_binding_must_match_exact_task_and_safe_attempt(tmp_pat
     validated.assert_called_once_with('job')
 
 
-def test_every_capture_and_detail_uses_its_own_route_through_delivery(confirmed, tmp_path):
+def test_every_capture_and_detail_uses_its_own_route_until_local_handoff(confirmed, tmp_path):
     from contextlib import contextmanager
     active = []
     events = []
@@ -300,16 +300,24 @@ def test_every_capture_and_detail_uses_its_own_route_through_delivery(confirmed,
             assert active.pop() is value
     runner.route_operation = route
     delivered = []
+    def prepare(content, *, binding, root, route, fence):
+        fence()
+        assert active == [route]
+        assert route['account_id'] == 'test-account'
+        assert binding['job_id'] == runner.bridge.plan['runtime_binding']['job_id']
+        delivered.append(('prepared', route['account_id']))
+    runner.prepare_delivery = prepare
     def deliver(refs):
-        assert len(active) == 1
-        delivered.append(active[0]['account_id'])
+        assert active == []
+        assert len(refs) == 1
+        delivered.append(('enqueued', refs[0]['content_key']))
     runner.on_delivery = deliver
     report, _ = runner.run()
-    assert report['handed_off'] == 1 and len(delivered) == 1
+    assert report['handed_off'] == 1 and len(delivered) == 2
     assert active == []
     assert [kw['account_id'] for kind, kw in events if kind == 'capture'] == ['second']
     assert [kw['account_id'] for kind, kw in events if kind == 'detail'] == ['test-account']
-    assert delivered == ['test-account']
+    assert delivered == [('prepared', 'test-account'), ('enqueued', 'same')]
 
 
 @pytest.mark.parametrize('code', ['PROXY_EXIT_CHANGED', 'PROXY_REVISION_MISMATCH'])
@@ -513,13 +521,13 @@ def test_proxy_flag_off_geographic_route_retains_actual_legacy_direct_bundle(tmp
     assert module.settings.crawler_proxy_enabled is False
 
 
-@pytest.mark.parametrize('queued_id,source_id,allowed', [
-    (None, 'source-a', False),
-    ('other-b', 'source-a', False),
-    ('source-a', None, False),
-    ('source-a', 'source-a', True),
+@pytest.mark.parametrize('queued_id,source_id', [
+    (None, 'source-a'),
+    ('other-b', 'source-a'),
+    ('source-a', None),
+    ('source-a', 'source-a'),
 ])
-def test_geographic_media_requires_retained_delivery_source_not_producer(monkeypatch, tmp_path, queued_id, source_id, allowed):
+def test_geographic_consumer_never_downloads_even_with_matching_source(monkeypatch, tmp_path, queued_id, source_id):
     from types import SimpleNamespace
     from backend.audit_agent import pipeline as module
     pipeline = module.AuditPipeline.__new__(module.AuditPipeline)
@@ -538,13 +546,9 @@ def test_geographic_media_requires_retained_delivery_source_not_producer(monkeyp
         assert kw['route_context'] is queued
         return 'retained-source-only'
     monkeypatch.setattr(module, 'download_url_with_error', download)
-    if allowed:
-        assert pipeline._download_subject_media(subject, 'https://fixture.invalid/image', tmp_path/'image') == 'retained-source-only'
-        assert len(calls) == 1
-    else:
-        with pytest.raises(module.CollectionRouteError, match='SUPPLEMENT_DEFERRED'):
-            pipeline._download_subject_media(subject, 'https://fixture.invalid/image', tmp_path/'image')
-        assert calls == [] and not (tmp_path/'image').exists()
+    with pytest.raises(module.CollectionRouteError, match='SUPPLEMENT_DEFERRED'):
+        pipeline._download_subject_media(subject, 'https://fixture.invalid/image', tmp_path/'image')
+    assert calls == [] and not (tmp_path/'image').exists()
 
 
 def test_fresh_resume_from_verified_geographic_run_never_falls_back_to_producer(confirmed, tmp_path, monkeypatch):

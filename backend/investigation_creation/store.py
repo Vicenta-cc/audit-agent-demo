@@ -44,6 +44,7 @@ from .errors import (
     DraftRevisionConflictError,
     IdempotencyConflictError,
     InvalidStateTransitionError,
+    LeaseLostError,
     PrincipalAccessDeniedError,
     ProposalNotFoundError,
     ProposalVersionConflictError,
@@ -1875,7 +1876,7 @@ class InvestigationCreationStore:
                 WHERE id=?""", (self._now_text(), row["id"]))
         return True
 
-    def cancel_queued_local_resume(self, job_id, *, action="stop_all", signal=None):
+    def cancel_queued_local_resume(self, job_id, *, action="stop_all", signal=None, settle=None):
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             cancelled = db.execute("""UPDATE investigation_resume_commands SET state='cancelled',cancel_action=?
@@ -1886,8 +1887,21 @@ class InvestigationCreationStore:
             # A queued command is cancelled entirely in this database. Its worker
             # materializes the stop projection from the durable action. Once a
             # command started, prepare has committed and will not clear flags again.
-            if not cancelled and signal is not None:
-                signal()
+            if not cancelled:
+                latest = db.execute("""SELECT c.state,c.cancel_action,r.status AS run_status
+                    FROM investigation_resume_commands c JOIN investigation_runs r ON r.id=c.run_id
+                    WHERE r.job_id=? ORDER BY c.rowid DESC LIMIT 1""", (job_id,)).fetchone()
+                # A finished cancellation never launched a pipeline. A later
+                # control must settle synchronously, since no runner will consume
+                # a transitional 'stopping' state. Newer resumes replace this
+                # proof and retain the normal active-run signal path.
+                quiescent = (latest is not None and latest["state"] == "finished"
+                    and latest["cancel_action"] in {"stop_all", "pause_crawl", "pause_analysis", "stop_analysis"}
+                    and latest["run_status"] in {RunStatus.RUNNING.value, RunStatus.INTERRUPTED.value})
+                if quiescent and settle is not None:
+                    settle()
+                elif signal is not None:
+                    signal()
 
     def take_local_resume(self, run_id, claim_token, *, start=False, prepare=None):
         with self._connect() as db:
@@ -1903,6 +1917,24 @@ class InvestigationCreationStore:
                     prepare()
                 db.execute("UPDATE investigation_resume_commands SET state='started' WHERE request_key=?", (row["request_key"],))
             return dict(row)
+
+    def finish_cancelled_local_resume(self, run_id, claim_token, job_id, *, project):
+        """Fence the short Job projection and command completion; no network I/O."""
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM investigation_runs WHERE id=?", (run_id,)).fetchone()
+            if (not claim_token or row is None or row["claim_token"] != claim_token
+                    or row["status"] != RunStatus.RUNNING.value or row["job_id"] != job_id):
+                raise LeaseLostError("Cancelled recovery no longer owns its Run and Job")
+            command = db.execute(
+                "SELECT * FROM investigation_resume_commands WHERE run_id=? ORDER BY rowid DESC LIMIT 1",
+                (run_id,),
+            ).fetchone()
+            if command is None or command["state"] != "cancelled":
+                raise LeaseLostError("Cancelled recovery command is no longer current")
+            project(command["cancel_action"] or "stop_all")
+            db.execute("UPDATE investigation_resume_commands SET state='finished' WHERE request_key=? AND run_id=?",
+                       (command["request_key"], run_id))
 
     def finish_local_resume(self, run_id, claim_token, request_key):
         with self._connect() as db:

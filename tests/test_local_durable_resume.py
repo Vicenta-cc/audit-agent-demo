@@ -231,3 +231,204 @@ def test_queued_cancel_intent_survives_without_cross_database_signal(confirmed, 
     result = worker._recover_execution(claim)
     assert result.status == RunStatus.INTERRUPTED
     assert adapter.job_store.get(job)['status'] == 'stopped'
+
+
+@pytest.mark.parametrize('action', ['stop_all', 'pause_crawl', 'pause_analysis', 'stop_analysis'])
+def test_cancelled_resume_lost_claim_cannot_overwrite_successor_job(confirmed, creation_stack, monkeypatch, action):
+    from datetime import timedelta
+    from backend.investigation_creation.errors import LeaseLostError
+
+    store, adapter, _, job = interrupted(confirmed, creation_stack)
+    store.enqueue_local_resume(job, action='resume_crawl', request_key='cancelled')
+    store.cancel_queued_local_resume(job, action=action)
+    old = store.claim_next('worker-a')
+    worker = InvestigationWorker(store, execution_adapter=adapter,
+        report_adapter=SimpleNamespace(), session_adapter=SimpleNamespace())
+    finish = worker._finish_cancelled_resume
+    successor_store = type(store)(store.db_path, clock=lambda: store.clock() + timedelta(seconds=301))
+    successor_state = []
+
+    def replace_then_finish(run):
+        successor = successor_store.claim_next('worker-b')
+        assert successor and successor.claim_token != old.claim_token
+        adapter.job_store.update(job, status='running', crawl_status='running', analysis_status='running')
+        adapter.job_store.update_control(job, stop_all_requested=True, crawl_epoch=12)
+        successor_state.append(adapter.job_store.get(job))
+        try:
+            return finish(run)
+        finally:
+            assert adapter.job_store.get(job) == successor_state[0]
+
+    monkeypatch.setattr(worker, '_finish_cancelled_resume', replace_then_finish)
+    with pytest.raises(LeaseLostError):
+        worker._recover_execution(old)
+    assert adapter.job_store.get(job) == successor_state[0]
+    assert successor_store.get_run_for_worker(old.id).claimed_by == 'worker-b'
+    with store._connect() as db:
+        assert db.execute('SELECT state FROM investigation_resume_commands').fetchone()[0] == 'cancelled'
+
+
+def test_cancelled_resume_serializes_both_job_writes_against_claim_replacement(confirmed, creation_stack, monkeypatch):
+    import sqlite3
+    from datetime import timedelta
+
+    store, adapter, _, job = interrupted(confirmed, creation_stack)
+    store.enqueue_local_resume(job, action='resume_crawl', request_key='cancelled')
+    store.cancel_queued_local_resume(job, action='stop_all')
+    run = store.claim_next('worker-a')
+    successor_store = type(store)(store.db_path, clock=lambda: store.clock() + timedelta(seconds=301))
+    connect = successor_store._connect
+
+    def nonblocking_connect():
+        db = connect()
+        db.execute('PRAGMA busy_timeout=0')
+        return db
+
+    monkeypatch.setattr(successor_store, '_connect', nonblocking_connect)
+    update_control = adapter.job_store.update_control
+    blocked = []
+
+    def finish_projection(job_id, **changes):
+        assert adapter.job_store.get(job_id)['status'] == 'stopped'
+        with pytest.raises(sqlite3.OperationalError, match='locked'):
+            successor_store.claim_next('worker-b')
+        signal = Mock()
+        with pytest.raises(sqlite3.OperationalError, match='locked'):
+            successor_store.cancel_queued_local_resume(job, action='stop_all', signal=signal)
+        signal.assert_not_called()
+        assert store.owns_claim(run.id, run.claim_token)
+        blocked.append(True)
+        return update_control(job_id, **changes)
+
+    monkeypatch.setattr(adapter.job_store, 'update_control', finish_projection)
+    worker = InvestigationWorker(store, execution_adapter=adapter,
+        report_adapter=SimpleNamespace(), session_adapter=SimpleNamespace())
+    result = worker._recover_execution(run)
+    assert blocked == [True]
+    assert result.status == RunStatus.INTERRUPTED
+    assert adapter.job_store.get(job)['status'] == 'stopped'
+    assert adapter.job_store.get(job)['control']['stop_all_requested'] is False
+
+
+def test_cancelled_resume_uses_latest_durable_stop_action(confirmed, creation_stack, monkeypatch):
+    store, adapter, _, job = interrupted(confirmed, creation_stack)
+    store.enqueue_local_resume(job, action='resume_crawl', request_key='cancelled')
+    store.cancel_queued_local_resume(job, action='pause_crawl')
+    run = store.claim_next('worker')
+    worker = InvestigationWorker(store, execution_adapter=adapter,
+        report_adapter=SimpleNamespace(), session_adapter=SimpleNamespace())
+    finish = worker._finish_cancelled_resume
+
+    def change_then_finish(run):
+        store.cancel_queued_local_resume(job, action='stop_all')
+        return finish(run)
+
+    monkeypatch.setattr(worker, '_finish_cancelled_resume', change_then_finish)
+    result = worker._recover_execution(run)
+    assert result.status == RunStatus.INTERRUPTED
+    stopped = adapter.job_store.get(job)
+    assert stopped['status'] == stopped['crawl_status'] == stopped['analysis_status'] == 'stopped'
+
+
+@pytest.mark.parametrize('mismatch', ['job_binding', 'command_started'])
+def test_cancelled_resume_rechecks_binding_and_command_before_job_mutation(confirmed, creation_stack, mismatch):
+    from backend.investigation_creation.errors import LeaseLostError
+
+    store, adapter, _, job = interrupted(confirmed, creation_stack)
+    store.enqueue_local_resume(job, action='resume_crawl', request_key='cancelled')
+    run = store.claim_next('worker')
+    if mismatch == 'job_binding':
+        store.cancel_queued_local_resume(job, action='stop_all')
+        run = run.model_copy(update={'job_id': 'unbound-job'})
+    else:
+        assert store.take_local_resume(run.id, run.claim_token, start=True)
+    before = adapter.job_store.get(job)
+    worker = InvestigationWorker(store, execution_adapter=adapter,
+        report_adapter=SimpleNamespace(), session_adapter=SimpleNamespace())
+    with pytest.raises(LeaseLostError):
+        worker._finish_cancelled_resume(run)
+    assert adapter.job_store.get(job) == before
+    assert adapter.job_store.get('unbound-job') is None
+
+
+@pytest.mark.parametrize('when', ['before_run_interruption', 'after_run_interruption'])
+def test_real_api_stop_after_cancelled_projection_settles_without_pipeline(confirmed, creation_stack, monkeypatch, when):
+    from backend import main
+    from fastapi import BackgroundTasks
+    from backend.audit_agent.job_state import available_job_actions
+
+    store, adapter, _, job = interrupted(confirmed, creation_stack)
+    store.enqueue_local_resume(job, action='resume_crawl', request_key='cancelled')
+    store.cancel_queued_local_resume(job, action='pause_crawl')
+    run = store.claim_next('worker')
+    finish = store.finish_cancelled_local_resume
+    monkeypatch.setattr(main, '_authz_enabled', lambda: False)
+    monkeypatch.setattr(main, 'job_store', adapter.job_store)
+    monkeypatch.setattr(main, 'ingestion_store', adapter.ingestion_store)
+    monkeypatch.setattr(main, 'investigation_creation_store', store)
+    monkeypatch.setattr(main, '_require_job', lambda *a, **k: adapter.job_store.get(job))
+    monkeypatch.setattr(main, 'enrich_job', lambda value: value)
+    background = BackgroundTasks()
+
+    def stop():
+        main.control_job(job, main.JobControlRequest(action='stop_all'), background)
+
+    def stop_after_fence(*args, **kwargs):
+        finish(*args, **kwargs)
+        with store._connect() as db:
+            assert db.execute('SELECT state FROM investigation_resume_commands').fetchone()[0] == 'finished'
+        if when == 'before_run_interruption':
+            stop()
+
+    monkeypatch.setattr(store, 'finish_cancelled_local_resume', stop_after_fence)
+    worker = InvestigationWorker(store, execution_adapter=adapter,
+        report_adapter=SimpleNamespace(), session_adapter=SimpleNamespace())
+    monkeypatch.setattr(adapter, 'run_pipeline', Mock(side_effect=AssertionError('cancelled recovery started pipeline')))
+    assert worker._recover_execution(run).status == RunStatus.INTERRUPTED
+    if when == 'after_run_interruption':
+        stop()
+    state = adapter.job_store.get(job)
+    assert state['status'] == state['crawl_status'] == state['analysis_status'] == 'stopped'
+    assert state['control']['stop_all_requested'] is False
+    assert available_job_actions(state, {})['resume_crawl']
+    assert background.tasks == []
+    adapter.run_pipeline.assert_not_called()
+
+
+def test_cancelled_projection_failure_keeps_command_retryable(confirmed, creation_stack, monkeypatch):
+    store, adapter, _, job = interrupted(confirmed, creation_stack)
+    store.enqueue_local_resume(job, action='resume_crawl', request_key='cancelled')
+    store.cancel_queued_local_resume(job, action='stop_all')
+    run = store.claim_next('worker')
+    update = adapter.job_store.update_control
+    monkeypatch.setattr(adapter.job_store, 'update_control', Mock(side_effect=RuntimeError('write failed')))
+    worker = InvestigationWorker(store, execution_adapter=adapter,
+        report_adapter=SimpleNamespace(), session_adapter=SimpleNamespace())
+    with pytest.raises(RuntimeError, match='write failed'):
+        worker._recover_execution(run)
+    with store._connect() as db:
+        assert db.execute('SELECT state FROM investigation_resume_commands').fetchone()[0] == 'cancelled'
+    assert store.owns_claim(run.id, run.claim_token)
+    monkeypatch.setattr(adapter.job_store, 'update_control', update)
+    assert worker._recover_execution(run).status == RunStatus.INTERRUPTED
+    assert adapter.job_store.get(job)['status'] == 'stopped'
+
+
+@pytest.mark.parametrize('state', ['started', 'finished'])
+def test_newer_executed_resume_cannot_use_old_cancellation_quiescence(confirmed, creation_stack, state):
+    store, adapter, _, job = interrupted(confirmed, creation_stack)
+    store.enqueue_local_resume(job, action='resume_crawl', request_key='cancelled')
+    store.cancel_queued_local_resume(job, action='stop_all')
+    run = store.claim_next('cancel-worker')
+    worker = InvestigationWorker(store, execution_adapter=adapter,
+        report_adapter=SimpleNamespace(), session_adapter=SimpleNamespace())
+    worker._recover_execution(run)
+    store.enqueue_local_resume(job, action='resume_crawl', request_key='new-resume')
+    run = store.claim_next('new-worker')
+    assert store.take_local_resume(run.id, run.claim_token, start=True)
+    if state == 'finished':
+        store.finish_local_resume(run.id, run.claim_token, 'new-resume')
+    signal, settle = Mock(), Mock()
+    store.cancel_queued_local_resume(job, action='stop_all', signal=signal, settle=settle)
+    signal.assert_called_once()
+    settle.assert_not_called()

@@ -199,7 +199,7 @@ export function TaskSuggestionCard({
                 ) : null}
               </div>
               {preview?.mode !== "creator" && draft.confirmed ? (
-                <p className="task-suggestion-locked-note">任务已启动，搜索词已冻结；如需修改，请新建调查。</p>
+                <p className="task-suggestion-locked-note">配置已确认，搜索词已锁定；如需修改，请新建调查。</p>
               ) : null}
               {isKeywordsOverflowing ? (
                 <button

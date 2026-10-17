@@ -131,3 +131,11 @@ test("browser initialization failure keeps the keyword pending without blaming l
   expect(text).not.toContain("登录");
   expect(text).not.toContain("跳过");
 });
+
+
+test("confirmed draft errors explain the lock instead of suggesting retry", () => {
+  expect(formatCreationErrorMessage("DRAFT_ALREADY_CONFIRMED: investigation-draft:internal"))
+    .toBe("此调查配置已确认并锁定，不能直接修改；如需调整，请新建调查。");
+  expect(formatCreationErrorMessage("CRAWLER_ACCOUNT_LOGIN_REQUIRED"))
+    .toBe("采集账号需要重新登录，请在采集账号中处理后再继续。");
+});
