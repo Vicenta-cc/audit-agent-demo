@@ -50,14 +50,23 @@ children retain their separate no-dotenv boundary. See the offline entrypoint
 regression in `tests/test_release_dotenv_boundary.py` and the current
 [deployment readiness inventory](../../docs/runtime/DEPLOYMENT-READINESS-20261019.md).
 
-Geographic execution is opt-in: add top-level `"geographic_runtime": true` only to a
-`staging` release manifest. It defaults to disabled and is rejected for production.
+Geographic execution is opt-in: add top-level `"geographic_runtime": true` to the
+reviewed staging or production release manifest. It defaults to disabled. Production
+retains the fixed 8298/3298 ports and additionally requires the merged owner environment
+to keep application authentication, crawler safety, secure cookies, HTTPS login origins
+and no direct degradation. This structural support does not approve a cutover: G0,
+asset, maintenance, stopped-write, backup, migration and smoke gates remain unchanged.
 API and fresh conversation processes load this same manifest, bind its App source
 to the executing checkout, and require the creation, conversation and resource
 databases to stay inside the manifest's dedicated directory. The restricted child
 state remains its `state/` subdirectory. The worker consumes the confirmed frozen
 plan; region confirmation and execution-claim checks still apply. Do not inject a
 second `AUDIT_RUNTIME_MANIFEST` through private settings or the parent environment.
+
+Persistent service generation and its operational verification are described in
+[the service delivery runbook](../../docs/runtime/PERSISTENT-SERVICES-20261019.md).
+Production-data copy rehearsal and business-only rollback limits are described in
+[the migration/recovery runbook](../../docs/runtime/MIGRATION-ROLLBACK-20261019.md).
 
 Maintenance contract: `CRAWLER_BROWSER_MAINTENANCE=true` blocks new Douyin login, crawl
 and recovery admissions while business APIs/reports can start. API/worker entrypoints consume

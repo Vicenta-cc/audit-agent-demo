@@ -232,10 +232,6 @@ def validate(config):
         "manifest_keys",
     )
     require(type(config.get("geographic_runtime", False)) is bool, "geographic_runtime_type")
-    require(
-        not config.get("geographic_runtime", False) or config.get("mode") == "staging",
-        "geographic_runtime_requires_staging",
-    )
     require(config["schema_version"] == SCHEMA, "manifest_schema")
     require(
         isinstance(config["release_id"], str)
@@ -829,6 +825,18 @@ def environment(config):
     result["CRAWLER_LOGIN_V2_ORIGINS"] = validate_login_v2_origins(
         result.get("CRAWLER_LOGIN_V2_ORIGINS")
     )
+    if config["mode"] == "production" and config.get("geographic_runtime", False):
+        require(result.get("APP_AUTH_MODE", "required").strip().lower() == "required",
+                "production_geographic_auth_required")
+        require(result.get("CRAWLER_SAFETY_ENABLED", "").strip().lower() in {"1", "true"},
+                "production_geographic_safety_required")
+        require(result.get("CRAWLER_DIRECT_DEGRADE_ENABLED", "false").strip().lower()
+                in {"0", "false"}, "production_geographic_direct_degrade_forbidden")
+        require(result.get("APP_AUTH_COOKIE_SECURE", "true").strip().lower() in {"1", "true"},
+                "production_geographic_secure_cookie_required")
+        require(all(urlsplit(origin).scheme == "https" for origin in
+                    result["CRAWLER_LOGIN_V2_ORIGINS"].split(",")),
+                "production_geographic_https_origin_required")
     return result
 
 

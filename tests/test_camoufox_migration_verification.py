@@ -13,6 +13,18 @@ from backend.audit_agent.crawler_browser_verification import verify_migrated_acc
 
 @pytest.fixture
 def migrated(monkeypatch):
+    crawler = Path(
+        os.environ.get('MEDIACRAWLER_DIR')
+        or os.environ.get('MEDIA_CRAWLER_DIR')
+        or route.settings.media_crawler_dir
+    ).expanduser().resolve()
+    if not (crawler / 'tools' / 'collection_route.py').is_file():
+        pytest.fail(
+            'Migration verification requires the pinned MediaCrawler contract at '
+            f'{crawler / "tools" / "collection_route.py"}; set MEDIACRAWLER_DIR '
+            'to the compatible MediaCrawler checkout.',
+            pytrace=False,
+        )
     from test_crawler_browser_migration import MigrationTest
     fixture = MigrationTest()
     fixture.setUp()
@@ -23,7 +35,7 @@ def migrated(monkeypatch):
         monkeypatch.setattr(route.settings, 'request_scheduler_db', fixture.scheduler)
         monkeypatch.setattr(route.settings, 'crawler_browser_profile_root', fixture.root / 'logical')
         monkeypatch.setattr(route.settings, 'crawler_camoufox_state_root', fixture.root / 'state')
-        monkeypatch.setattr(route.settings, 'media_crawler_dir', Path(__file__).resolve().parents[2] / 'wukong-proxy-crawler')
+        monkeypatch.setattr(route.settings, 'media_crawler_dir', crawler)
         monkeypatch.setattr(route.settings, 'crawler_safety_enabled', True)
         monkeypatch.setattr(route.settings, 'crawler_proxy_enabled', False)
         monkeypatch.setattr(route.settings, 'crawler_browser_maintenance', True)

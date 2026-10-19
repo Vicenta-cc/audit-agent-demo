@@ -1,5 +1,7 @@
 """Offline geographic enablement uses the existing, isolated release authority."""
 import json
+import hashlib
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,12 +15,25 @@ from backend.investigation_creation.geographic_runtime import (
 )
 
 
-@pytest.fixture
-def release(tmp_path):
+@pytest.fixture(params=['staging', 'production'])
+def release(tmp_path, request):
     root = tmp_path.resolve() / 'candidate'
     root.mkdir()
     config = manifest(root)
     config['ports'].update(frontend=13299, allowed=[18298, 13299])
+    if request.param == 'production':
+        config['mode'] = 'production'
+        config['ports'].update(backend=8298, frontend=3298, allowed=[8298, 3298],
+                               protected=[80, 443, 13298])
+        # Real credentials still belong to a reviewed private file. This fixture
+        # only supplies nonsecret required policy to the startup contract.
+        policy = root / 'policy.json'
+        policy.write_text(json.dumps({'CRAWLER_SAFETY_ENABLED': 'true'}))
+        policy.chmod(0o600)
+        config['parent_env_files'] = [{
+            'path': str(policy), 'sha256': hashlib.sha256(policy.read_bytes()).hexdigest(),
+            'expected_uid': os.geteuid(), 'reviewed_allowlist': ['CRAWLER_SAFETY_ENABLED'],
+        }]
     config['artifacts']['app']['path'] = str(Path(__file__).resolve().parents[3])
     path = root / 'manifest.json'
     config['geographic_runtime'] = True
@@ -75,11 +90,13 @@ def test_release_enablement_is_strict_bool(release, value):
         IsolatedGeographicCapability.from_release_manifest(path)
 
 
-def test_production_enablement_rejected(release):
+def test_production_cannot_reuse_staging_ports(release):
     path, config = release
     config['mode'] = 'production'
+    config['ports'].update(backend=18298, frontend=13299, allowed=[18298, 13299],
+                           protected=[80, 443])
     save(path, config)
-    with pytest.raises(ValueError, match='requires_staging'):
+    with pytest.raises(ValueError, match='production_ports_changed'):
         IsolatedGeographicCapability.from_release_manifest(path)
 
 

@@ -182,9 +182,17 @@ class ControlTest(unittest.TestCase):
         self.m["security_evidence"]["sha256"] = digest(evidence)
         target = self.root / "current.json"
         target.write_text("original")
-        with self.assertRaisesRegex(InvalidRelease, "G0_not_passed"):
-            cutover(validate(self.m), target, self.root / "nonexistent-receipt")
-        self.assertEqual(target.read_text(), "original")
+        for mode in ("staging", "production"):
+            with self.subTest(mode=mode):
+                config = copy.deepcopy(self.m)
+                config["mode"] = mode
+                config["geographic_runtime"] = True
+                if mode == "production":
+                    config["ports"].update(backend=8298, frontend=3298,
+                                           allowed=[8298, 3298], protected=[80, 443, 13298])
+                with self.assertRaisesRegex(InvalidRelease, "G0_not_passed"):
+                    cutover(validate(config), target, self.root / "nonexistent-receipt")
+                self.assertEqual(target.read_text(), "original")
 
     def test_hash_detects_changes_and_rejects_symlink(self):
         artifact = self.root / "file"

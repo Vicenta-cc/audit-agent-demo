@@ -1,4 +1,4 @@
-"""Server-owned isolated geographic confirmation; production remains disabled."""
+"""Server-owned geographic confirmation bound to one dedicated runtime."""
 from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -59,7 +59,7 @@ class IsolatedGeographicCapability:
 
     @classmethod
     def from_release_manifest(cls, path):
-        """Opt in only from the pinned staging release, without legacy overlays.
+        """Opt in from a pinned release, without legacy overlays.
 
         The launcher verifies all artifact hashes before starting API or worker.
         Turn subprocesses validate the same schema and source/root binding here;
