@@ -52,6 +52,7 @@ TOP_KEYS = {
     "parent_env_files",
     "quiescence_scope",
 }
+OPTIONAL_TOP_KEYS = {"geographic_runtime"}
 RUNTIME_KEYS = {
     "state_root",
     "profile_root",
@@ -112,6 +113,7 @@ CONTROLLED_ENV = frozenset(
         "PYTHONPATH",
         "PYTHONHOME",
         "CAMOUFOX_RELEASE_MANIFEST",
+        "AUDIT_RUNTIME_MANIFEST",
     }
 )
 
@@ -223,7 +225,16 @@ def validate_login_v2_origins(value):
 
 
 def validate(config):
-    exact(config, TOP_KEYS, "manifest_keys")
+    require(
+        isinstance(config, dict)
+        and TOP_KEYS <= set(config) <= TOP_KEYS | OPTIONAL_TOP_KEYS,
+        "manifest_keys",
+    )
+    require(type(config.get("geographic_runtime", False)) is bool, "geographic_runtime_type")
+    require(
+        not config.get("geographic_runtime", False) or config.get("mode") == "staging",
+        "geographic_runtime_requires_staging",
+    )
     require(config["schema_version"] == SCHEMA, "manifest_schema")
     require(
         isinstance(config["release_id"], str)

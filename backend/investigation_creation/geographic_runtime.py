@@ -57,6 +57,38 @@ class IsolatedGeographicCapability:
             raise ValueError('a dedicated temporary isolation root is required')
         self._confirmation = ContextVar('geographic_confirmation', default=None)
 
+    @classmethod
+    def from_release_manifest(cls, path):
+        """Opt in only from the pinned staging release, without legacy overlays.
+
+        The launcher verifies all artifact hashes before starting API or worker.
+        Turn subprocesses validate the same schema and source/root binding here;
+        they must not rehash the browser and wheelhouse on every model turn.
+        """
+        from deploy.camoufox.control import read_json, validate
+
+        manifest = Path(path).absolute()
+        if manifest != manifest.resolve():
+            raise ValueError('geographic release manifest must not use symlinks')
+        config = validate(read_json(manifest))
+        if not config.get('geographic_runtime', False):
+            return None
+        root = manifest.parent
+        repository = Path(__file__).resolve().parents[2]
+        source = Path(config['artifacts']['app']['path'])
+        runtime = config['runtime']
+        if (source != repository or source != source.resolve()
+                or root in (Path('/'), Path.home().resolve(), Path(tempfile.gettempdir()).resolve())
+                or root.is_relative_to(repository) or repository.is_relative_to(root)
+                or Path(runtime['state_root']).resolve() != root / 'state'
+                or not all(Path(runtime[key]).resolve().is_relative_to(root)
+                           for key in ('scheduler_db', 'account_db', 'owner_db', 'archive_root'))):
+            raise ValueError('a dedicated source-bound release geographic isolation root is required')
+        capability = cls.__new__(cls)
+        capability.root = root
+        capability._confirmation = ContextVar('geographic_confirmation', default=None)
+        return capability
+
     def allows_path(self, path):
         return Path(path).resolve().is_relative_to(self.root)
 
@@ -261,3 +293,24 @@ def _provenance(application,draft,principal,session_id):
             history=history,lineage=lineage,selection=selection,message=messages[0],application_message=messages[1],anchor_message=messages[2])
 
 
+def install_runtime_geographic_capability(application, conversation_store, *, environ=None):
+    """Shared API/turn composition; release configuration has one authority."""
+    import os
+
+    env = os.environ if environ is None else environ
+    release = env.get('CAMOUFOX_RELEASE_MANIFEST')
+    legacy = env.get('AUDIT_RUNTIME_MANIFEST')
+    if release and legacy:
+        raise ValueError('release and legacy runtime manifests cannot be combined')
+    capability = None
+    if release:
+        capability = IsolatedGeographicCapability.from_release_manifest(release)
+    elif legacy:
+        manifest = Path(legacy)
+        config = json.loads(manifest.read_text())
+        if config.get('geographic_runtime') is True:
+            capability = IsolatedGeographicCapability(config['runtime_root'], runtime_manifest=manifest)
+    if capability is not None:
+        application.conversation_store = conversation_store
+        capability.install(application)
+    return capability
