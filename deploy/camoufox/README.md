@@ -74,7 +74,9 @@ must stop the actual formal units and prove quiescence before backup/migration.
    Launch isolated: `docker run --rm --network none --read-only --shm-size=1g --pids-limit=256
    --memory=4g --cpus=2 --tmpfs /tmp:rw,noexec,nosuid,size=256m IMAGE` with a dedicated private
    `/state` volume owned by the runtime UID; no production mounts, ports or queue/DB access.
-   `/state/home/.camoufox` must exist before launch. UID/GID is10001 unless an operator pins another.
+   Precreate `/state`, `/state/profiles`, `/state/cache`, `/state/tmp`, `/state/outputs`,
+   `/state/home`, and `/state/home/.camoufox`, all non-symlink private directories owned by
+   the runtime UID with mode `0700`. UID/GID is10001 unless an operator pins another.
 5. `control.py owner-preflight runtime.json` runs as App owner and checks all source/artifact
    hashes plus restricted parent environment files. `control.py preflight runtime.json` runs as
    the exact browser UID and checks only browser binary/assets/runtime-support hashes, executable,

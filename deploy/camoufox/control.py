@@ -633,8 +633,15 @@ def preflight(config, *, check_ports=True):
     )
     require(resource.getrlimit(resource.RLIMIT_NOFILE)[0] >= 4096, "fd_limit_too_low")
     require(shutil.which("Xvfb") is not None, "xvfb_missing")
-    for key in ("state_root", "profile_root", "cache_root", "tmp_root", "home"):
-        path = Path(config["runtime"][key])
+    state_directories = [
+        Path(config["runtime"][key])
+        for key in ("state_root", "profile_root", "cache_root", "tmp_root", "home")
+    ]
+    state_directories.extend(
+        (Path(config["runtime"]["state_root"]) / "outputs",
+         Path(config["runtime"]["home"]) / ".camoufox")
+    )
+    for path in state_directories:
         require(path.is_dir() and not path.is_symlink(), "state_directory_missing")
         st = path.stat()
         require(

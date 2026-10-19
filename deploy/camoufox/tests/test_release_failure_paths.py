@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -132,6 +133,55 @@ class FailurePaths(unittest.TestCase):
         ):
             with self.assertRaisesRegex(InvalidRelease, "linux_x86_required"):
                 preflight(self.m)
+
+    def test_preflight_checks_all_child_state_directories(self):
+        self.m["runtime"].update(uid=os.geteuid(), gid=os.getegid())
+        state = Path(self.m["runtime"]["state_root"])
+        paths = [state / name for name in
+                 ("profiles", "cache", "tmp", "outputs", "home", "home/.camoufox")]
+        state.mkdir(mode=0o700)
+        for path in paths:
+            path.mkdir(mode=0o700)
+        # The next boundary deliberately fails after all state checks succeed.
+        Path(self.m["runtime"]["archive_root"]).mkdir(mode=0o700)
+        for relative in ("outputs", "home/.camoufox"):
+            path = state / relative
+            with (
+                self.subTest(directory=relative),
+                patch("control.check_child_artifacts"),
+                patch("control.platform.system", return_value="Linux"),
+                patch("control.platform.machine", return_value="x86_64"),
+                patch("control.resource.getrlimit", return_value=(8192, 8192)),
+                patch("control.shutil.which", return_value="/usr/bin/Xvfb"),
+            ):
+                path.rmdir()
+                with self.assertRaisesRegex(InvalidRelease, "state_directory_missing"):
+                    preflight(self.m)
+                path.mkdir(mode=0o700)
+                path.chmod(0o755)
+                with self.assertRaisesRegex(InvalidRelease, "state_permissions"):
+                    preflight(self.m)
+                path.chmod(0o700)
+                original_stat = Path.stat
+
+                def wrong_owner(target, *args, **kwargs):
+                    value = original_stat(target, *args, **kwargs)
+                    if target == path:
+                        from types import SimpleNamespace
+                        return SimpleNamespace(st_uid=os.geteuid() + 1, st_mode=value.st_mode)
+                    return value
+
+                with patch.object(Path, "stat", wrong_owner):
+                    with self.assertRaisesRegex(InvalidRelease, "state_permissions"):
+                        preflight(self.m)
+                path.rmdir()
+                path.symlink_to(state / "cache", target_is_directory=True)
+                with self.assertRaisesRegex(InvalidRelease, "state_directory_missing"):
+                    preflight(self.m)
+                path.unlink()
+                path.mkdir(mode=0o700)
+                with self.assertRaisesRegex(InvalidRelease, "child_can_read_account_archives"):
+                    preflight(self.m)
 
     def test_mutable_docker_image_rejected_before_running(self):
         with patch("docker_rehearse.subprocess.check_output") as inspect:

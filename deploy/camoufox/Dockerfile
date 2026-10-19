@@ -10,7 +10,7 @@ ARG BROWSER_UID=10001
 ARG BROWSER_GID=10001
 RUN groupadd -g ${BROWSER_GID} crawler && useradd -u ${BROWSER_UID} -g ${BROWSER_GID} -m crawler
 COPY --chown=0:0 payload/ /opt/camoufox-release/
-RUN chmod -R a-w /opt/camoufox-release && mkdir -p /state/profiles /state/cache /state/tmp /state/home/.camoufox && chown -R crawler:crawler /state && chmod -R 700 /state
+RUN chmod -R a-w /opt/camoufox-release && mkdir -p /state/profiles /state/cache /state/tmp /state/outputs /state/home/.camoufox && chown -R crawler:crawler /state && chmod -R 700 /state
 USER crawler
 ENV CAMOUFOX_RELEASE_MANIFEST=/opt/camoufox-release/runtime.json
 WORKDIR /opt/camoufox-release
