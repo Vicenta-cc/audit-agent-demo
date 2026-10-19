@@ -37,6 +37,8 @@ App settings. It does not read the old environment.json/secrets.env or inject br
 before releasing; do not blindly inherit the legacy process environment. Secrets must not be put
 in public manifests or receipts. The App/browser child boundary applies its separate, smaller
 allowlist; App environment is not a browser-child environment.
+Release environment fixes `PYTHONDONTWRITEBYTECODE=1` for fresh Python children as
+well as the service parent, so conversation imports do not alter pinned source hashes.
 
 App Settings also refuses checkout `.env` loading whenever
 `CAMOUFOX_RELEASE_MANIFEST` is present. Both API and worker install this marker

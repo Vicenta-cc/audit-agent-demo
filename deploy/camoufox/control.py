@@ -112,6 +112,7 @@ CONTROLLED_ENV = frozenset(
         "LD_PRELOAD",
         "PYTHONPATH",
         "PYTHONHOME",
+        "PYTHONDONTWRITEBYTECODE",
         "CAMOUFOX_RELEASE_MANIFEST",
         "AUDIT_RUNTIME_MANIFEST",
     }
@@ -822,6 +823,7 @@ def environment(config):
             "XHS_AUDIT_DATA_DIR": str(Path(r["account_db"]).parent),
             "CRAWLER_LOGIN_HEADED": "true",
             "CRAWLER_LOGIN_V2_ENABLED": "true",
+            "PYTHONDONTWRITEBYTECODE": "1",
         }
     )
     result["CRAWLER_LOGIN_V2_ORIGINS"] = validate_login_v2_origins(
