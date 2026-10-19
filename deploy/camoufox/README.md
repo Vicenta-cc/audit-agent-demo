@@ -38,6 +38,16 @@ before releasing; do not blindly inherit the legacy process environment. Secrets
 in public manifests or receipts. The App/browser child boundary applies its separate, smaller
 allowlist; App environment is not a browser-child environment.
 
+App Settings also refuses checkout `.env` loading whenever
+`CAMOUFOX_RELEASE_MANIFEST` is present. Both API and worker install this marker
+before importing Settings, independently of python-dotenv's version-specific
+disable flag. Missing business configuration must be supplied by reviewed
+manifest/private-file keys, never silently filled from a packaged `.env`.
+Unmanaged development keeps its existing dotenv behavior; restricted browser
+children retain their separate no-dotenv boundary. See the offline entrypoint
+regression in `tests/test_release_dotenv_boundary.py` and the current
+[deployment readiness inventory](../../docs/runtime/DEPLOYMENT-READINESS-20261019.md).
+
 Maintenance contract: `CRAWLER_BROWSER_MAINTENANCE=true` blocks new Douyin login, crawl
 and recovery admissions while business APIs/reports can start. API/worker entrypoints consume
 the same manifest. `APP_AUTH_DB` is fixed to `runtime.owner_db`, archive root is pinned by

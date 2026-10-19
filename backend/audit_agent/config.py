@@ -17,7 +17,13 @@ def trial_job_ids(value: str) -> tuple[str, ...]:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-if os.getenv("CRAWLER_RESTRICTED_CHILD") != "1":
+# Managed release entrypoints install the reviewed environment before importing
+# Settings. Never fill its missing values from the checkout, even with an older
+# python-dotenv that does not support PYTHON_DOTENV_DISABLED.
+if (
+    os.getenv("CRAWLER_RESTRICTED_CHILD") != "1"
+    and not os.getenv("CAMOUFOX_RELEASE_MANIFEST")
+):
     load_dotenv(ROOT / ".env")
 
 
