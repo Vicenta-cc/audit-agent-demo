@@ -198,3 +198,35 @@ def test_projector_only_checks_reconciliation_when_not_running(
         assert result['available_actions']['resume_crawl'] is False
         assert result['task_stats']['collection_resumable'] is False
     assert runner.execution.snapshot() == before
+
+
+@pytest.mark.parametrize('job_status', ['completed', 'crawl_paused'])
+def test_published_projection_never_loads_resume_snapshot(
+    confirmed, tmp_path, monkeypatch, job_status,
+):
+    import backend.audit_agent.geographic_status as geographic_status
+    from backend.investigation_creation.adapters import InvestigationRunProjector
+    from backend.investigation_creation.contracts import RunStatus
+
+    runner, _, _ = runtime(confirmed, tmp_path)
+    adapter, _ = confirmed
+    jobs = adapter.job_store
+    job_id = runner.bridge.plan['runtime_binding']['job_id']
+    jobs.update(job_id, status=job_status)
+
+    def unexpected_resume_probe(*args):
+        pytest.fail('completed collection must not load the geographic recovery snapshot')
+
+    monkeypatch.setattr(geographic_status, 'geographic_resume_blocker', unexpected_resume_probe)
+    projector = InvestigationRunProjector(
+        job_store=jobs, ingestion_store=adapter.ingestion_store,
+        audit_result_store=adapter.audit_result_store,
+        crawler_account_store=adapter.crawler_account_store,
+        report_store=SimpleNamespace(),
+    )
+    result = projector.project(SimpleNamespace(
+        job_id=job_id, status=RunStatus.PUBLISHED, report_version_id='',
+    ))
+    assert result['recovery_blocker'] == ''
+    assert result['available_actions']['resume_crawl'] is False
+    assert result['task_stats']['collection_resumable'] is False
