@@ -32,3 +32,7 @@ KillMode=control-group、TimeoutStopSec=45 保持现有停止语义，进程组�
 5. 失败时阻止新写入并保全新数据，停止精确新单元、确认 cgroup 排空，仅恢复已备份且身份匹配的旧定义和启用状态。若旧服务是 transient，按原实际属性恢复，不与同名持久定义并存。单元回退不自动回滚数据库或 Profile；数据和账号另按已验证迁移账本恢复，禁止覆盖新版新写入。
 
 本地离线测试覆盖私有独占输出、生产与候选定义、真实 Git 源码身份/资产、manifest 变化阻断、路径与 systemd 字符转义、资源/停止/依赖策略。Linux语法、实际安装、自动恢复及 boot 验收由真实发布收据补充，不由离线测试代替。
+
+## Target Linux compatibility correction
+
+The first real Linux `systemd-analyze verify` rejected quoted `WorkingDirectory` values; no service had been stopped or installed at that point. The renderer now emits this path directive without token quotes and accepts only plain absolute deployment paths for it, rejecting whitespace, quotes, backslashes and specifiers instead of relying on version-specific interpretation. ExecStart/Environment retain their separate token escaping. Linux verification must be rerun on the corrected frozen revision before installation.

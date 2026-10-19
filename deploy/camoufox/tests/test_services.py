@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from control import InvalidRelease, digest
-from services import pinned_config, quoted, render
+from services import pinned_config, quoted, render, working_directory
 from test_control import manifest
 
 
@@ -72,6 +72,7 @@ def test_render_contract_and_private_exclusive_output(release):
         assert config['runtime']['app_python'] in text
         assert config['artifacts']['runtime_support']['path'] in text
         assert '[Install]\nWantedBy=multi-user.target' in text
+        assert f'WorkingDirectory={config["artifacts"]["app"]["path"]}\n' in text
         assert 'EnvironmentFile=' not in text
         assert 'ExecStop=' not in text
     frontend = (output / 'content-audit-candidate-frontend.service').read_text()
@@ -160,3 +161,9 @@ def test_conventional_venv_interpreter_symlink_keeps_venv_identity(release):
     output = path.parent / 'symlink-python-review'
     render(path, output, 'audit')
     assert str(python) in (output / 'audit-api.service').read_text()
+
+
+@pytest.mark.parametrize('value', ['/opt/space path', '/opt/%n', '/opt/"quoted"', '/opt/path\\name'])
+def test_working_directory_rejects_ambiguous_path_syntax(value):
+    with pytest.raises(InvalidRelease, match='service_working_directory_requires_plain_path'):
+        working_directory(value)

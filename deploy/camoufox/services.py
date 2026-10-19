@@ -37,6 +37,16 @@ def quoted(value, *, command=False):
     return '"' + value + '"'
 
 
+def working_directory(value):
+    # Unlike ExecStart/Environment tokens, older systemd path directives do not
+    # unquote the value. Restrict this renderer to plain deployment paths rather
+    # than guessing at version-specific escaping for literal path characters.
+    value = str(value)
+    require(re.fullmatch(r'/[A-Za-z0-9_./@+-]+', value) is not None,
+            "service_working_directory_requires_plain_path")
+    return value
+
+
 def pinned_config(manifest, expected_sha256=None):
     path = path_value(manifest)
     require(path.is_file(), "service_manifest_missing")
@@ -108,7 +118,7 @@ RestartSec={restart_seconds}
 MemoryMax={memory}
 CPUQuota=200%
 TasksMax=512
-WorkingDirectory={quoted(app)}
+WorkingDirectory={working_directory(app)}
 Environment={quoted('CAMOUFOX_RELEASE_MANIFEST=' + str(manifest))}
 Environment=GIT_OPTIONAL_LOCKS=0
 Environment=PYTHONDONTWRITEBYTECODE=1
