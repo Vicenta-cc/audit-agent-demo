@@ -1280,10 +1280,7 @@ function getPublishedAt(result: AuditResult) {
     stringField(result, "publish_time"),
     stringField(result, "published_at"),
     stringField(result, "created_time"),
-    stringField(result, "time"),
-    result.analyzed_at,
-    result.updated_at,
-    result.created_at
+    stringField(result, "time")
   );
   return direct ? formatDetailDateTime(direct) : "--";
 }
