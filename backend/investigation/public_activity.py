@@ -60,6 +60,15 @@ PUBLIC_TOOL_ACTIVITIES: dict[str, PublicActivitySpec] = {
     "read_conversation_result": PublicActivitySpec(
         "读取历史查询结果", "已读取所选查询结果。"
     ),
+    "query_report_content": PublicActivitySpec(
+        "读取报告内容与证据", "已读取所选报告内容与证据。"
+    ),
+    "query_account_activity": PublicActivitySpec(
+        "查询账号活动记录", "已读取所选账号的活动记录。"
+    ),
+    "read_conversation_delivery": PublicActivitySpec(
+        "读取已展示查询记录", "已读取已展示查询记录。"
+    ),
     "compare_conversation_config": PublicActivitySpec(
         "比较报告规则与关键词", "已比较报告实际使用的规则与关键词。"
     ),
@@ -111,6 +120,9 @@ PUBLIC_TOOL_ACTIVITIES: dict[str, PublicActivitySpec] = {
     ),
     "read_resource": PublicActivitySpec(
         "查询正式审核资源", "已读取正式审核资源。"
+    ),
+    "import_resource": PublicActivitySpec(
+        "导入会话资源", "资源已导入当前会话编辑稿，尚未正式保存。"
     ),
     "create_lexicon_edit": PublicActivitySpec(
         "生成黑话库编辑稿", "黑话库编辑稿已生成，尚未正式保存。"

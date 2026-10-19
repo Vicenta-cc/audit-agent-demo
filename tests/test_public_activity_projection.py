@@ -20,6 +20,7 @@ from backend.investigation_creation.conversation import (
 from backend.investigation_creation.principal import Principal
 from backend.investigation_creation.continuity import INPUTS as CONTINUITY_INPUTS
 from backend.report_collection.tools import DELIVERY_INPUTS as COLLECTION_INPUTS
+from backend.report_collection.tools import EXTRA_INPUTS as COLLECTION_EXTRA_INPUTS
 from backend.investigation_creation.tools import (
     HermesToolExecutionIdentity,
     InvestigationCreationToolService,
@@ -50,11 +51,14 @@ def test_every_product_tool_has_an_explicit_public_activity_mapping():
         str(schema["name"])
         for catalog in catalogs
         for schema in catalog
-    } | set(M3_TOOL_INPUTS) | set(COLLECTION_INPUTS) | set(CONTINUITY_INPUTS) | {'list_completed_reports', 'read_user_manual'}
+    } | set(M3_TOOL_INPUTS) | set(COLLECTION_INPUTS) | set(COLLECTION_EXTRA_INPUTS) | set(CONTINUITY_INPUTS) | {'list_completed_reports', 'read_user_manual'}
     assert set(PUBLIC_TOOL_ACTIVITIES) == expected
 
 
-@pytest.mark.parametrize("tool_name", sorted(set(COLLECTION_INPUTS) | set(CONTINUITY_INPUTS)))
+@pytest.mark.parametrize(
+    "tool_name",
+    sorted(set(COLLECTION_INPUTS) | set(COLLECTION_EXTRA_INPUTS) | set(CONTINUITY_INPUTS) | {"import_resource"}),
+)
 @pytest.mark.parametrize("outcome", ["success", "failure", "interrupted"])
 def test_collection_and_session_activities_survive_history_recovery(
     tmp_path, monkeypatch, tool_name, outcome,
