@@ -20,9 +20,8 @@ import {
   type AnalysisRecord,
   type AnalysisRisk
 } from "./analysisRecords";
-import { getInvestigationWorkspaceState } from "../../services/investigationCreation";
 import { AnalysisBasisDrawer } from "./AnalysisBasisDrawer";
-import { loadM3AnalysisRecords, reportAuditDetailPath, reportPostDetailPath } from "./m3AnalysisRecords";
+import { loadAnalysisRecordRun, loadM3AnalysisRecords, reportAuditDetailPath, reportPostDetailPath } from "./m3AnalysisRecords";
 
 import { loadHistoricalAnalysisRecords } from "./historicalAnalysisRecords";
 
@@ -91,16 +90,9 @@ export function AnalysisRecordsPage() {
           if (current) setInvestigationTitle(result.title);
           return result;
         })
-      : getInvestigationWorkspaceState(investigationId).then((state) => {
-        if (!state.run || state.run.run_id !== authoritativeRunId) {
-          throw new Error("当前调查没有匹配的真实 Run");
-        }
-        const expectedReport = searchParams.get("report") || "";
-        if (expectedReport && state.run.report_version_id !== expectedReport) {
-          throw new Error("Run 与 ReportVersion 引用不一致");
-        }
-        setInvestigationTitle(state.draft_artifact?.draft.title || "当前调查");
-        return loadM3AnalysisRecords(state.run);
+      : loadAnalysisRecordRun(investigationId, authoritativeRunId, searchParams.get("report") || "").then(({ run, title }) => {
+        if (current) setInvestigationTitle(title);
+        return loadM3AnalysisRecords(run);
       });
     void request.then((result) => {
         if (!current) return;
@@ -207,7 +199,8 @@ export function AnalysisRecordsPage() {
         <button
           type="button"
           className="analysis-records-back"
-          onClick={() => navigate(`/investigation/${encodeURIComponent(investigationId)}`, {
+          onClick={() => navigate(investigationId.startsWith("investigation-run:")
+            ? "/investigation" : `/investigation/${encodeURIComponent(investigationId)}`, {
             state: {
               restoreAnalysisProgress: {
                 recordCount: records.length,
@@ -217,7 +210,7 @@ export function AnalysisRecordsPage() {
           })}
         >
           <ArrowLeft size={17} />
-          <span>返回调查报告</span>
+          <span>{investigationId.startsWith("investigation-run:") ? "返回调查工作区" : "返回调查报告"}</span>
         </button>
         <div className="analysis-records-context">
           <span>调查会话</span>

@@ -4,6 +4,7 @@ import {
   fetchReportPresentation
 } from "../../services/reports";
 import type { InvestigationRunProjection } from "../../types/investigationCreation";
+import { getInvestigationRun, getInvestigationWorkspaceState } from "../../services/investigationCreation";
 import type {
   ReportEvidencePresentation,
   ReportPostDetail,
@@ -24,6 +25,31 @@ export interface M3AnalysisCounts {
 
 export interface M3AnalysisRecordsResult extends M3AnalysisCounts {
   records: AnalysisRecord[];
+}
+
+export async function loadAnalysisRecordRun(
+  investigationId: string,
+  runId: string,
+  reportVersionId: string
+): Promise<{ run: InvestigationRunProjection; title: string }> {
+  let run: InvestigationRunProjection | null | undefined;
+  let title = "当前调查";
+  if (investigationId.startsWith("investigation-run:")) {
+    // Existing links used a Run ID as the path's workspace ID. The Run API
+    // enforces ownership; never treat arbitrary workspace failures as Run links.
+    if (investigationId !== runId) throw new Error("调查任务引用不一致");
+    run = await getInvestigationRun(runId);
+  } else {
+    const state = await getInvestigationWorkspaceState(investigationId);
+    const round = state.rounds?.find((item) => item.run?.run_id === runId);
+    run = round?.run || (state.run?.run_id === runId ? state.run : null);
+    title = round?.title || state.draft_artifact?.draft.title || title;
+  }
+  if (!run || run.run_id !== runId) throw new Error("当前调查没有匹配的真实 Run");
+  if (reportVersionId && run.report_version_id !== reportVersionId) {
+    throw new Error("Run 与 ReportVersion 引用不一致");
+  }
+  return { run, title };
 }
 
 export async function loadM3AnalysisRecords(

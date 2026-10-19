@@ -510,7 +510,7 @@ export function InvestigationCenterArea({
                     key={msg.id}
                     phase={msg.runData ? mapInvestigationRunState(msg.runData).phase : session.executionPhase}
                     onPhaseChange={onPhaseChange}
-                    investigationId={msg.runData?.run_id || session.id}
+                    investigationId={session.id}
                     investigationTitle={session.title}
                     taskName={`${msg.roundLabel ? `${msg.roundLabel} · ` : ""}${messageDraft.taskName}`}
                     platformsText={messageDraft.platforms.map(
