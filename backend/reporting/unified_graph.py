@@ -91,16 +91,18 @@ class UnifiedAuditReportGraph(PassReportGraph):
 
     def _build_unified_account_overview(self, state):
         snapshot = self._snapshot(state["report_version_id"])
+        identity = snapshot.statistics.get("source_task_identity")
+        if identity is None:
+            identity = {
+                "creator_account": self.report_source.creator_account_identity(snapshot.task_id),
+                "explicit_creator_target": self.report_source.has_explicit_creator_target(snapshot.task_id),
+            }
         projection = ReportAccountOverviewProjector.from_snapshot(
             snapshot
         ).build(
             snapshot,
-            target_account_identity=self.report_source.creator_account_identity(
-                snapshot.task_id
-            ),
-            require_target=self.report_source.has_explicit_creator_target(
-                snapshot.task_id
-            ),
+            target_account_identity=identity["creator_account"],
+            require_target=identity["explicit_creator_target"],
             allow_unresolved_comment_accounts=True,
         )
         self.store.record_run_event(

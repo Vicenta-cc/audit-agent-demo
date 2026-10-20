@@ -45,12 +45,16 @@ class AccountOverviewReportGraph(AccountEntryReportGraph):
     def _build_report_account_entries(self, state) -> dict[str, Any]:
         snapshot = self._snapshot(state["report_version_id"])
         projector = self.account_projector or ReportAccountOverviewProjector.from_snapshot(snapshot)
+        identity = snapshot.statistics.get("source_task_identity")
+        if identity is None:
+            identity = {
+                "creator_account": self.report_source.creator_account_identity(snapshot.task_id),
+                "explicit_creator_target": self.report_source.has_explicit_creator_target(snapshot.task_id),
+            }
         projection = projector.build(
             snapshot,
-            target_account_identity=self.report_source.creator_account_identity(
-                snapshot.task_id
-            ),
-            require_target=self.report_source.has_explicit_creator_target(snapshot.task_id),
+            target_account_identity=identity["creator_account"],
+            require_target=identity["explicit_creator_target"],
         )
         self.store.record_run_event(
             state["run_id"],

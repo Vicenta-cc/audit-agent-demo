@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from contextlib import closing, contextmanager
+from copy import copy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +13,7 @@ from urllib.parse import unquote, urlparse
 from backend.domain.contracts import SourceFormat, SupportType
 from backend.domain.evidence_adapter import EvidenceAdapter, EvidenceContext
 from backend.domain.identity import make_evidence_id, make_finding_id, stable_hash
+from backend.reporting.sqlite_snapshot import SQLITE_BACKUP_DIGEST, sqlite_snapshot
 from hermes_m0.source_projection import (
     normalize_source_id,
     normalize_source_text,
@@ -47,6 +50,7 @@ def _json(value: str | None, default: Any) -> Any:
 
 
 def source_sha256(path: Path) -> str:
+    """Hash a closed, immutable artifact, never an active SQLite database."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
@@ -122,13 +126,23 @@ class CanonicalReportSource:
             raise FileNotFoundError(self.db_path)
 
     def connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.db_path.as_uri() + "?mode=ro", uri=True)
+        query = "?mode=ro&immutable=1" if getattr(self, "_frozen_database", False) else "?mode=ro"
+        connection = sqlite3.connect(self.db_path.as_uri() + query, uri=True)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA query_only=ON")
         return connection
 
+    @contextmanager
+    def frozen_database(self):
+        """Preserve source-specific projections while pinning database reads."""
+        with sqlite_snapshot(self.db_path) as (path, digest):
+            frozen = copy(self)
+            frozen.db_path = path
+            frozen._frozen_database = True
+            yield frozen, digest
+
     def task_name(self, task_id: str) -> str:
-        with self.connect() as connection:
+        with closing(self.connect()) as connection:
             row = connection.execute(
                 "SELECT display_name FROM jobs WHERE id = ? AND archived = 0", (task_id,)
             ).fetchone()
@@ -138,7 +152,7 @@ class CanonicalReportSource:
 
     def has_explicit_creator_target(self, task_id: str) -> bool:
         """Return whether the frozen task was configured around a creator target."""
-        with self.connect() as connection:
+        with closing(self.connect()) as connection:
             row = connection.execute(
                 """
                 SELECT crawl_mode, creator_url, creator_id
@@ -154,7 +168,7 @@ class CanonicalReportSource:
 
     def creator_account_identity(self, task_id: str) -> dict[str, str] | None:
         """Resolve a creator task's configured stable Account identity."""
-        with self.connect() as connection:
+        with closing(self.connect()) as connection:
             row = connection.execute(
                 """
                 SELECT platform, crawl_mode, creator_url, creator_id
@@ -202,7 +216,7 @@ class CanonicalReportSource:
         }
 
     def config(self, task_id: str) -> dict[str, Any]:
-        with self.connect() as connection:
+        with closing(self.connect()) as connection:
             row = connection.execute(
                 "SELECT * FROM task_audit_config_revisions WHERE job_id = ? ORDER BY version DESC LIMIT 1",
                 (task_id,),
@@ -230,7 +244,7 @@ class CanonicalReportSource:
         WHERE ar.job_id = ?
         ORDER BY ar.id
         """
-        with self.connect() as connection:
+        with closing(self.connect()) as connection:
             rows = list(connection.execute(query, (task_id,)))
         keys = [str(row["content_key"] or row["content_id"] or row["id"]) for row in rows]
         if len(keys) != len(set(keys)):
@@ -241,7 +255,7 @@ class CanonicalReportSource:
         """Freeze the source Job's delivered selection, independently of risk totals."""
         from backend.audit_agent.geographic_delivery import delivery_basis_from_connection
         source_job_id = str(row["job_id"])
-        with self.connect() as connection:
+        with closing(self.connect()) as connection:
             job = connection.execute("SELECT control FROM jobs WHERE id=?", (source_job_id,)).fetchone()
             control = json.loads(job["control"] or "{}") if job else {}
             summary = control.get("geographic_selection")
@@ -265,7 +279,7 @@ class CanonicalReportSource:
 
     def coverage(self, task_id: str) -> dict[str, Any]:
         """Return public, sanitized coverage for completed and failed posts."""
-        with self.connect() as connection:
+        with closing(self.connect()) as connection:
             job = connection.execute("SELECT control FROM jobs WHERE id=?", (task_id,)).fetchone()
             control = json.loads(job["control"] or "{}") if job else {}
             rows = list(
@@ -398,6 +412,15 @@ class CanonicalReportSource:
 def build_immutable_snapshot(
     source: CanonicalReportSource,
     task_id: str = TASK_ID,
+) -> ImmutableReportSnapshot:
+    with source.frozen_database() as (frozen, digest):
+        return _build_immutable_snapshot(frozen, task_id, digest)
+
+
+def _build_immutable_snapshot(
+    source: CanonicalReportSource,
+    task_id: str,
+    source_digest: str,
 ) -> ImmutableReportSnapshot:
     rows = source.canonical_rows(task_id)
     if not rows:
@@ -637,6 +660,11 @@ def build_immutable_snapshot(
         decisions[finding.payload["decision"]] = decisions.get(finding.payload["decision"], 0) + 1
         risk_levels[finding.payload["risk_level"]] = risk_levels.get(finding.payload["risk_level"], 0) + 1
     statistics = {
+        "source_db_digest_kind": SQLITE_BACKUP_DIGEST,
+        "source_task_identity": {
+            "explicit_creator_target": source.has_explicit_creator_target(task_id),
+            "creator_account": source.creator_account_identity(task_id),
+        },
         "canonical_posts": len(posts),
         "findings": len(findings),
         "direct_evidence": len(evidences),
@@ -662,7 +690,9 @@ def build_immutable_snapshot(
     snapshot_body = {
         "task_id": task_id,
         "display_name": source.task_name(task_id),
-        "source_db_sha256": source_sha256(source.db_path),
+        "source_db_sha256": source_digest,
+        "source_db_digest_kind": SQLITE_BACKUP_DIGEST,
+        "source_task_identity_hash": stable_hash(statistics["source_task_identity"]),
         "source_revision": stable_hash([(item.ref, item.revision, item.payload_hash) for item in posts]),
         "audit_config_revision_id": config["id"],
         "posts": [item.payload_hash for item in posts],

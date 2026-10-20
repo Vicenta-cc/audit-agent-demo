@@ -980,6 +980,10 @@ class ReportStore:
             "evidence": [item.payload_hash for item in evidence],
             "relations": relation_hash,
         }
+        if statistics.get("source_db_digest_kind"):
+            snapshot_body["source_db_digest_kind"] = statistics["source_db_digest_kind"]
+        if "source_task_identity" in statistics:
+            snapshot_body["source_task_identity_hash"] = stable_hash(statistics["source_task_identity"])
         if statistics.get("source_configuration"):
             snapshot_body["source_configuration_hash"] = stable_hash(statistics["source_configuration"])
         if statistics.get("geographic_coverage"):

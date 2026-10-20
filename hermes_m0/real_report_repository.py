@@ -732,6 +732,10 @@ def _load_report_graph(
         "relations": relation_hash,
     }
     frozen_statistics = _json_object(manifest["statistics_json"], "Snapshot statistics")
+    if frozen_statistics.get("source_db_digest_kind"):
+        snapshot_body["source_db_digest_kind"] = frozen_statistics["source_db_digest_kind"]
+    if "source_task_identity" in frozen_statistics:
+        snapshot_body["source_task_identity_hash"] = _stable_hash(frozen_statistics["source_task_identity"])
     task_configuration = _project_task_configuration(
         frozen_statistics.get("source_configuration"),
         configuration_revision_id=str(manifest["configuration_revision_id"] or ""),

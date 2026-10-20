@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
+import subprocess
+import sys
 from typing import Any
 from uuid import uuid4
 
@@ -14,12 +17,77 @@ from backend.reporting.account_overview import (
     public_account_overview_projection,
 )
 from backend.reporting.errors import ReportGenerationError, ReportValidationError
-from backend.reporting.integration_source import CanonicalReportSource, source_sha256
+from backend.reporting.integration_source import CanonicalReportSource, build_immutable_snapshot
+from backend.reporting.sqlite_snapshot import SQLITE_BACKUP_DIGEST
 from backend.reporting.r31_graph import AccountOverviewReportGraph
 from backend.reporting.store import ReportStore
 
 
 CORRECTION_KIND = "report-r3.1-target-account-role-correction/v1"
+
+
+def _legacy_source_digest(path: Path) -> str:
+    """Keep the historical byte-hash contract outside the SQLite-owning process.
+
+    Only legacy report correction uses this compatibility path. New reports
+    always hash a SQLite backup and validate their own frozen task inputs.
+    """
+    result = subprocess.run(
+        [sys.executable, "-I", "-c",
+         "import hashlib,sys\n"
+         "digest=hashlib.sha256()\n"
+         "with open(sys.argv[1], 'rb') as handle:\n"
+         "    for block in iter(lambda: handle.read(1024*1024), b''):\n"
+         "        digest.update(block)\n"
+         "print(digest.hexdigest())\n",
+         str(path)],
+        check=True, capture_output=True, text=True, timeout=30, close_fds=True,
+    )
+    return result.stdout.strip()
+
+
+def _validated_target_identity(report_source, snapshot):
+    """Validate correction inputs before creating any new ReportVersion."""
+    kind = snapshot.statistics.get("source_db_digest_kind")
+    if kind == SQLITE_BACKUP_DIGEST:
+        current = build_immutable_snapshot(report_source, snapshot.task_id)
+        # Other tasks and report persistence legitimately change the database
+        # image. Every report-scoped field, including config and target identity,
+        # must still match the original frozen input.
+        comparable = replace(
+            current, snapshot_ref=snapshot.snapshot_ref,
+            source_db_sha256=snapshot.source_db_sha256,
+            snapshot_hash=snapshot.snapshot_hash,
+        )
+        if comparable != snapshot:
+            raise ReportValidationError(
+                "correct_target_account_role",
+                ["the task source data or configuration differs from the frozen Report"],
+            )
+        return current.statistics["source_task_identity"]["creator_account"]
+    if kind is not None:
+        raise ReportValidationError(
+            "correct_target_account_role", ["unsupported source database digest kind"],
+        )
+
+    # Never reinterpret a historical raw-file hash as a backup-file hash.
+    if _legacy_source_digest(report_source.db_path) != snapshot.source_db_sha256:
+        raise ReportValidationError(
+            "correct_target_account_role",
+            ["the live task configuration database differs from the frozen source"],
+        )
+    with report_source.frozen_database() as (frozen, _):
+        if frozen.task_name(snapshot.task_id) != snapshot.display_name:
+            raise ReportValidationError(
+                "correct_target_account_role",
+                ["the task configuration does not match the frozen Report task"],
+            )
+        identity = frozen.creator_account_identity(snapshot.task_id)
+    if _legacy_source_digest(report_source.db_path) != snapshot.source_db_sha256:
+        raise ReportValidationError(
+            "correct_target_account_role", ["the legacy source changed during validation"],
+        )
+    return identity
 
 
 def _clone_snapshot(
@@ -192,15 +260,13 @@ def publish_target_account_role_correction(
     if source_report is None or source_report.get("status") != "published":
         raise ReportGenerationError("source ReportVersion is not published")
     snapshot = store.load_immutable_snapshot(source_report_version_id)
-    if source_sha256(report_source.db_path) != snapshot.source_db_sha256:
-        raise ReportValidationError(
-            "correct_target_account_role",
-            ["the live task configuration database differs from the frozen source"],
-        )
-    if report_source.task_name(snapshot.task_id) != snapshot.display_name:
-        raise ReportValidationError(
-            "correct_target_account_role",
-            ["the task configuration does not match the frozen Report task"],
+    target_identity = _validated_target_identity(report_source, snapshot)
+    # This legacy R3.1 operation requires reusable model steps. Check before
+    # creating a version so unsupported deterministic reports leave no debris.
+    source_steps = store.list_model_steps(source_report_version_id)
+    if not source_steps or any(item["status"] != "succeeded" for item in source_steps):
+        raise ReportGenerationError(
+            "source ReportVersion does not have a complete successful model-step set"
         )
 
     generation = store.create_generation(
@@ -238,9 +304,7 @@ def publish_target_account_role_correction(
     )
     projection = ReportAccountOverviewProjector.load(account_fixture_path).build(
         corrected_snapshot,
-        target_account_identity=report_source.creator_account_identity(
-            corrected_snapshot.task_id
-        ),
+        target_account_identity=target_identity,
     )
     public_projection = public_account_overview_projection(projection)
 
