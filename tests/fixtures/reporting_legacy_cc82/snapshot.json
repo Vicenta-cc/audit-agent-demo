@@ -1,0 +1,698 @@
+{
+  "snapshot_ref": "snapshot-aa22a919329b7ee0",
+  "task_id": "new-search-task",
+  "display_name": "单条帖子审核演示",
+  "source_db_sha256": "10efaa2eaaa24b4cef4192ad0ab78a90c0ccb02bf9e80364c2c098a8b31c950f",
+  "source_revision": "e1ae8a0a6264540433d349798e42e47b97e943b6cd75ac8b52c7d0ec8e4c06f8",
+  "audit_config_revision_id": "cbf9584a84f5",
+  "posts": [
+    {
+      "ref": "post:10001",
+      "canonical_key": "10001",
+      "revision": "2026-10-20T17:27:48",
+      "payload": {
+        "canonical_key": "10001",
+        "revision": "2026-10-20T17:27:48",
+        "platform": "dy",
+        "source_title": "日常分享 1",
+        "display_title": "合成审核样本",
+        "display_title_source": "audit_generated",
+        "title": "合成审核样本",
+        "published_at": "2026-09-08T00:00:00Z",
+        "captured_at": "2026-10-20T17:27:48Z",
+        "analyzed_at": "2026-10-20T17:27:48Z",
+        "caption": "今天去公园散步，记录日常生活。",
+        "url": "https://www.douyin.com/video/10001",
+        "author": "生活记录者",
+        "author_display": {
+          "nickname": "生活记录者",
+          "platform": "dy"
+        },
+        "source_content": {
+          "title": "日常分享 1",
+          "title_zh": "",
+          "desc": "今天去公园散步，记录日常生活。",
+          "desc_zh": "",
+          "video_results": [
+            {
+              "transcript": {
+                "text": "A walk in the park.",
+                "text_zh": "在公园散步。",
+                "asr_raw_rel": "private/transcript.json",
+                "provider": "internal-provider"
+              }
+            }
+          ]
+        },
+        "raw_content_payload": {
+          "title": "日常分享 1",
+          "desc": "今天去公园散步，记录日常生活。",
+          "url": "https://www.douyin.com/video/10001",
+          "author": {
+            "nickname": "生活记录者",
+            "sec_uid": "stable-author"
+          },
+          "decision": "pass",
+          "risk_level": "none",
+          "summary": "内容为日常生活分享，未检出本次规则覆盖的风险。",
+          "comments": [],
+          "evidence_items": [
+            {
+              "evidence_id": "ocr-review",
+              "primary_modality": "ocr",
+              "source": "video:1/frame:review",
+              "ocr_text": "相关内容需要复核"
+            }
+          ],
+          "video_results": [
+            {
+              "transcript": {
+                "text": "A walk in the park.",
+                "text_zh": "在公园散步。",
+                "asr_raw_rel": "private/transcript.json",
+                "provider": "internal-provider"
+              }
+            }
+          ],
+          "content_title": "合成审核样本"
+        },
+        "comments": []
+      },
+      "payload_hash": "aab9c960db169a64def4451ffc78497a3a60ca81eee3298fea1063892974f463"
+    },
+    {
+      "ref": "post:10002",
+      "canonical_key": "10002",
+      "revision": "2026-10-20T17:27:48",
+      "payload": {
+        "canonical_key": "10002",
+        "revision": "2026-10-20T17:27:48",
+        "platform": "dy",
+        "source_title": "日常分享 2",
+        "display_title": "合成审核样本",
+        "display_title_source": "audit_generated",
+        "title": "合成审核样本",
+        "published_at": "2026-09-08T00:00:00Z",
+        "captured_at": "2026-10-20T17:27:48Z",
+        "analyzed_at": "2026-10-20T17:27:48Z",
+        "caption": "今天去公园散步，记录日常生活。",
+        "url": "https://www.douyin.com/video/10002",
+        "author": "生活记录者",
+        "author_display": {
+          "nickname": "生活记录者",
+          "platform": "dy"
+        },
+        "source_content": {
+          "title": "日常分享 2",
+          "title_zh": "",
+          "desc": "今天去公园散步，记录日常生活。",
+          "desc_zh": "",
+          "video_results": [
+            {
+              "transcript": {
+                "text": "A walk in the park.",
+                "text_zh": "在公园散步。",
+                "asr_raw_rel": "private/transcript.json",
+                "provider": "internal-provider"
+              }
+            }
+          ]
+        },
+        "raw_content_payload": {
+          "title": "日常分享 2",
+          "desc": "今天去公园散步，记录日常生活。",
+          "url": "https://www.douyin.com/video/10002",
+          "author": {
+            "nickname": "生活记录者",
+            "sec_uid": "stable-author"
+          },
+          "decision": "review",
+          "risk_level": "low",
+          "summary": "该帖审核决定为 review，风险等级为 low。",
+          "comments": [],
+          "evidence_items": [
+            {
+              "evidence_id": "ocr-review",
+              "primary_modality": "ocr",
+              "source": "video:1/frame:review",
+              "ocr_text": "相关内容需要复核"
+            }
+          ],
+          "video_results": [
+            {
+              "transcript": {
+                "text": "A walk in the park.",
+                "text_zh": "在公园散步。",
+                "asr_raw_rel": "private/transcript.json",
+                "provider": "internal-provider"
+              }
+            }
+          ],
+          "content_title": "合成审核样本"
+        },
+        "comments": []
+      },
+      "payload_hash": "f37fd7c05f786be82ef73cc1a16e5717ca9cf3d1e5bb2a582e109835a1b1b678"
+    },
+    {
+      "ref": "post:10003",
+      "canonical_key": "10003",
+      "revision": "2026-10-20T17:27:48",
+      "payload": {
+        "canonical_key": "10003",
+        "revision": "2026-10-20T17:27:48",
+        "platform": "dy",
+        "source_title": "日常分享 3",
+        "display_title": "合成审核样本",
+        "display_title_source": "audit_generated",
+        "title": "合成审核样本",
+        "published_at": "2026-09-08T00:00:00Z",
+        "captured_at": "2026-10-20T17:27:48Z",
+        "analyzed_at": "2026-10-20T17:27:48Z",
+        "caption": "今天去公园散步，记录日常生活。",
+        "url": "https://www.douyin.com/video/10003",
+        "author": "生活记录者",
+        "author_display": {
+          "nickname": "生活记录者",
+          "platform": "dy"
+        },
+        "source_content": {
+          "title": "日常分享 3",
+          "title_zh": "",
+          "desc": "今天去公园散步，记录日常生活。",
+          "desc_zh": "",
+          "video_results": [
+            {
+              "transcript": {
+                "text": "A walk in the park.",
+                "text_zh": "在公园散步。",
+                "asr_raw_rel": "private/transcript.json",
+                "provider": "internal-provider"
+              }
+            }
+          ]
+        },
+        "raw_content_payload": {
+          "title": "日常分享 3",
+          "desc": "今天去公园散步，记录日常生活。",
+          "url": "https://www.douyin.com/video/10003",
+          "author": {
+            "nickname": "生活记录者",
+            "sec_uid": "stable-author"
+          },
+          "decision": "review",
+          "risk_level": "medium",
+          "summary": "该帖审核决定为 review，风险等级为 medium。",
+          "comments": [],
+          "evidence_items": [
+            {
+              "evidence_id": "ocr-review",
+              "primary_modality": "ocr",
+              "source": "video:1/frame:review",
+              "ocr_text": "相关内容需要复核"
+            }
+          ],
+          "video_results": [
+            {
+              "transcript": {
+                "text": "A walk in the park.",
+                "text_zh": "在公园散步。",
+                "asr_raw_rel": "private/transcript.json",
+                "provider": "internal-provider"
+              }
+            }
+          ],
+          "content_title": "合成审核样本"
+        },
+        "comments": []
+      },
+      "payload_hash": "8b5b8f07436ab8f0e59988582259661ed2716f133c5f31987bf8932f1d04b3e7"
+    },
+    {
+      "ref": "post:10004",
+      "canonical_key": "10004",
+      "revision": "2026-10-20T17:27:48",
+      "payload": {
+        "canonical_key": "10004",
+        "revision": "2026-10-20T17:27:48",
+        "platform": "dy",
+        "source_title": "日常分享 4",
+        "display_title": "合成审核样本",
+        "display_title_source": "audit_generated",
+        "title": "合成审核样本",
+        "published_at": "2026-09-08T00:00:00Z",
+        "captured_at": "2026-10-20T17:27:48Z",
+        "analyzed_at": "2026-10-20T17:27:48Z",
+        "caption": "今天去公园散步，记录日常生活。",
+        "url": "https://www.douyin.com/video/10004",
+        "author": "生活记录者",
+        "author_display": {
+          "nickname": "生活记录者",
+          "platform": "dy"
+        },
+        "source_content": {
+          "title": "日常分享 4",
+          "title_zh": "",
+          "desc": "今天去公园散步，记录日常生活。",
+          "desc_zh": "",
+          "video_results": [
+            {
+              "transcript": {
+                "text": "A walk in the park.",
+                "text_zh": "在公园散步。",
+                "asr_raw_rel": "private/transcript.json",
+                "provider": "internal-provider"
+              }
+            }
+          ]
+        },
+        "raw_content_payload": {
+          "title": "日常分享 4",
+          "desc": "今天去公园散步，记录日常生活。",
+          "url": "https://www.douyin.com/video/10004",
+          "author": {
+            "nickname": "生活记录者",
+            "sec_uid": "stable-author"
+          },
+          "decision": "review",
+          "risk_level": "high",
+          "summary": "该帖审核决定为 review，风险等级为 high。",
+          "comments": [],
+          "evidence_items": [
+            {
+              "evidence_id": "ocr-review",
+              "primary_modality": "ocr",
+              "source": "video:1/frame:review",
+              "ocr_text": "相关内容需要复核"
+            }
+          ],
+          "video_results": [
+            {
+              "transcript": {
+                "text": "A walk in the park.",
+                "text_zh": "在公园散步。",
+                "asr_raw_rel": "private/transcript.json",
+                "provider": "internal-provider"
+              }
+            }
+          ],
+          "content_title": "合成审核样本"
+        },
+        "comments": []
+      },
+      "payload_hash": "47ac451a9f5b329cddd40ada33503455e4cd7ecfe2a3e6ad890c18222be161ce"
+    }
+  ],
+  "findings": [
+    {
+      "ref": "finding:audit_result:1",
+      "audit_result_id": 1,
+      "post_ref": "post:10001",
+      "payload": {
+        "audit_result_id": 1,
+        "decision": "pass",
+        "risk_level": "none",
+        "risk_score": null,
+        "categories": [],
+        "summary": "内容为日常生活分享，未检出本次规则覆盖的风险。",
+        "risk_basis": "",
+        "primary_risk": "",
+        "completed_at": "2026-10-20T17:27:48",
+        "audit_config_revision_id": "cbf9584a84f5",
+        "review_status": "",
+        "review_note": "",
+        "content_key": "10001",
+        "content_id": 1,
+        "source_platform": "dy",
+        "content_url": "https://www.douyin.com/video/10001",
+        "author": "生活记录者",
+        "raw_effective_result": {
+          "title": "日常分享 1",
+          "desc": "今天去公园散步，记录日常生活。",
+          "url": "https://www.douyin.com/video/10001",
+          "author": {
+            "nickname": "生活记录者",
+            "sec_uid": "stable-author"
+          },
+          "decision": "pass",
+          "risk_level": "none",
+          "summary": "内容为日常生活分享，未检出本次规则覆盖的风险。",
+          "comments": [],
+          "evidence_items": [
+            {
+              "evidence_id": "ocr-review",
+              "primary_modality": "ocr",
+              "source": "video:1/frame:review",
+              "ocr_text": "相关内容需要复核"
+            }
+          ],
+          "video_results": [
+            {
+              "transcript": {
+                "text": "A walk in the park.",
+                "text_zh": "在公园散步。",
+                "asr_raw_rel": "private/transcript.json",
+                "provider": "internal-provider"
+              }
+            }
+          ],
+          "content_title": "合成审核样本"
+        }
+      },
+      "payload_hash": "a4c478d08935b79b028de3a542aaf8554ea367582a2405af4c9ef206489be4c6"
+    },
+    {
+      "ref": "finding:audit_result:2",
+      "audit_result_id": 2,
+      "post_ref": "post:10002",
+      "payload": {
+        "audit_result_id": 2,
+        "decision": "review",
+        "risk_level": "low",
+        "risk_score": null,
+        "categories": [],
+        "summary": "该帖审核决定为 review，风险等级为 low。",
+        "risk_basis": "",
+        "primary_risk": "",
+        "completed_at": "2026-10-20T17:27:48",
+        "audit_config_revision_id": "cbf9584a84f5",
+        "review_status": "",
+        "review_note": "",
+        "content_key": "10002",
+        "content_id": 2,
+        "source_platform": "dy",
+        "content_url": "https://www.douyin.com/video/10002",
+        "author": "生活记录者",
+        "raw_effective_result": {
+          "title": "日常分享 2",
+          "desc": "今天去公园散步，记录日常生活。",
+          "url": "https://www.douyin.com/video/10002",
+          "author": {
+            "nickname": "生活记录者",
+            "sec_uid": "stable-author"
+          },
+          "decision": "review",
+          "risk_level": "low",
+          "summary": "该帖审核决定为 review，风险等级为 low。",
+          "comments": [],
+          "evidence_items": [
+            {
+              "evidence_id": "ocr-review",
+              "primary_modality": "ocr",
+              "source": "video:1/frame:review",
+              "ocr_text": "相关内容需要复核"
+            }
+          ],
+          "video_results": [
+            {
+              "transcript": {
+                "text": "A walk in the park.",
+                "text_zh": "在公园散步。",
+                "asr_raw_rel": "private/transcript.json",
+                "provider": "internal-provider"
+              }
+            }
+          ],
+          "content_title": "合成审核样本"
+        }
+      },
+      "payload_hash": "3735e7fbe9293c0979226c7f9b844bafa851eb1cdc09f264211730b5a4659eb1"
+    },
+    {
+      "ref": "finding:audit_result:3",
+      "audit_result_id": 3,
+      "post_ref": "post:10003",
+      "payload": {
+        "audit_result_id": 3,
+        "decision": "review",
+        "risk_level": "medium",
+        "risk_score": null,
+        "categories": [],
+        "summary": "该帖审核决定为 review，风险等级为 medium。",
+        "risk_basis": "",
+        "primary_risk": "",
+        "completed_at": "2026-10-20T17:27:48",
+        "audit_config_revision_id": "cbf9584a84f5",
+        "review_status": "",
+        "review_note": "",
+        "content_key": "10003",
+        "content_id": 3,
+        "source_platform": "dy",
+        "content_url": "https://www.douyin.com/video/10003",
+        "author": "生活记录者",
+        "raw_effective_result": {
+          "title": "日常分享 3",
+          "desc": "今天去公园散步，记录日常生活。",
+          "url": "https://www.douyin.com/video/10003",
+          "author": {
+            "nickname": "生活记录者",
+            "sec_uid": "stable-author"
+          },
+          "decision": "review",
+          "risk_level": "medium",
+          "summary": "该帖审核决定为 review，风险等级为 medium。",
+          "comments": [],
+          "evidence_items": [
+            {
+              "evidence_id": "ocr-review",
+              "primary_modality": "ocr",
+              "source": "video:1/frame:review",
+              "ocr_text": "相关内容需要复核"
+            }
+          ],
+          "video_results": [
+            {
+              "transcript": {
+                "text": "A walk in the park.",
+                "text_zh": "在公园散步。",
+                "asr_raw_rel": "private/transcript.json",
+                "provider": "internal-provider"
+              }
+            }
+          ],
+          "content_title": "合成审核样本"
+        }
+      },
+      "payload_hash": "d960f031966b2ae190fac74a2508ca3968903d29fdace4536428c4119882a8f6"
+    },
+    {
+      "ref": "finding:audit_result:4",
+      "audit_result_id": 4,
+      "post_ref": "post:10004",
+      "payload": {
+        "audit_result_id": 4,
+        "decision": "review",
+        "risk_level": "high",
+        "risk_score": null,
+        "categories": [],
+        "summary": "该帖审核决定为 review，风险等级为 high。",
+        "risk_basis": "",
+        "primary_risk": "",
+        "completed_at": "2026-10-20T17:27:48",
+        "audit_config_revision_id": "cbf9584a84f5",
+        "review_status": "",
+        "review_note": "",
+        "content_key": "10004",
+        "content_id": 4,
+        "source_platform": "dy",
+        "content_url": "https://www.douyin.com/video/10004",
+        "author": "生活记录者",
+        "raw_effective_result": {
+          "title": "日常分享 4",
+          "desc": "今天去公园散步，记录日常生活。",
+          "url": "https://www.douyin.com/video/10004",
+          "author": {
+            "nickname": "生活记录者",
+            "sec_uid": "stable-author"
+          },
+          "decision": "review",
+          "risk_level": "high",
+          "summary": "该帖审核决定为 review，风险等级为 high。",
+          "comments": [],
+          "evidence_items": [
+            {
+              "evidence_id": "ocr-review",
+              "primary_modality": "ocr",
+              "source": "video:1/frame:review",
+              "ocr_text": "相关内容需要复核"
+            }
+          ],
+          "video_results": [
+            {
+              "transcript": {
+                "text": "A walk in the park.",
+                "text_zh": "在公园散步。",
+                "asr_raw_rel": "private/transcript.json",
+                "provider": "internal-provider"
+              }
+            }
+          ],
+          "content_title": "合成审核样本"
+        }
+      },
+      "payload_hash": "75999a63f63e6587b6a34e27550cb7d6e0a41c0c064d2879aba3d7de3fed30de"
+    }
+  ],
+  "evidence": [
+    {
+      "ref": "evidence:audit_result:1:ocr-review",
+      "audit_result_id": 1,
+      "post_ref": "post:10001",
+      "finding_ref": "finding:audit_result:1",
+      "support_type": "direct",
+      "source_formats": [
+        "evidence_items"
+      ],
+      "payload": {
+        "evidence_id": "evidence:audit_result:1:ocr-review",
+        "local_evidence_id": "ocr-review",
+        "evidence_type": "ocr",
+        "original_text": "相关内容需要复核",
+        "translated_text": "",
+        "timestamp_start": null,
+        "timestamp_end": null,
+        "summary": "",
+        "reason": "",
+        "source_json_path": "/evidence_items/0",
+        "asset_path": "",
+        "source_formats": [
+          "evidence_items"
+        ],
+        "audit_result_id": 1,
+        "content_id": 1,
+        "support_type": "direct"
+      },
+      "payload_hash": "1995c0a70342189d3db3c7c69092593ce90fea4a83eb682beb2f644976015320"
+    },
+    {
+      "ref": "evidence:audit_result:2:ocr-review",
+      "audit_result_id": 2,
+      "post_ref": "post:10002",
+      "finding_ref": "finding:audit_result:2",
+      "support_type": "direct",
+      "source_formats": [
+        "evidence_items"
+      ],
+      "payload": {
+        "evidence_id": "evidence:audit_result:2:ocr-review",
+        "local_evidence_id": "ocr-review",
+        "evidence_type": "ocr",
+        "original_text": "相关内容需要复核",
+        "translated_text": "",
+        "timestamp_start": null,
+        "timestamp_end": null,
+        "summary": "",
+        "reason": "",
+        "source_json_path": "/evidence_items/0",
+        "asset_path": "",
+        "source_formats": [
+          "evidence_items"
+        ],
+        "audit_result_id": 2,
+        "content_id": 2,
+        "support_type": "direct"
+      },
+      "payload_hash": "ba71c4ce62ed3780d85a331962ba82214929d75709412cf98fa8e504c2ae933c"
+    },
+    {
+      "ref": "evidence:audit_result:3:ocr-review",
+      "audit_result_id": 3,
+      "post_ref": "post:10003",
+      "finding_ref": "finding:audit_result:3",
+      "support_type": "direct",
+      "source_formats": [
+        "evidence_items"
+      ],
+      "payload": {
+        "evidence_id": "evidence:audit_result:3:ocr-review",
+        "local_evidence_id": "ocr-review",
+        "evidence_type": "ocr",
+        "original_text": "相关内容需要复核",
+        "translated_text": "",
+        "timestamp_start": null,
+        "timestamp_end": null,
+        "summary": "",
+        "reason": "",
+        "source_json_path": "/evidence_items/0",
+        "asset_path": "",
+        "source_formats": [
+          "evidence_items"
+        ],
+        "audit_result_id": 3,
+        "content_id": 3,
+        "support_type": "direct"
+      },
+      "payload_hash": "d991086eb9a43a1c8ced21ad3e34b8b94b704ae3eb64e8c81535d6759cffb9f1"
+    },
+    {
+      "ref": "evidence:audit_result:4:ocr-review",
+      "audit_result_id": 4,
+      "post_ref": "post:10004",
+      "finding_ref": "finding:audit_result:4",
+      "support_type": "direct",
+      "source_formats": [
+        "evidence_items"
+      ],
+      "payload": {
+        "evidence_id": "evidence:audit_result:4:ocr-review",
+        "local_evidence_id": "ocr-review",
+        "evidence_type": "ocr",
+        "original_text": "相关内容需要复核",
+        "translated_text": "",
+        "timestamp_start": null,
+        "timestamp_end": null,
+        "summary": "",
+        "reason": "",
+        "source_json_path": "/evidence_items/0",
+        "asset_path": "",
+        "source_formats": [
+          "evidence_items"
+        ],
+        "audit_result_id": 4,
+        "content_id": 4,
+        "support_type": "direct"
+      },
+      "payload_hash": "29a2fc0e812b88a2b3aa5d55b65cc4eb686caba5b5aa4dbb110b1155999e2994"
+    }
+  ],
+  "relation_hash": "1d9c56202bbf569458fe3b956269f8b26318305d2108034b7e0466fee0efffa0",
+  "snapshot_hash": "aa22a919329b7ee048dd833f3158a53b5c552fcd324c23642d5a240cf21968aa",
+  "statistics": {
+    "canonical_posts": 4,
+    "findings": 4,
+    "direct_evidence": 4,
+    "direct_legacy_risk_image": 0,
+    "indirect_evidence": 0,
+    "counter_evidence": 0,
+    "decision": {
+      "pass": 1,
+      "review": 3
+    },
+    "risk_level": {
+      "high": 1,
+      "low": 1,
+      "medium": 1,
+      "none": 1
+    },
+    "manual_corrections": 0,
+    "source_coverage": {
+      "collection_incomplete": false,
+      "skipped_keywords": [],
+      "candidate_posts": 4,
+      "selected_posts": 4,
+      "excluded_failed_posts": []
+    },
+    "source_configuration": {
+      "id": "cbf9584a84f5",
+      "version": 1,
+      "config_hash": "",
+      "audit_config": {
+        "capabilities": [
+          "text"
+        ]
+      },
+      "rule_snapshot": {},
+      "prompt_profile_snapshot": {}
+    }
+  }
+}

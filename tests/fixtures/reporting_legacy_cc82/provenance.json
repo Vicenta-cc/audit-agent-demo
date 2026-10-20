@@ -1,0 +1,8 @@
+{
+  "synthetic": true,
+  "builder_commit": "cc82d62d9595f2908ac5e5a13e5895d64cccec23",
+  "builder_path": "backend/reporting/integration_source.py",
+  "source_sha256": "10efaa2eaaa24b4cef4192ad0ab78a90c0ccb02bf9e80364c2c098a8b31c950f",
+  "snapshot_hash": "aa22a919329b7ee048dd833f3158a53b5c552fcd324c23642d5a240cf21968aa",
+  "note": "Historical build_immutable_snapshot executed unmodified in isolated Python process against synthetic data. Source DB is standalone DELETE journal image; no production records."
+}
