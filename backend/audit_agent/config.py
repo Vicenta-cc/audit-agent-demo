@@ -243,6 +243,13 @@ class Settings:
     remote_ocr_base_url = os.getenv("REMOTE_OCR_BASE_URL", remote_inference_base_url).rstrip("/")
     remote_inference_api_key = os.getenv("REMOTE_INFERENCE_API_KEY", "")
     inference_api_key = os.getenv("INFERENCE_API_KEY", remote_inference_api_key)
+    xfyun_app_id = os.getenv("XFYUN_APP_ID", "").strip()
+    xfyun_api_key = os.getenv("XFYUN_API_KEY", "").strip()
+    xfyun_api_secret = os.getenv("XFYUN_API_SECRET", "").strip()
+    xfyun_ws_url = os.getenv(
+        "XFYUN_WS_URL", "wss://iat.cn-huabei-1.xf-yun.com/v1"
+    ).strip()
+    xfyun_proxy_url = os.getenv("XFYUN_PROXY_URL", "").strip()
     use_remote_asr = os.getenv("USE_REMOTE_ASR", os.getenv("USE_REMOTE_WHISPER", "false")).lower() == "true"
     use_remote_whisper = use_remote_asr
     use_remote_mms_asr = os.getenv("USE_REMOTE_MMS_ASR", "false").lower() == "true"

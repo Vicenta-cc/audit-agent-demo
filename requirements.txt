@@ -3,6 +3,7 @@ uvicorn==0.29.0
 python-dotenv==1.2.2
 python-multipart>=0.0.9
 requests==2.33.0
+websockets==15.0.1
 pydantic==2.13.4
 langgraph==1.2.10
 langgraph-checkpoint-sqlite==3.1.1

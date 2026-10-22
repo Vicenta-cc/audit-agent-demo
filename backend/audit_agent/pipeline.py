@@ -3667,7 +3667,14 @@ class AuditPipeline:
     @staticmethod
     def _validate_authoritative_asr_configuration() -> None:
         errors: list[str] = []
-        if settings.use_remote_asr:
+        if settings.asr_engine == "xfyun":
+            if not str(settings.xfyun_app_id or "").strip():
+                errors.append("XFYUN_APP_ID")
+            if not str(settings.xfyun_api_key or "").strip():
+                errors.append("XFYUN_API_KEY")
+            if not str(settings.xfyun_api_secret or "").strip():
+                errors.append("XFYUN_API_SECRET")
+        elif settings.use_remote_asr:
             if not settings.remote_asr_base_url:
                 errors.append("REMOTE_ASR_BASE_URL")
         elif settings.asr_engine == "dolphin":

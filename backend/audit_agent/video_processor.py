@@ -14,6 +14,7 @@ from time import perf_counter
 from .config import settings
 from .asr_chunks import transcribe_in_chunks
 from .remote_inference import RemoteInferenceClient
+from .xfyun_asr import XfyunASRClient
 
 cv2 = None
 np = None
@@ -41,6 +42,7 @@ class DemoAudioProcessor:
         self.last_extract_status = "not_started"
         self.last_extract_diagnostic: dict = {}
         self.remote = RemoteInferenceClient()
+        self.xfyun = XfyunASRClient()
 
     def extract_audio(self, video_path: Path, output_dir: Path) -> Path | None:
         audio_path = output_dir / "audio.wav"
@@ -195,6 +197,8 @@ class DemoAudioProcessor:
         return "..." + message[-limit:]
 
     def transcribe(self, audio_path: Path) -> dict:
+        if self.engine == "xfyun":
+            return self.xfyun.transcribe(audio_path)
         if settings.use_remote_asr:
             if not self.remote.asr_enabled:
                 return {"text": "", "segments": [], "error": "USE_REMOTE_ASR=true but REMOTE_ASR_BASE_URL/REMOTE_INFERENCE_BASE_URL is empty"}
