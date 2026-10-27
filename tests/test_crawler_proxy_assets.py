@@ -322,6 +322,9 @@ def test_feature_off_never_required_unknown_source_retains_legacy_download(tmp_p
     monkeypatch.setattr(settings, 'crawler_proxy_enabled', False)
     class Response:
         status_code=200; content=b'legacy'; headers={}
+        def iter_content(self, chunk_size):
+            assert chunk_size == 65536
+            yield self.content
         def raise_for_status(self): pass
         def close(self): pass
     class Session:

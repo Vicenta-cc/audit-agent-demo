@@ -1,0 +1,12 @@
+# Review artifact only: not installed by this change.
+[Unit]
+Description=Private edge relay for multi-user Audit Agent
+After=docker.service content-audit-production-frontend.service
+Wants=content-audit-production-frontend.service
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /mnt/datadisk0/xhs-audit-agent-multi-user-20260920/edge_relay.py
+Restart=on-failure
+RestartSec=2
+[Install]
+WantedBy=multi-user.target

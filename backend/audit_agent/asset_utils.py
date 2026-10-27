@@ -178,7 +178,7 @@ def download_url_with_error(
                         raise crawler_route.CollectionRouteError("PROXY_CONFIG_INVALID")
                     response = session.get(current_url, timeout=timeout,
                                            headers=media_headers(platform, referer),
-                                           allow_redirects=False, verify=verify)
+                                           allow_redirects=False, verify=verify, stream=True)
                     try:
                         if response.status_code in {301, 302, 303, 307, 308}:
                             location = response.headers.get("Location")
@@ -187,7 +187,14 @@ def download_url_with_error(
                             current_url = urljoin(current_url, location)
                             continue
                         response.raise_for_status()
-                        output_path.write_bytes(response.content)
+                        with tempfile.NamedTemporaryFile(mode="wb", dir=output_path.parent,
+                                                         prefix="." + output_path.name + ".", suffix=".partial",
+                                                         delete=False) as stream:
+                            temporary_path = Path(stream.name)
+                            for chunk in response.iter_content(chunk_size=65536):
+                                stream.write(chunk)
+                        temporary_path.replace(output_path)
+                        temporary_path = None
                         return DownloadResult(output_path, status_code=response.status_code)
                     finally:
                         response.close()

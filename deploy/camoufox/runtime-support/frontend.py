@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import re
 import select
 import socket
 import sys
+import threading
 import time
-import urllib.error
-import urllib.request
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer as _ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -23,7 +23,6 @@ environment(
     CONFIG
 )  # Validate the App-owner contract without exporting secrets to this process.
 DIST = Path(CONFIG["artifacts"]["frontend_dist"]["path"])
-BACKEND = f"http://{CONFIG['ports']['host']}:{CONFIG['ports']['backend']}"
 HOP_BY_HOP = {
     "connection",
     "keep-alive",
@@ -40,76 +39,223 @@ STREAM_IO_TIMEOUT_SECONDS = 10.0
 STREAM_TUNNEL_MAX_SECONDS = 1800.0
 
 
+TRANSFER_CHUNK_BYTES = 65536
+HTTP_IO_TIMEOUT_SECONDS = 180.0
+HTTP_MAX_SECONDS = 3600.0
+MAX_ACTIVE_CONNECTIONS = 32
+
+
+def shutdown_socket(connection):
+    if connection is not None:
+        try:
+            connection.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+
+class ThreadingHTTPServer(_ThreadingHTTPServer):
+    """Bound handlers before spawning; the accept loop also reaps cancelled I/O."""
+
+    request_queue_size = 16
+
+    def __init__(self, *args, **kwargs):
+        self._slots = threading.BoundedSemaphore(MAX_ACTIVE_CONNECTIONS)
+        self._active = {}
+        self._active_lock = threading.Lock()
+        super().__init__(*args, **kwargs)
+
+    def process_request(self, request, client_address):
+        if not self._slots.acquire(blocking=False):
+            # Never block the accept/watchdog loop on a client that does not read.
+            request.setblocking(False)
+            try:
+                request.send(
+                    b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n"
+                    b"Connection: close\r\nRetry-After: 1\r\n\r\n"
+                )
+            except OSError:
+                pass
+            self.shutdown_request(request)
+            return
+        request.settimeout(HTTP_IO_TIMEOUT_SECONDS)
+        with self._active_lock:
+            self._active[request] = {
+                "deadline": time.monotonic() + HTTP_MAX_SECONDS,
+                "upstream": None,
+                "watch_disconnect": False,
+            }
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            with self._active_lock:
+                self._active.pop(request, None)
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            with self._active_lock:
+                self._active.pop(request, None)
+            self._slots.release()
+
+    def service_actions(self):
+        # One bounded scan in serve_forever's existing thread, no per-transfer
+        # polling threads. Production poll_interval is 500 ms. Hold the lock so
+        # a completed handler cannot start reading its next request during peek.
+        with self._active_lock:
+            now = time.monotonic()
+            for client, state in self._active.items():
+                expired = state["deadline"] is not None and now >= state["deadline"]
+                cancelled = False
+                if state["watch_disconnect"]:
+                    try:
+                        ready, _, _ = select.select([client], [], [], 0)
+                        cancelled = bool(ready) and client.recv(1, socket.MSG_PEEK) == b""
+                    except (OSError, ValueError):
+                        cancelled = True
+                if expired or cancelled:
+                    shutdown_socket(state["upstream"])
+                    shutdown_socket(client)
+
+    def server_close(self):
+        with self._active_lock:
+            active = list(self._active.items())
+        for client, state in active:
+            shutdown_socket(state["upstream"])
+            shutdown_socket(client)
+        super().server_close()
+
+
 class CandidateFrontendHandler(SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(DIST), **kwargs)
 
+    def handle_one_request(self):
+        # Include request headers and body in the total deadline, not just the
+        # upstream response. Keepalive requests each receive their own budget.
+        self.server._active[self.connection]["deadline"] = (
+            time.monotonic() + HTTP_MAX_SECONDS
+        )
+        super().handle_one_request()
+
     def _proxy(self) -> None:
-        length = int(self.headers.get("Content-Length", "0"))
-        body = self.rfile.read(length) if length else None
+        # Reject ambiguous framing rather than forwarding a different body to
+        # the backend. The public ingress sends a length, not chunked requests.
+        lengths = self.headers.get_all("Content-Length", [])
+        if self.headers.get("Transfer-Encoding"):
+            self.send_error(501, "Chunked request bodies are not supported")
+            return
+        if len(lengths) > 1 or (lengths and not re.fullmatch(r"[0-9]+", lengths[0])):
+            self.send_error(400, "Invalid Content-Length")
+            return
+        try:
+            length = int(lengths[0]) if lengths else 0
+        except ValueError:
+            self.send_error(400, "Invalid Content-Length")
+            return
+        state = self.server._active[self.connection]
+        state["watch_disconnect"] = not length
+        connection = http.client.HTTPConnection(
+            CONFIG["ports"]["host"],
+            CONFIG["ports"]["backend"],
+            timeout=HTTP_IO_TIMEOUT_SECONDS,
+        )
+        response = None
+        response_started = False
+
+        def request_chunks():
+            remaining = length
+            while remaining:
+                chunk = self.rfile.read1(min(remaining, TRANSFER_CHUNK_BYTES))
+                if not chunk:
+                    raise ConnectionError("Incomplete request body")
+                remaining -= len(chunk)
+                yield chunk
+            # For browser/Nginx HTTP traffic, EOF after a complete request means
+            # cancellation. Raw clients using SHUT_WR then awaiting a response
+            # are deliberately not supported: TCP cannot distinguish their FIN.
+            state["watch_disconnect"] = True
+
+        connection_tokens = {
+            token.strip().lower() for token in self.headers.get("Connection", "").split(",")
+        }
         headers = {
             key: value
             for key, value in self.headers.items()
-            if key.lower() not in HOP_BY_HOP and key.lower() != "host"
+            if key.lower() not in HOP_BY_HOP | connection_tokens | {"host"}
         }
-        request = urllib.request.Request(
-            BACKEND + self.path,
-            data=body,
-            headers=headers,
-            method=self.command,
-        )
         try:
-            response = urllib.request.build_opener(
-                urllib.request.ProxyHandler({})
-            ).open(request, timeout=180)
-        except urllib.error.HTTPError as error:
-            response = error
-        except urllib.error.URLError as error:
-            payload = json.dumps(
-                {"detail": f"Backend unavailable: {error.reason}"}
-            ).encode()
-            self.send_response(502)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(payload)))
-            self.end_headers()
-            self.wfile.write(payload)
-            return
-        if response.headers.get_content_type() == "text/event-stream":
+            connection.connect()
+            state["upstream"] = connection.sock
+            # http.client never follows redirects or replays this one-shot body.
+            connection.request(
+                self.command,
+                self.path,
+                body=request_chunks() if length else None,
+                headers=headers,
+            )
+            response = connection.getresponse()
+            is_sse = response.headers.get_content_type() == "text/event-stream"
+            if is_sse:
+                state["deadline"] = None  # Existing 15s heartbeat keeps idle I/O alive.
+            has_body = self.command != "HEAD" and response.status not in (204, 304)
+            expected = response.length if has_body else 0
+            response_tokens = {
+                token.strip().lower() for token in response.getheader("Connection", "").split(",")
+            }
+            excluded = HOP_BY_HOP | response_tokens
+            if response.chunked or is_sse:
+                excluded |= {"content-length"}
+            if is_sse:
+                excluded |= {"x-accel-buffering"}
             self.send_response(response.status)
-            for key, value in response.headers.items():
-                if key.lower() not in HOP_BY_HOP and key.lower() not in {
-                    "content-length",
-                    "x-accel-buffering",
-                }:
+            for key, value in response.getheaders():
+                if key.lower() not in excluded:
                     self.send_header(key, value)
-            self.send_header("X-Accel-Buffering", "no")
-            self.send_header("Connection", "close")
+            if is_sse:
+                self.send_header("X-Accel-Buffering", "no")
+            # Dechunked/unknown-length responses use EOF framing. Known lengths
+            # remain usable by the outer Nginx proxy_force_ranges filter.
+            if is_sse or (has_body and expected is None):
+                self.send_header("Connection", "close")
+                self.close_connection = True
             self.end_headers()
+            response_started = True
+            received = 0
+            if has_body:
+                while chunk := response.read1(TRANSFER_CHUNK_BYTES):
+                    received += len(chunk)
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                if expected is not None and received != expected:
+                    # Never leave a truncated Content-Length response on a
+                    # reusable downstream connection or report a second status.
+                    self.close_connection = True
+        except (OSError, http.client.HTTPException, ValueError):
             self.close_connection = True
-            try:
-                if self.command != "HEAD":
-                    while chunk := response.read1(65536):
-                        self.wfile.write(chunk)
-                        self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError, TimeoutError):
-                pass
-            finally:
-                response.close()
-            return
-        try:
-            payload = response.read()
+            if not response_started:
+                try:
+                    payload = json.dumps({"detail": "Backend unavailable"}).encode()
+                    self.send_response(502)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.send_header("Connection", "close")
+                    self.end_headers()
+                    if self.command != "HEAD":
+                        self.wfile.write(payload)
+                except OSError:
+                    pass
         finally:
-            response.close()
-        self.send_response(response.status)
-        for key, value in response.headers.items():
-            if key.lower() not in HOP_BY_HOP and key.lower() != "content-length":
-                self.send_header(key, value)
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        if self.command != "HEAD":
-            self.wfile.write(payload)
+            with self.server._active_lock:
+                state["watch_disconnect"] = False
+                state["upstream"] = None
+            if response is not None:
+                response.close()
+            connection.close()
 
     def _websocket(self) -> None:
         # Authentication and Origin/ticket validation remain in the backend.
