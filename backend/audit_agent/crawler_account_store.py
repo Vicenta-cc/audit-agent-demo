@@ -881,7 +881,7 @@ class CrawlerAccountStore:
             conn.execute('BEGIN IMMEDIATE')
             return write(conn)
 
-    def admit_route(self, account_id, observed_exit, generation, operation_id, *, recovery_claim=None, login_bootstrap=False):
+    def admit_route(self, account_id, observed_exit, generation, operation_id, *, recovery_claim=None, login_bootstrap=False, require_existing=False):
         if type(login_bootstrap) is not bool:
             raise ValueError('ROUTE_BOOTSTRAP_INVALID')
         key = self._exit_key(observed_exit)
@@ -894,7 +894,10 @@ class CrawlerAccountStore:
             if prior:
                 if (prior['account_id'],prior['exit_key'],prior['generation'],prior['state']) != (account_id,key,generation,'active'):
                     raise ValueError('ROUTE_OPERATION_CONFLICT')
-                return operation_id
+                if not require_existing:
+                    return operation_id
+            elif require_existing:
+                raise ValueError('ROUTE_LEASE_REJECTED')
             account = conn.execute('SELECT * FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
             recovery = bool(account and recovery_claim and account['recovery_claim']==recovery_claim and account['recovery_state'] in {'claimed','manual_claimed'})
             manual = bool(recovery and account['recovery_state']=='manual_claimed' and self._manual_claim_valid(conn,account_id,recovery_claim,key=key,generation=generation))
@@ -913,6 +916,10 @@ class CrawlerAccountStore:
                     raise ValueError('ACCOUNT_CHALLENGE')
             if account['route_mode']=='direct_degraded' and account['validated_direct_generation']!=generation and not (login_bootstrap or recovery):
                 raise ValueError('LOGIN_REVALIDATION_REQUIRED')
+            if require_existing:
+                if account['shared_exit_key'] != key or account['shared_exit_generation'] != generation:
+                    raise ValueError('ROUTE_GENERATION_STALE')
+                return operation_id
             conn.execute('INSERT INTO crawler_route_admissions(operation_id,account_id,exit_key,generation,created_at) VALUES(?,?,?,?,?)',(operation_id,account_id,key,generation,time.time()))
             conn.execute('UPDATE crawler_accounts SET shared_exit_key=?,shared_exit_generation=? WHERE id=?',(key,generation,account_id))
             conn.execute("INSERT INTO crawler_route_events(account_id,event_type,route_mode,operation_id,shared_exit_key,created_at) VALUES(?,'route_admitted',?,?,?,?)",(account_id,account['route_mode'],operation_id,key,time.time()))

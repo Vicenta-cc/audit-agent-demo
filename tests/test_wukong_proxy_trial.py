@@ -146,7 +146,7 @@ def test_route_operation_transition_preserves_terminal_state(tmp_path):
 
     operation = RouteOperation.create(
         owner_id='owner-1', account_id='account-1', profile_key='profile-1',
-        route_mode='proxy_required', expires_at=time.time() + 300,
+        route_mode='proxy_required', expires_at=time.time() + 300, proxy_expires_at=time.time() + 600,
         context_id='context-1', snapshot_digest='a'*64,
     )
     store = RouteOperationStore(tmp_path / 'route-operations.sqlite3')

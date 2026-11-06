@@ -37,7 +37,8 @@ def managed(tmp_path, mode='proxy_preferred'):
 def store_operation(store, snap):
     return store.issue(app.RouteOperation(operation_id=snap.operation_id, lease_id=snap.lease_id,
         lease_version=snap.lease_version, owner_id=snap.owner_id, account_id=snap.account_id,
-        profile_key=snap.profile_key, route_mode=snap.route_mode, expires_at=snap.expires_at, observed_exit=snap.observed_exit_ip,
+        profile_key=snap.profile_key, route_mode=snap.route_mode, expires_at=min(snap.expires_at or time.time()+300, time.time()+300),
+        proxy_expires_at=snap.expires_at or 0, observed_exit=snap.observed_exit_ip,
         context_id=snap.context_id, snapshot_digest=snap.snapshot_digest))
 
 
@@ -56,7 +57,7 @@ print('ACK_OK', flush=True)
 """
     env = {**os.environ, **route_pipe.env, **receipt_pipe.env,
         'PYTHONPATH':crawler, 'MEDIACRAWLER_ACCOUNT_ID':'a', 'MEDIACRAWLER_PROXY_REQUIRED':'true'}
-    child = subprocess.Popen(['/Users/hose/project/zhanyun/media-crawler/.venv/bin/python', '-c',script],
+    child = subprocess.Popen([os.environ.get('LOGIN_BROWSER_TEST_PYTHON', os.sys.executable), '-c',script],
         env=env, cwd=crawler, pass_fds=(*route_pipe.pass_fds,*receipt_pipe.pass_fds),
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
     try:
@@ -294,6 +295,26 @@ def test_renew_ticket_is_idempotent_fenced_and_bounded(tmp_path,monkeypatch):
     with pytest.raises(ValueError):store.renew('renew-3',route_operation_id=operation.operation_id,owner_id='owner',lease_version=2)
 
 
+def test_real_proxy_deadline_bounds_long_running_ticket_and_draining_stops_renewal(tmp_path, monkeypatch):
+    clock = [1000.]
+    monkeypatch.setattr(app.time, 'time', lambda: clock[0])
+    store = app.RouteOperationStore(tmp_path/'ops.db')
+    operation = app.RouteOperation.create(owner_id='owner', account_id='account', profile_key='profile',
+        route_mode='proxy_required', context_id='context', snapshot_digest='a'*64,
+        expires_at=1300., proxy_expires_at=2600.)
+    store.issue(operation)
+    store.ack(operation.operation_id, owner_id='owner', lease_version=1, snapshot_digest='a'*64, context_id='context')
+    for version in range(1, 7):
+        clock[0] += 250
+        ack = store.renew(f'cmd-{version}', route_operation_id=operation.operation_id,
+            owner_id='owner', lease_version=version)
+        assert ack['expires_at'] == min(clock[0]+300, 2600.)
+    assert ack['lease_version'] == 7 and ack['expires_at'] == 2600.
+    store.transition(operation.operation_id, state='draining', owner_id='owner', lease_version=7)
+    with pytest.raises(ValueError, match='ROUTE_LEASE_REJECTED'):
+        store.renew('after-stop', route_operation_id=operation.operation_id, owner_id='owner', lease_version=7)
+
+
 def test_risk_receipt_pauses_shared_exit_before_live_child_drains(tmp_path,monkeypatch):
     from backend.audit_agent.crawler_account_store import CrawlerAccountStore
     monkeypatch.setattr(app.settings,'crawler_safety_enabled',True)
@@ -311,7 +332,7 @@ def test_risk_receipt_pauses_shared_exit_before_live_child_drains(tmp_path,monke
     crawler=str(app.settings.media_crawler_dir.resolve())
     env={**os.environ,**config.env,**receipts.env,'PYTHONPATH':crawler,'MEDIACRAWLER_ACCOUNT_ID':account['id']}
     script='from tools.bound_proxy import initialize_bound_route,obtain_route_ack,emit_account_risk\nimport time\ns=initialize_bound_route();obtain_route_ack(s);assert emit_account_risk(s);time.sleep(3)'
-    child=subprocess.Popen(['/Users/hose/project/zhanyun/media-crawler/.venv/bin/python','-c',script],env=env,cwd=crawler,
+    child=subprocess.Popen([os.environ.get('LOGIN_BROWSER_TEST_PYTHON', os.sys.executable),'-c',script],env=env,cwd=crawler,
         pass_fds=(*config.pass_fds,*receipts.pass_fds),stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
     try:
         config.start(child);receipts.start(child)
@@ -465,20 +486,30 @@ runpy.run_path(os.environ['FIXTURE_HELPER'],run_name='__main__')
         if direct_server:direct_server.shutdown();direct_server.server_close()
 
 
-def test_real_child_renews_ticket_without_changing_snapshot_identity(tmp_path):
+def test_real_child_renews_ticket_without_changing_snapshot_identity(tmp_path, monkeypatch):
     import json
-    base=replace(managed(tmp_path),expires_at=time.time()+3600)
-    snap=replace(base,snapshot_digest=app.route_contract().snapshot_digest(base))
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+    monkeypatch.setattr(app.settings, 'app_auth_mode', 'disabled')
+    accounts = CrawlerAccountStore(tmp_path/'accounts.db')
+    account = accounts.create(platform='dy', display_name='fixture')
+    accounts.save_auth_state(account['id'], 'fixture-state')
+    accounts.observe_shared_exit('198.51.100.8', service_exit=True)
+    base = app.resolve_account_route(account['id'], account_store=accounts)
+    base = replace(base, operation_id='op', owner_id='owner', context_id='context',
+        lease_id='lease', lease_version=1, safety_db_path=str(accounts.db_path))
+    snap = replace(base, snapshot_digest=app.route_contract().snapshot_digest(base))
+    accounts.admit_route(account['id'], snap.observed_exit_ip, snap.exit_generation, snap.operation_id)
     store=app.RouteOperationStore(tmp_path/'ops.db')
     store.issue(app.RouteOperation(operation_id=snap.operation_id,lease_id=snap.lease_id,lease_version=1,
         owner_id=snap.owner_id,account_id=snap.account_id,profile_key=snap.profile_key,route_mode=snap.route_mode,
-        expires_at=time.time()+10,proxy_expires_at=snap.expires_at,context_id=snap.context_id,snapshot_digest=snap.snapshot_digest))
-    bundle=SimpleNamespace(snapshot=snap,route_operation_store=store,_lock=threading.RLock())
+        expires_at=time.time()+10,proxy_expires_at=snap.expires_at or 0,context_id=snap.context_id,snapshot_digest=snap.snapshot_digest))
+    bundle=SimpleNamespace(snapshot=snap,route_operation_store=store,_lock=threading.RLock(),
+        account_store=accounts, account_id=snap.account_id, owner_id=snap.owner_id, execution_id='exec')
     route_pipe,receipt_pipe=app.RouteConfigPipe(snap),app.RouteReceiptPipe(bundle)
     crawler=str(app.settings.media_crawler_dir.resolve())
-    env={**os.environ,**route_pipe.env,**receipt_pipe.env,'PYTHONPATH':crawler,'MEDIACRAWLER_ACCOUNT_ID':'a'}
+    env={**os.environ,**route_pipe.env,**receipt_pipe.env,'PYTHONPATH':crawler,'MEDIACRAWLER_ACCOUNT_ID':snap.account_id}
     script="from tools.bound_proxy import initialize_bound_route,BoundProxySession\nimport json\ns=initialize_bound_route();value=BoundProxySession(s,echo_url='https://echo.invalid/ip',budget_id='renew-fixture');value.check_stop();print(json.dumps({'ticket_version':value._lease_ack['lease_version'],'snapshot_version':s.lease_version,'digest':s.snapshot_digest}))"
-    child=subprocess.Popen(['/Users/hose/project/zhanyun/media-crawler/.venv/bin/python','-c',script],env=env,cwd=crawler,
+    child=subprocess.Popen([os.sys.executable,'-c',script],env=env,cwd=crawler,
         pass_fds=(*route_pipe.pass_fds,*receipt_pipe.pass_fds),stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
     try:
         route_pipe.start(child);receipt_pipe.start(child)
@@ -502,7 +533,7 @@ def test_live_orphan_retains_account_profile_fences_then_exact_reconciliation(tm
     handle=acquire_account_handle('dy',account['id']);assert handle
     directory=tmp_path/'profiles'/app.route_contract().derive_profile_key(account['id']);directory.mkdir(parents=True)
     script="import fcntl,sys,time\nh=open(sys.argv[1],'a+b');fcntl.flock(h,fcntl.LOCK_EX);print('READY',flush=True);time.sleep(30)"
-    child=subprocess.Popen(['/Users/hose/project/zhanyun/media-crawler/.venv/bin/python','-c',script,str(directory/'adapter.lock')],
+    child=subprocess.Popen([os.environ.get('LOGIN_BROWSER_TEST_PYTHON', os.sys.executable),'-c',script,str(directory/'adapter.lock')],
         pass_fds=(handle.fileno(),),stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
     try:
         assert child.stdout.readline().strip()=='READY'

@@ -29,6 +29,7 @@ def test_no_proxy_account_gets_explicit_direct_template(direct):
     store, account = direct
     route = app.resolve_account_route(account['id'], account_store=store)
     assert route.route_mode == 'legacy_direct'
+    assert route.expires_at is None
     assert route.playwright_proxy() is None and route.httpx_proxy() is None
     assert not route.managed
     assert route.safety_db_path == ''  # authority is assigned only after lease acquisition
@@ -122,5 +123,130 @@ def test_direct_managed_provenance_reuses_same_live_route(direct, monkeypatch):
         assert provenance['route_mode'] == 'legacy_direct'
         with app.authorize_source_route(provenance, 'owner', 'crawl', route_context=bundle, account_store=store) as same:
             assert same is bundle
+    finally:
+        bundle.close()
+
+
+def test_live_direct_task_renews_past_twenty_minutes_then_rejects_disabled_account(direct, monkeypatch):
+    from backend.audit_agent.crawler_request_authority import parent_authority_renew_ticket
+
+    accounts, account = direct
+    accounts.save_auth_state(account['id'], 'fixture-encrypted-state')
+    clock = [time.time()]
+    monkeypatch.setattr(time, 'time', lambda: clock[0])
+    ip = '203.0.113.9'
+    accounts.observe_shared_exit(ip, service_exit=True)
+    bundle = app.acquire_route_execution(account['id'], 'crawl', 'owner', account_store=accounts)
+    try:
+        snap = bundle.snapshot
+        store = bundle.route_operation_store
+        assert snap.expires_at is None
+        row = store.ack(snap.operation_id, owner_id=snap.owner_id, lease_version=1,
+            snapshot_digest=snap.snapshot_digest, context_id=snap.context_id)
+        assert row['request']['proxy_expires_at'] == 0
+        ticket = row['ack']
+        for version in range(2, 12):
+            clock[0] += 275
+            accounts.observe_shared_exit(ip, service_exit=True)
+            ticket = parent_authority_renew_ticket(bundle, ticket)
+            assert ticket['lease_version'] == version
+            assert ticket['expires_at'] == clock[0] + 300
+        with accounts._connect() as db:
+            db.execute("UPDATE crawler_accounts SET status='disabled' WHERE id=?", (account['id'],))
+        with pytest.raises(ValueError, match='ACCOUNT_CHALLENGE'):
+            parent_authority_renew_ticket(bundle, ticket)
+        assert store.ticket(snap.operation_id, owner_id=snap.owner_id,
+            snapshot_digest=snap.snapshot_digest, context_id=snap.context_id) == ticket
+    finally:
+        bundle.close()
+
+
+def test_direct_secondary_phase_issues_short_ticket_and_refuses_revoked_owner(direct, monkeypatch, tmp_path):
+    from backend.application_auth.store import AuthStore
+    from backend.audit_agent.crawler_request_authority import parent_authority_renew_ticket
+
+    accounts, account = direct
+    accounts.save_auth_state(account['id'], 'fixture-encrypted-state')
+    accounts.observe_shared_exit('203.0.113.9', service_exit=True)
+    monkeypatch.setattr(app.settings, 'app_auth_mode', 'required')
+    monkeypatch.setattr(app.settings, 'app_auth_db', tmp_path/'auth.db')
+    auth = AuthStore(app.settings.app_auth_db)
+    owner = auth.create_user(username='route-owner', password='long-fixture-password', activation_mode='created_at')['id']
+    auth.register_crawler_account(account['id'], owner)
+    bundle = app.acquire_route_execution(account['id'], 'crawl', owner, account_store=accounts)
+    try:
+        prior = bundle.snapshot.operation_id
+        app.renew_same_route_phase(bundle)
+        snap = bundle.snapshot
+        assert snap.operation_id != prior and snap.expires_at is None
+        row = bundle.route_operation_store.ack(snap.operation_id, owner_id=owner, lease_version=1,
+            snapshot_digest=snap.snapshot_digest, context_id=snap.context_id)
+        assert row['request']['proxy_expires_at'] == 0 and 0 < row['ack']['ttl'] <= 300
+        auth.unregister_crawler_account(account['id'])
+        with pytest.raises(app.CollectionRouteError, match='PROXY_UNAVAILABLE'):
+            parent_authority_renew_ticket(bundle, row['ack'])
+    finally:
+        bundle.close()
+
+
+def test_bound_proxy_renewal_honors_provider_expiry_and_stop(direct, monkeypatch):
+    from backend.audit_agent.crawler_proxy_store import CrawlerProxyStore
+    from backend.audit_agent.crawler_request_authority import parent_authority_renew_ticket
+
+    accounts, account = direct
+    monkeypatch.setattr(app.settings, 'crawler_proxy_enabled', True)
+    accounts.save_auth_state(account['id'], 'fixture-encrypted-state')
+    clock = [time.time()]
+    monkeypatch.setattr(time, 'time', lambda: clock[0])
+    expiry = clock[0] + 420
+    proxies = CrawlerProxyStore(accounts)
+    resource = proxies.create(display_name='fixture', endpoint='http://127.0.0.1:9', expires_at=expiry)
+    bound = proxies.bind(account['id'], resource['id'], expected_binding_revision=account['binding_revision'])
+    proxies.observe_exit(resource['id'], '203.0.113.9')
+    proxies.mark_route_login_validated(account['id'], expected_binding_revision=bound['binding_revision'],
+        expected_config_revision=resource['config_revision'])
+    bundle = app.acquire_route_execution(account['id'], 'crawl', 'owner', account_store=accounts)
+    try:
+        snap = bundle.snapshot
+        row = bundle.route_operation_store.ack(snap.operation_id, owner_id='owner', lease_version=1,
+            snapshot_digest=snap.snapshot_digest, context_id=snap.context_id)
+        clock[0] += 275
+        ticket = parent_authority_renew_ticket(bundle, row['ack'])
+        assert row['request']['proxy_expires_at'] == expiry == ticket['expires_at']
+        proxies.set_health(resource['id'], status='unavailable', stop_reason='PROXY_TRANSPORT_FAILED')
+        with pytest.raises(app.CollectionRouteError):
+            parent_authority_renew_ticket(bundle, ticket)
+    finally:
+        bundle.close()
+
+
+def test_degraded_direct_renewal_rejects_changed_binding(direct, monkeypatch):
+    from backend.audit_agent.crawler_proxy_store import CrawlerProxyStore
+    from backend.audit_agent.crawler_request_authority import parent_authority_renew_ticket
+
+    accounts, account = direct
+    monkeypatch.setattr(app.settings, 'crawler_proxy_enabled', True)
+    monkeypatch.setattr(app.settings, 'crawler_direct_degrade_enabled', True)
+    accounts.save_auth_state(account['id'], 'fixture-encrypted-state')
+    proxies = CrawlerProxyStore(accounts)
+    resource = proxies.create(display_name='fixture', endpoint='http://127.0.0.1:9', expires_at=time.time()+1800)
+    proxies.bind(account['id'], resource['id'], expected_binding_revision=account['binding_revision'],
+        route_mode='proxy_preferred')
+    ip = '203.0.113.9'
+    exit_state = accounts.observe_shared_exit(ip, service_exit=True)
+    generation = exit_state['shared_exit_generation']
+    accounts.set_route_state(account['id'], state='active', route_mode='direct_degraded',
+        shared_exit_key=ip, generation=generation)
+    accounts.mark_direct_validated(account['id'], generation)
+    bundle = app.acquire_route_execution(account['id'], 'crawl', 'owner', account_store=accounts)
+    try:
+        snap = bundle.snapshot
+        assert snap.route_mode == 'direct_degraded' and snap.expires_at is None
+        row = bundle.route_operation_store.ack(snap.operation_id, owner_id='owner', lease_version=1,
+            snapshot_digest=snap.snapshot_digest, context_id=snap.context_id)
+        with accounts._connect() as db:
+            db.execute('UPDATE crawler_accounts SET binding_revision=binding_revision+1 WHERE id=?', (account['id'],))
+        with pytest.raises(app.CollectionRouteError, match='PROXY_REVISION_MISMATCH'):
+            parent_authority_renew_ticket(bundle, row['ack'])
     finally:
         bundle.close()

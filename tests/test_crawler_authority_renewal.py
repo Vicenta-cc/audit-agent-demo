@@ -9,8 +9,8 @@ from backend.audit_agent.crawler_request_authority import parent_authority_renew
 
 
 def test_concurrent_owner_renewal_commits_one_ticket_without_waiting_for_live_child(tmp_path,monkeypatch):
-    from backend.audit_agent import crawler_child_runtime
-    monkeypatch.setattr(crawler_child_runtime,'require_browser_available',lambda *args,**kwargs: None)
+    from backend.audit_agent import crawler_route
+    monkeypatch.setattr(crawler_route,'require_route_renewal',lambda bundle: None)
     clock=[time.time()]
     monkeypatch.setattr(time,'time',lambda:clock[0])
     store=RouteOperationStore(tmp_path/'scheduler.sqlite3')

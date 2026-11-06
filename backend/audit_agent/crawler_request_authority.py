@@ -647,15 +647,9 @@ def parent_authority_ticket(bundle):
 
 def parent_authority_renew_ticket(bundle, prior):
     """Authority owner performs renewal; never waits for its child to renew it."""
-    from .crawler_child_runtime import require_browser_available
+    from .crawler_route import require_route_renewal
 
-    require_browser_available(
-        bundle.account_id,
-        store=getattr(bundle, "account_store", None),
-        owner_id=bundle.owner_id,
-        migration_id=getattr(bundle, "migration_id", None),
-        operation_id=bundle.execution_id,
-    )
+    require_route_renewal(bundle)
     current = parent_authority_ticket(bundle)
     if current["lease_version"] > prior["lease_version"]:
         return current
