@@ -579,7 +579,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     const params = new URLSearchParams(location.search);
     if (view) params.set("view", view);
     else params.delete("view");
-    navigate({ pathname: location.pathname, search: params.toString() }, { state: location.state });
+    const pathname = initialSubView && !view ? "/investigation" : location.pathname;
+    navigate({ pathname, search: params.toString() }, { state: location.state });
   };
   const currentWorkspaceLocationRef = useRef(location);
   currentWorkspaceLocationRef.current = location;
@@ -783,10 +784,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   }, [activeSessionId, historicalWorkspacesLoaded, investigationId, location.search, navigate, sessions]);
 
   useEffect(() => {
-    if (!applicationUser || investigationId || !sessions.length) return;
+    if (!applicationUser || investigationId || initialSubView || !sessions.length) return;
     setActiveSessionId(sessions[0].id);
     navigate(`/investigation/${encodeURIComponent(sessions[0].id)}${location.search}`, { replace: true });
-  }, [applicationUser, investigationId, sessions, location.search, navigate]);
+  }, [applicationUser, investigationId, initialSubView, sessions, location.search, navigate]);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0]
     || buildNewInvestigationWorkspaceSession("empty-workspace");
