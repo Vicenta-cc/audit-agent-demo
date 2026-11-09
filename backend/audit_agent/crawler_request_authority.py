@@ -20,6 +20,10 @@ import time
 from pathlib import Path
 
 MAX_FRAME = 16384
+_RESERVE_BUSY_BACKOFF = (0.05, 0.10)
+# Leave room inside the private channel deadline for safety and the grant
+# transaction (both use a 200 ms SQLite busy timeout), plus the response.
+_RESERVE_RETRY_HEADROOM = 0.5
 
 _OWNER_OPERATIONS = frozenset({
     "initialize", "cache_lookup", "check_stop", "fail", "browser_validate",
@@ -295,6 +299,7 @@ class RequestAuthority:
                             "PROBE_BUDGET_EXHAUSTED",
                             "PROXY_EXIT_CHANGED",
                             "SCHEDULER_POLICY_CONFLICT",
+                            "SCHEDULER_DATABASE_BUSY",
                             "PROXY_AUTH_FAILED",
                             "PROXY_EXPIRED",
                             "PROXY_TRANSPORT_FAILED",
@@ -370,6 +375,7 @@ class RequestAuthority:
             "digest": digest,
             "pid": self.pid,
             "start_identity": self.start_identity,
+            "deadline": frame["deadline"],
         }
         from tools.authority_ledger import owner_access
 
@@ -381,11 +387,61 @@ class RequestAuthority:
         self.cache[request_id] = digest, result
         return result
 
+    def _reserve(self, payload, request):
+        from tools.persistent_request_gate import _try_reserve_scopes
+        from tools.request_authority import REQUEST_KINDS
+
+        lease = payload.get("lease_seconds")
+        if lease is not None and (type(lease) not in (int, float) or not 0 < lease <= 3630):
+            raise ValueError("invalid lease")
+        if payload.get("operation") not in REQUEST_KINDS:
+            raise ValueError("invalid operation")
+
+        session = self.session
+        started = time.monotonic()
+        deadline = request.get("deadline", float("inf"))
+        retries = 0
+        while True:
+            stage = "browser_safety"
+            try:
+                session._validate_browser_safety()
+                if session._gate is None or self.closed.is_set():
+                    raise RuntimeError("PROXY_UNAVAILABLE")
+                if time.time() >= deadline:
+                    raise TimeoutError("request deadline expired")
+                stage = "reserve_scopes"
+                return _try_reserve_scopes(
+                    self.snapshot.scheduler_db_path, session._gate.scope_ids,
+                    payload["operation"], lease, time.time(),
+                    safety_fence=session._safety_fence(), authority=request,
+                )
+            except sqlite3.Error as exc:
+                code = getattr(exc, "sqlite_errorcode", None)
+                busy = (isinstance(exc, sqlite3.OperationalError) and type(code) is int
+                        and (code & 0xff) == sqlite3.SQLITE_BUSY)
+                backoff = _RESERVE_BUSY_BACKOFF[retries] if retries < len(_RESERVE_BUSY_BACKOFF) else None
+                retry = (busy and getattr(exc, "reservation_rolled_back", False)
+                         and backoff is not None and deadline - time.time() > backoff + _RESERVE_RETRY_HEADROOM)
+                action = "retry" if retry else ("exhausted" if busy else "failed")
+                logging.getLogger(__name__).warning(
+                    "CRAWLER_RESERVE_DATABASE stage=%s step=%s sqlite_code=%s retries=%d elapsed_ms=%d action=%s",
+                    stage, getattr(exc, "reservation_step", "unclassified"), code, retries,
+                    int((time.monotonic() - started) * 1000), action,
+                )
+                if not retry:
+                    if busy:
+                        raise RuntimeError("SCHEDULER_DATABASE_BUSY") from exc
+                    raise
+                if self.closed.wait(backoff) or not self._alive():
+                    raise RuntimeError("PROXY_UNAVAILABLE") from None
+                if deadline - time.time() <= _RESERVE_RETRY_HEADROOM:
+                    raise RuntimeError("SCHEDULER_DATABASE_BUSY") from exc
+                retries += 1
+
     def _execute(self, operation, payload, request):
         from tools.bound_proxy import BoundProxySession
         from tools.collection_route import ProbeReceipt
         from tools.persistent_request_gate import (
-            _try_reserve_scopes,
             release_scope_tokens,
             validate_safety_connection,
         )
@@ -461,27 +517,7 @@ class RequestAuthority:
                 session.trial_limits.owner_pid = self.pid
             return {"trial_enabled": session.trial_limits is not None}
         if operation == "reserve":
-            session._validate_browser_safety()
-            lease = payload.get("lease_seconds")
-            if lease is not None and (
-                type(lease) not in (int, float) or not 0 < lease <= 3630
-            ):
-                raise ValueError("invalid lease")
-            from tools.request_authority import REQUEST_KINDS
-
-            if payload.get("operation") not in REQUEST_KINDS:
-                raise ValueError("invalid operation")
-            if session._gate is None:
-                raise RuntimeError("PROXY_UNAVAILABLE")
-            result = _try_reserve_scopes(
-                self.snapshot.scheduler_db_path,
-                session._gate.scope_ids,
-                payload["operation"],
-                lease,
-                time.time(),
-                safety_fence=session._safety_fence(),
-                authority=request,
-            )
+            result = self._reserve(payload, request)
             if result["delay"] == 0:
                 self.owned_tokens.update(result["scope_tokens"].items())
                 if payload['operation'] == 'media' and result['scope_tokens']:

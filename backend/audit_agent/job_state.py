@@ -9,6 +9,7 @@ RECOVERABLE_CRAWL_FAILURE_CODES = frozenset({
     "crawler_rate_limited",
     "crawler_media_download_failed",
     "crawler_browser_initialization_failed",
+    "crawler_scheduler_database_busy",
 })
 
 

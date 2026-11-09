@@ -1724,6 +1724,7 @@ class AuditPipeline:
                     "crawler_account_login_required",
                     "crawler_rate_limited",
                     "crawler_browser_initialization_failed",
+                    "crawler_scheduler_database_busy",
                 },
                 action="retry_after_recovery",
             )

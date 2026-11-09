@@ -8,6 +8,7 @@ import pytest
 
 from backend.audit_agent.config import settings
 from test_crawler_adapter_output_handoff import handoff
+from test_task_admission import stack
 from backend.audit_agent.crawler_adapter import (
     MediaCrawlerAdapter, CrawlerCollectionIncompleteError,
     CrawlerMediaDownloadError,
@@ -30,6 +31,41 @@ def write_handoff_failure(item, marker, exit_code, reason=None):
     terminal = "os._exit(7 if args.fixture_mode=='nonzero' else 0)"
     assert terminal in source
     path.write_text(source.replace(terminal, failure))
+
+
+def test_scheduler_database_busy_is_a_recoverable_collection_failure(handoff, stack):
+    from backend.audit_agent.job_state import failure_metadata
+    from test_task_admission import make_run, worker_for
+    from test_investigation_creation_m3 import FakeExecutionAdapter, FakeReportAdapter
+
+    write_handoff_failure(handoff, 'tools.collection_route.CollectionRouteError: SCHEDULER_DATABASE_BUSY', 1)
+    with pytest.raises(CrawlerCollectionIncompleteError, match='采集调度数据库繁忙') as exc:
+        handoff.run()
+
+    code, _, message = str(exc.value).partition(': ')
+    assert code == 'crawler_scheduler_database_busy'
+    metadata = failure_metadata(code, message)
+    assert metadata['recovery_action'] == 'continue_crawl'
+    creation, _, (owner, _) = stack
+    task = make_run(creation, owner, 'database-busy')
+    state = {**FakeExecutionAdapter.completed_state(ingested=1, completed=1),
+             'status': 'failed', 'crawl_status': 'failed', 'error': str(exc.value),
+             'control': {'failure': metadata}}
+    reports = FakeReportAdapter()
+    worker_for(creation, FakeExecutionAdapter(state), reports).run_once()
+    saved = creation.get_run_for_worker(task.id)
+    assert saved.status.value == 'INTERRUPTED' and saved.error_code == code
+    assert '采集调度数据库繁忙' in saved.error_message
+    assert reports.generate_calls == 0
+    assert handoff.events.index('final') < handoff.events.index('cleanup')
+
+
+def test_nonterminal_busy_marker_does_not_reclassify_another_failure(handoff):
+    write_handoff_failure(handoff,
+        'tools.collection_route.CollectionRouteError: SCHEDULER_DATABASE_BUSY\nRuntimeError: different failure', 1)
+    with pytest.raises(RuntimeError, match='different failure') as exc:
+        handoff.run()
+    assert not isinstance(exc.value, CrawlerCollectionIncompleteError)
 
 
 @pytest.mark.parametrize('exit_code', [0, 1])

@@ -27,3 +27,8 @@ test('proven preflight deferral remains resumable without claiming capture succe
 test('real account failure retains its specific recovery guidance', () => {
   expect(formatRunFailureMessage({ ...interrupted, error_code: 'crawler_account_login_required' })).toContain('登录状态');
 });
+
+test('database contention is shown independently of account and platform state', () => {
+  const run = { ...interrupted, error_code: 'crawler_scheduler_database_busy' };
+  expect(formatRunFailureMessage(run)).toBe('采集调度数据库繁忙，本次采集已中断。');
+});

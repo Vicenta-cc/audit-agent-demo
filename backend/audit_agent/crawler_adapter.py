@@ -827,6 +827,11 @@ class MediaCrawlerAdapter:
                         error = CrawlerVerificationError("采集账号触发平台验证")
                         error.account_risk_recorded = bool(route_context and getattr(route_context, 'account_risk_recorded', False))
                         raise error
+                    terminal_error = stderr.rstrip().rpartition("\n")[2]
+                    if terminal_error == "tools.collection_route.CollectionRouteError: SCHEDULER_DATABASE_BUSY":
+                        raise CrawlerCollectionIncompleteError(
+                            "crawler_scheduler_database_busy: 采集调度数据库繁忙，本次采集已中断。"
+                        )
                     raise_route_log_error(stdout + '\n' + stderr)
                     if "BROWSER_INITIALIZATION_FAILED:" in stdout or "BROWSER_INITIALIZATION_FAILED:" in stderr:
                         raise CrawlerBrowserInitializationError()
