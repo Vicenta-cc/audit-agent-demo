@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
+from backend.audit_agent.manual_review import blocked_review_fields
 from backend.domain.contracts import SourceFormat, SupportType
 from backend.domain.evidence_adapter import EvidenceAdapter, EvidenceContext
 from backend.domain.identity import make_evidence_id, make_finding_id, stable_hash
@@ -501,7 +502,10 @@ def _build_immutable_snapshot(
             comment_risk_level = normalize_source_id(
                 source_comment.get("risk_level")
             ).lower()
-            if not comment_audit_status and not comment_risk_level:
+            local_empty = source_comment.get("audit_source") == "local_empty"
+            if local_empty:
+                comment_audit_status, comment_risk_level = "pending", "unavailable"
+            elif not comment_audit_status and not comment_risk_level:
                 comment_audit_status = "unavailable"
                 comment_risk_level = "unavailable"
             elif comment_audit_status not in {
@@ -530,7 +534,7 @@ def _build_immutable_snapshot(
                     "nickname": normalize_source_id(source_comment.get("nickname")),
                     "audit_status": comment_audit_status,
                     "risk_level": comment_risk_level,
-                    "risk_score": source_comment.get("risk_score"),
+                    "risk_score": None if local_empty else source_comment.get("risk_score"),
                     "risk_type": normalize_source_id(source_comment.get("risk_type")),
                     "content": normalize_source_text(source_comment.get("content")),
                     "create_time": comment_time,
@@ -602,7 +606,10 @@ def _build_immutable_snapshot(
             "content_url": row["url"] or result.get("url") or "",
             "author": author.get("nickname") or result.get("author", {}).get("nickname", ""),
             "raw_effective_result": result,
+
         }
+        if finding_payload["risk_level"] == "unknown" and finding_payload["decision"] == "review":
+            finding_payload.update(blocked_review_fields(result))
         if hasattr(source, "provenance_for_row"):
             finding_payload["source_provenance"] = source.provenance_for_row(row)
         findings.append(

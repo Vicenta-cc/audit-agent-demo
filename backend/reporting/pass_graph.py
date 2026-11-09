@@ -29,7 +29,7 @@ def partial_coverage_paragraphs(snapshot) -> list[str]:
     if coverage.get("collection_incomplete"):
         cause = "部分关键词采集失败" if coverage.get("skipped_keywords") else "用户已结束后续采集"
         paragraphs.append(
-            f"采集未完成：{cause}，本报告仅覆盖已完成研判的 {coverage.get('selected_posts', len(snapshot.posts))} 条帖子。"
+            f"采集未完成：{cause}，本报告收录已保存审核记录的 {coverage.get('selected_posts', len(snapshot.posts))} 条帖子。"
             "未采集到的内容未作研判，不能视为无风险，也不能据此推断已覆盖全部调查范围。"
         )
         for skipped in coverage.get("skipped_keywords") or []:
@@ -38,7 +38,7 @@ def partial_coverage_paragraphs(snapshot) -> list[str]:
         return paragraphs
     paragraphs.append(
         f"本任务共有 {coverage.get('candidate_posts', len(snapshot.posts) + len(failures))} 条候选帖子，"
-        f"其中 {coverage.get('selected_posts', len(snapshot.posts))} 条审核成功并纳入统计，"
+        f"其中 {coverage.get('selected_posts', len(snapshot.posts))} 条已保存审核记录并纳入报告，"
         f"{len(failures)} 条审核失败并排除在风险比例分母之外。"
     )
     for failure in failures:
@@ -192,7 +192,10 @@ class PassReportGraph(IntegrationReportGraph):
         document["schema_version"] = STRUCTURED_REPORT_SCHEMA_VERSION
         document["template_kind"] = self.template_kind
         document["template_version"] = self.template_version
-        document["report_metadata"]["investigation_scope"] = SCOPE
+        document["report_metadata"]["investigation_scope"] = (
+            "风险等级仅统计已判定的帖子。待人工复核的帖子单独列出，可查看对应作品及未完成环节。"
+            if any(f.payload.get("pending_manual_review") for f in snapshot.findings) else SCOPE
+        )
         document.pop("provenance", None)
         document.pop("account_entries", None)
         for key in ("account_coverage_statistics", "default_active_comment_entries", "full_account_index", "target_account_entries"):

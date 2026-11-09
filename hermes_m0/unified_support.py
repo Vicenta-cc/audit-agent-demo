@@ -155,6 +155,8 @@ class UnifiedAuditReportToolService(PassReportToolService):
         repo = self.repository
         posts = tuple(repo.ordered_posts())
         first_page = posts[:POST_DIRECTORY_PAGE_SIZE]
+        assessed_risks = dict(repo.report.statistics.risk_counts)
+        pending_review = assessed_risks.pop("unknown", 0)
         account_entries, account_entry_statistics = self._default_account_entries(
             session_id
         )
@@ -171,7 +173,9 @@ class UnifiedAuditReportToolService(PassReportToolService):
                 "statistics": {
                     "post_count": len(posts),
                     "decision_counts": repo.report.statistics.decision_counts,
-                    "risk_counts": repo.report.statistics.risk_counts,
+                    "risk_counts": assessed_risks,
+                    "risk_assessed_posts": sum(assessed_risks.values()),
+                    "pending_manual_review_posts": pending_review,
                     **repo.report_comment_statistics(),
                 },
                 "post_previews": self._post_cards(

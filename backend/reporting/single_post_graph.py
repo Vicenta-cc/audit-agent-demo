@@ -1,5 +1,6 @@
 """One audited risk post: preserve its verdict and evidence without clustering."""
 
+from backend.audit_agent.manual_review import is_pending_report_review
 from backend.reporting.errors import ReportValidationError
 from backend.reporting.pass_graph import PassReportGraph, SCOPE, partial_coverage_paragraphs
 
@@ -20,7 +21,9 @@ class SinglePostReportGraph(PassReportGraph):
         if finding.post_ref != snapshot.posts[0].ref:
             raise ReportValidationError("validate_single_post", ["audit does not belong to the sample"])
         result = finding.payload
-        if result.get("decision") not in DECISIONS or result.get("risk_level") not in RISKS:
+        if result.get("decision") not in DECISIONS or (
+            result.get("risk_level") not in RISKS and not is_pending_report_review(result)
+        ):
             raise ReportValidationError("validate_single_post", ["a complete audit verdict is required"])
         if result["decision"] == "pass" and result["risk_level"] == "none":
             raise ReportValidationError("validate_single_post", ["pass/none belongs to the all-pass template"])
@@ -39,8 +42,12 @@ class SinglePostReportGraph(PassReportGraph):
         comments = self._validate_snapshot(snapshot)
         result = snapshot.findings[0].payload
         verdict = DECISIONS[result["decision"]]
-        risk = RISKS[result["risk_level"]]
+        risk = "风险未定" if result.get("pending_manual_review") else RISKS[result["risk_level"]]
         summary = f"本次共完成 1 条帖子的审核，审核决定为{verdict}，风险等级为{risk}。以下保留原审核结论及对应依据。"
+        if result.get("pending_manual_review"):
+            collected = (snapshot.statistics.get("source_coverage") or {}).get("candidate_posts", 1)
+            summary = (f"已采集 {collected} 条，已判定风险等级 0 条，风险未定、待人工复核 1 条。"
+                       f"供应商拦截环节：{'、'.join(result['audit_gap_stages'])}。")
         coverage = (
             f"本次资料包含 {comments['total']} 条评论，完成独立审核 {comments['completed']} 条，"
             f"其中风险评论 {comments['risk']} 条；其余 {comments['unreviewed']} 条尚无完整审核结果。"
@@ -60,7 +67,7 @@ class SinglePostReportGraph(PassReportGraph):
             })
 
         add("1", "overview", "调查概况", [summary])
-        add("2", "data_overview", "数据概览", ["以下统计覆盖本次全部已审核帖子。"])
+        add("2", "data_overview", "数据概览", ["以下统计覆盖本次纳入报告的帖子。"])
         add("2.1", "deterministic_statistics", "内容与评论规模", [coverage], "section-2")
         add("2.2", "deterministic_statistics", "审核结果与风险等级", [f"审核决定：{verdict}；风险等级：{risk}。"], "section-2")
         add("2.3", "account_activity_overview", "账号活动概览", ["仅统计本次样本中的发布账号，不推断账号全部历史活动。"], "section-2")

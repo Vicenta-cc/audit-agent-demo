@@ -1027,24 +1027,31 @@ def _statistics_projection(
             if str(item.get("audit_finding_ref") or "")
         }
     )
+    canonical_posts = int(statistics.get("canonical_posts") or 0)
+    pending = int((statistics.get("risk_level") or {}).get("unknown") or 0)
+    coverage = statistics.get("source_coverage") or {}
+    risk_scope = "已判定样本" if pending else "全部样本"
     return {
-        "canonical_posts": int(statistics.get("canonical_posts") or 0),
+        "canonical_posts": canonical_posts,
         "audit_finding_count": int(statistics.get("findings") or 0),
         "investigation_finding_count": len(investigation_findings),
         "independently_reviewed_comments": comment_statistics[0],
         "comment_own_risk": comment_statistics[1],
         "decision": decisions,
         "risk_level": risks,
+        "collected_posts": int(coverage.get("candidate_posts", canonical_posts)),
+        "risk_assessed_posts": risk_total,
+        "pending_manual_review_posts": pending,
         "risk_distribution": {
             "total": risk_total,
             "no_risk_summary": {
                 "label": "无风险内容占比",
                 "count": risks["none"],
-                "percentage_label": _percentage_label(risks["none"], risk_total),
+                "percentage_label": _percentage_label(risks["none"], risk_total) if risk_total else "暂无",
                 "description": (
                     f"{risks['none']} 篇内容未发现风险，"
-                    f"风险内容占全部样本的 "
-                    f"{_percentage_label(risk_post_total, risk_total)}。"
+                    f"风险内容占{risk_scope}的 "
+                    f"{_percentage_label(risk_post_total, risk_total)}。" if risk_total else "尚无已判定风险等级的内容。"
                 ),
             },
             "risk_bars": [
@@ -1112,6 +1119,8 @@ def _public_post(
         "decision": str(audit.get("decision") or ""),
         "risk_level": str(audit.get("risk_level") or ""),
         "audit_summary": str(audit.get("summary") or ""),
+        **({"pending_manual_review": True, "audit_gap_stages": list(audit["audit_gap_stages"])}
+           if audit.get("pending_manual_review") else {}),
         "published_at": str(post.get("published_at") or ""),
         "source_url": str(post.get("source_url") or ""),
         "original_text": str(post.get("original_text") or ""),

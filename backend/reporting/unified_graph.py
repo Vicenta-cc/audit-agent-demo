@@ -7,6 +7,7 @@ from typing import Any, Iterable
 
 from langgraph.graph import END, START, StateGraph
 
+from backend.audit_agent.manual_review import is_pending_report_review
 from backend.reporting.account_overview import (
     ReportAccountOverviewProjector,
     public_account_overview_projection,
@@ -51,7 +52,7 @@ def classify_unified_findings(findings: Iterable[Any]) -> dict[str, list[str]]:
         risk = _finding_value(finding, "risk_level")
         if decision == "reject":
             group = "reject"
-        elif decision == "review":
+        elif decision == "review" and risk != "unknown":
             group = "review"
         elif decision == "pass" and risk == "none":
             group = "safe"
@@ -146,7 +147,7 @@ class UnifiedAuditReportGraph(PassReportGraph):
             finding.ref
             for finding in snapshot.findings
             if finding.payload.get("decision") not in DECISION_LABELS
-            or finding.payload.get("risk_level") not in RISK_LABELS
+            or (finding.payload.get("risk_level") not in RISK_LABELS and not is_pending_report_review(finding.payload))
         ]
         if invalid:
             raise ReportValidationError(
@@ -237,9 +238,14 @@ class UnifiedAuditReportGraph(PassReportGraph):
             if evidence_notes
             else "当前冻结快照未提供独立证据条目，结论依据为原审核说明。"
         )
+        if finding.payload.get("pending_manual_review"):
+            stages = "、".join(finding.payload["audit_gap_stages"])
+            verdict = f"风险未定，待人工复核。供应商拦截环节：{stages}"
+        else:
+            verdict = f"{DECISION_LABELS[decision]}，{RISK_LABELS[risk]}"
         text = (
             f"{post.payload.get('title') or '未命名帖子'}："
-            f"{DECISION_LABELS[decision]}，{RISK_LABELS[risk]}。{summary}{basis}"
+            f"{verdict}。{summary}{basis}"
         )
         evidence_ids = [evidence.ref for evidence in related_evidence]
         claim = {
@@ -268,6 +274,7 @@ class UnifiedAuditReportGraph(PassReportGraph):
         )
         safe_count = len(groups["safe"])
         pending_count = len(groups["pending"])
+        manual_count = sum(bool(f.payload.get("pending_manual_review")) for f in snapshot.findings)
         sections: list[dict[str, Any]] = []
 
         platform = (
@@ -278,9 +285,10 @@ class UnifiedAuditReportGraph(PassReportGraph):
         outcome_parts = []
         for count, label in (
             (safe_count, "条审核通过"),
-            (counts["review"], "条建议复审"),
+            (len(groups["review"]), "条建议复审"),
             (counts["reject"], "条建议拒绝"),
-            (pending_count, "条待确认"),
+            (pending_count - manual_count, "条待确认"),
+            (manual_count, "条待人工复核"),
         ):
             if count:
                 outcome_parts.append(f"{count} {label}")
@@ -293,14 +301,23 @@ class UnifiedAuditReportGraph(PassReportGraph):
                     f"部分完成：{missing} 条评论未完成审核，需人工复核；"
                     "以下结论仅覆盖已审核内容，不能据此认定整帖均无风险。"
                 )
+        overview = (
+            f"本报告汇总任务“{snapshot.display_name}”在{platform}平台完成的 "
+            f"{len(snapshot.posts)} 条帖子审核结果：{'、'.join(outcome_parts)}。"
+        )
+        if manual_count:
+            collected = (snapshot.statistics.get("source_coverage") or {}).get("candidate_posts", len(snapshot.posts))
+            overview = (
+                f"已采集 {collected} 条，已判定风险等级 {len(snapshot.posts) - manual_count} 条，"
+                f"风险未定、待人工复核 {manual_count} 条。"
+            )
         self._section(
             sections,
             number="1",
             kind="overview",
             title="报告概览",
             paragraphs=[
-                f"本报告汇总任务“{snapshot.display_name}”在{platform}平台完成的 "
-                f"{len(snapshot.posts)} 条帖子审核结果：{'、'.join(outcome_parts)}。",
+                overview,
                 *coverage_note,
             ],
         )
@@ -347,9 +364,11 @@ class UnifiedAuditReportGraph(PassReportGraph):
             )
 
         if groups["pending"]:
-            paragraphs = [
-                "以下帖子存在审核决定与风险等级不一致的情况，不能直接归为安全。"
-            ]
+            paragraphs = []
+            if manual_count:
+                paragraphs.append(f"{manual_count} 条帖子因供应商拦截而未能判定风险等级，需人工复核。")
+            if pending_count > manual_count:
+                paragraphs.append("以下帖子存在审核决定与风险等级不一致的情况，不能直接归为安全。")
             claims = []
             for ref in groups["pending"]:
                 text, claim = self._post_claim(snapshot, findings[ref])
@@ -359,7 +378,7 @@ class UnifiedAuditReportGraph(PassReportGraph):
                 sections,
                 number="4",
                 kind="pending_post_analysis",
-                title="待确认帖子分析",
+                title="待人工复核" if pending_count == manual_count else "待确认帖子分析",
                 paragraphs=paragraphs,
                 claims=claims,
             )
@@ -381,9 +400,11 @@ class UnifiedAuditReportGraph(PassReportGraph):
         recommendations = list(coverage_note)
         if counts["reject"]:
             recommendations.append("优先复核并处置建议拒绝的帖子及其直接证据。")
-        if counts["review"]:
+        if groups["review"]:
             recommendations.append("对建议复审的帖子补充上下文后再作最终处置。")
-        if groups["pending"]:
+        if manual_count:
+            recommendations.append("请人工复核供应商拦截的环节，补齐依据后再判定风险等级。")
+        if pending_count > manual_count:
             recommendations.append("先解决审核决定与风险等级不一致的问题。")
         if not recommendations:
             recommendations.append("保留本次审核记录；扩大结论范围前应补充样本并重新审核。")

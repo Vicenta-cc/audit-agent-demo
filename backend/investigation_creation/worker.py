@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from backend.audit_agent.manual_review import is_pending_report_review
 from backend.audit_agent.ingestion import (
     SELECTED_CONTENT_PAYLOAD_UNAVAILABLE,
     SelectedContentPayloadUnavailableError,
@@ -777,6 +778,8 @@ class InvestigationWorker:
             for item in audit_results:
                 decision = str(item.get("decision") or "").lower()
                 risk_level = str(item.get("risk_level") or "").lower()
+                if is_pending_report_review(item):
+                    continue
                 if decision not in {"pass", "review", "reject"} or risk_level not in {
                     "none",
                     "low",

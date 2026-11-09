@@ -37,12 +37,12 @@ def snapshot_comment_coverage(payloads: Iterable[Mapping[str, Any]]) -> dict[str
                 # Raw non-empty status fields take precedence, as in the frozen
                 # comment detail projection. Identity is local to the parent post.
                 merged = comments.setdefault(identifier, {})
-                for field in ('audit_status', 'risk_level'):
+                for field in ('audit_status', 'risk_level', 'audit_source'):
                     value = str(comment.get(field) or '').strip().lower()
                     if value:
                         merged[field] = value
         for comment in comments.values():
-            status = comment.get('audit_status', '')
+            status = 'pending' if comment.get('audit_source') == 'local_empty' else comment.get('audit_status', '')
             status = 'pending' if status == 'queued' else status
             statuses[status if status in {'completed', 'failed', 'pending'} else 'unknown'] += 1
             if status == 'completed':

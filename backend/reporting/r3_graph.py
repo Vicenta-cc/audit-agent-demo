@@ -297,6 +297,8 @@ class AccountEntryReportGraph(RiskFindingReportGraph):
                 "post_ref": post_refs[item.post_ref],
                 "decision": item.payload.get("decision") or "",
                 "risk_level": item.payload.get("risk_level") or "",
+                **({"pending_manual_review": True, "audit_gap_stages": item.payload["audit_gap_stages"]}
+                   if item.payload.get("pending_manual_review") else {}),
                 "categories": list(item.payload.get("categories") or []),
                 "primary_risk": item.payload.get("primary_risk") or "",
                 "summary": item.payload.get("summary") or "",

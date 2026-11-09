@@ -80,6 +80,8 @@ def _timestamp(value: Any) -> str:
 
 
 def _is_risk_finding(payload: dict[str, Any]) -> bool:
+    if payload.get("pending_manual_review"):
+        return False
     return (
         str(payload.get("decision") or "").lower() in RISK_DECISIONS
         or str(payload.get("risk_level") or "").lower() in RISK_LEVELS

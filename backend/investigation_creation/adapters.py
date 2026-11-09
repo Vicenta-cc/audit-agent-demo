@@ -7,6 +7,7 @@ import sqlite3
 from types import SimpleNamespace
 from typing import Any, Callable
 
+from backend.audit_agent.manual_review import blocked_review_fields
 from backend.audit_agent.audit_policy_store import (
     AuditPolicyStore,
     TaskAuditConfigRevisionStore,
@@ -1065,6 +1066,7 @@ def _public_audit_result(item: dict[str, Any]) -> dict[str, Any]:
             item.get("content_title") or item.get("title") or "未命名内容"
         ),
         "author_display_name": author_display_name,
+        **blocked_review_fields(item),
         "decision": str(item.get("decision") or ""),
         "risk_level": str(item.get("risk_level") or ""),
         "summary": str(item.get("summary") or ""),

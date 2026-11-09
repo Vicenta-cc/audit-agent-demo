@@ -114,6 +114,9 @@ class IntegrationReportGraph(ReportGenerationGraph):
             }
             for finding in snapshot.findings
         ]
+        pending_review_count = sum(bool(f.payload.get("pending_manual_review")) for f in snapshot.findings)
+        warnings = ([{"code": "audit_content_blocked", "count": pending_review_count}]
+                    if pending_review_count else [])
         manifest = FrozenSourceSnapshot(
             snapshot_id=snapshot.snapshot_ref,
             report_version_id=state["report_version_id"],
@@ -123,7 +126,7 @@ class IntegrationReportGraph(ReportGenerationGraph):
             configuration_revision_id=snapshot.audit_config_revision_id,
             finding_ids=tuple(finding_ids),
             evidence_ids=tuple(evidence_ids),
-            data_quality_warnings=(),
+            data_quality_warnings=tuple(warnings),
             statistic_inputs=tuple(statistic_inputs),
             generated_at=datetime.now(timezone.utc).isoformat(),
             snapshot_hash=snapshot.snapshot_hash,
@@ -147,7 +150,7 @@ class IntegrationReportGraph(ReportGenerationGraph):
                 "evidence_ids": evidence_ids,
                 "snapshot_hash": snapshot.snapshot_hash,
             },
-            "warnings": [],
+            "warnings": warnings,
         }
 
     def _build_statistics(self, state: dict[str, Any]) -> dict[str, Any]:
@@ -237,12 +240,12 @@ class IntegrationReportGraph(ReportGenerationGraph):
             "direct_evidence_count",
         )
         decision_counts = Counter(item.payload["decision"] for item in findings)
-        risk_counts = Counter(item.payload["risk_level"] for item in findings)
+        risk_counts = Counter(item.payload["risk_level"] for item in findings if not item.payload.get("pending_manual_review"))
         primary_counts = Counter(item.payload.get("primary_risk") or "unspecified" for item in findings)
         evidence_types = Counter(item.payload["evidence_type"] for item in evidence)
         for group_key, values, denominator in (
             ("decision", decision_counts, len(findings)),
-            ("risk_level", risk_counts, len(findings)),
+            ("risk_level", risk_counts, sum(risk_counts.values())),
             ("primary_risk", primary_counts, len(findings)),
             ("evidence_type", evidence_types, len(evidence)),
         ):
@@ -258,7 +261,7 @@ class IntegrationReportGraph(ReportGenerationGraph):
                         denominator,
                         f"{group_key}_denominator",
                         group,
-                        "finding_count",
+                        "assessed_finding_count" if group_key == "risk_level" and denominator < len(findings) else "finding_count",
                     )
         # Archived reports can include verified candidate/exclusion counts.
         # Keep their stable metric refs so saved numeric claims can be revalidated.

@@ -28,6 +28,7 @@ from hermes_m0.domain import (
     ReportStatistics,
     ReportVersion,
 )
+from backend.audit_agent.manual_review import blocked_review_fields
 from backend.reporting.comment_statistics import snapshot_comment_coverage
 from hermes_m0.repository import InvestigationRepository, RepositoryLookupError
 from hermes_m0.source_projection import normalize_source_id, utc_timestamp
@@ -778,12 +779,13 @@ def _load_report_graph(
             raise PublishedReportLoadError("single-risk snapshot must contain one ungrouped post")
         row = finding_rows[0]
         verdict = finding_payloads[str(row["finding_ref"])]
-        if verdict.get("decision") not in {"review", "reject"} or verdict.get("risk_level") not in {"low", "medium", "high"}:
-            raise PublishedReportLoadError("single-risk snapshot requires a risk verdict")
-        standalone = (StandaloneRiskPost(
-            post_id=str(row["post_ref"]), audit_finding_id=str(row["finding_ref"]),
-            disposition_note="单条审核样本，保留原审核结论与依据，不推断跨帖子共性。",
-        ),)
+        if verdict.get("risk_level") != "unknown":
+            if verdict.get("decision") not in {"review", "reject"} or verdict.get("risk_level") not in {"low", "medium", "high"}:
+                raise PublishedReportLoadError("single-risk snapshot requires a risk verdict")
+            standalone = (StandaloneRiskPost(
+                post_id=str(row["post_ref"]), audit_finding_id=str(row["finding_ref"]),
+                disposition_note="单条审核样本，保留原审核结论与依据，不推断跨帖子共性。",
+            ),)
     _validate_risk_coverage(
         investigations,
         standalone,
@@ -884,6 +886,12 @@ def _load_report_graph(
             str(payload.get("completed_at") or manifest["generated_at"]),
             "Finding completed_at",
         )
+        if payload.get("risk_level") == "unknown":
+            if not (unified_audit or single_risk) or not (
+                payload.get("decision") == "review"
+                and blocked_review_fields(payload.get("raw_effective_result") or {})
+            ):
+                raise PublishedReportLoadError("unknown post risk lacks a blocked manual review record")
         finding = Finding(
             id=finding_ref,
             post_id=post_ref,
@@ -1663,7 +1671,9 @@ def _project_frozen_comments(
 
         audit_status = normalize_source_id(value("audit_status")).lower()
         risk_level = normalize_source_id(value("risk_level")).lower()
-        if not audit_status and not risk_level:
+        if value("audit_source") == "local_empty":
+            audit_status, risk_level = "pending", "unavailable"
+        elif not audit_status and not risk_level:
             audit_status = "unavailable"
             risk_level = "unavailable"
         elif audit_status not in {"completed", "failed", "pending", "queued"}:

@@ -100,7 +100,7 @@ class Finding(FrozenModel):
     post_id: str
     post_revision_id: str
     decision: Decision
-    risk_level: RiskLevel
+    risk_level: RiskLevel | Literal["unknown"]
     categories: tuple[str, ...]
     summary: str
     completed_at: datetime
