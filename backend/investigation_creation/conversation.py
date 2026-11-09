@@ -672,9 +672,11 @@ class InvestigationCreationConversationService:
         hermes_state_dir: Path | None = None,
         principal_resolver: Callable[[str], Principal] | None = None,
         report_service: HermesInvestigationAgentService | None = None,
+        audit_result_store: Any | None = None,
     ) -> None:
         self.tool_service = tool_service
         self.report_service = report_service
+        self.audit_result_store = audit_result_store
         self.report_collection = None
         self.tool_service.session_run_resolver = lambda session_id, principal: self.get_workspace_state(session_id, principal=principal).run
         self.store = store or InvestigationStore()
@@ -734,6 +736,7 @@ class InvestigationCreationConversationService:
 
     def list_workspaces(self, *, principal: Principal, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
         items = []
+        item_job_ids: dict[str, str] = {}
         for session in self.store.list_creation_sessions(principal=principal.id, limit=None):
             try:
                 state = self.get_workspace_state(session.id, principal=principal)
@@ -747,14 +750,17 @@ class InvestigationCreationConversationService:
                     *(message.created_at for message in state.report_messages),
                 ]
                 updated_at = max((value for value in timestamp_candidates if value), default=session.updated_at)
-                items.append({
+                item = {
                     "workspace_session_id": session.id,
                     "run_id": state.run.run_id if state.run else "",
                     "title": (state.draft_artifact.get("draft") or {}).get("title") or first_question[:48] or "新调查需求",
                     "updated_at": updated_at,
                     "run_status": state.run.status if state.run else "",
                     "presentation_stage": state.draft_artifact.get("presentation_stage", ""),
-                })
+                }
+                items.append(item)
+                if state.run and state.run.job_id:
+                    item_job_ids[session.id] = state.run.job_id
             except (sqlite3.Error, OSError):
                 # A shared storage outage must remain a request failure.
                 raise
@@ -788,7 +794,23 @@ class InvestigationCreationConversationService:
             key=lambda item: (item["updated_at"], item["workspace_session_id"]),
             reverse=True,
         )
-        return items[offset:offset + limit]
+        page = items[offset:offset + limit]
+        page_job_ids = {
+            item_job_ids.get(str(item["workspace_session_id"]), "")
+            for item in page
+        }
+        summaries = (
+            self.audit_result_store.risk_summaries_for_jobs(page_job_ids)
+            if self.audit_result_store is not None
+            else {}
+        )
+        empty_summary = {"status": "empty", "risk_count": 0, "review_count": 0}
+        for item in page:
+            if item.get("read_error"):
+                continue
+            job_id = item_job_ids.get(str(item["workspace_session_id"]), "")
+            item["risk_summary"] = summaries.get(job_id, empty_summary)
+        return page
 
     def get_session(self, session_id: str, *, principal: Principal) -> InvestigationSession:
         session = self.store.get_session(session_id)

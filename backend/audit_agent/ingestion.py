@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
+from itertools import groupby
+from operator import itemgetter
 from pathlib import Path
 from time import monotonic
 from typing import Callable, Iterable
+from urllib.parse import quote
 
 from .config import settings
 
@@ -276,35 +279,9 @@ class AuditResultStore:
 
         order_sql = self._order_sql(sort)
         with self._lock, self._connect() as conn:
-            if self._has_jobs_table(conn):
-                where.append(
-                    "NOT EXISTS ("
-                    "SELECT 1 FROM jobs "
-                    "WHERE jobs.id = audit_results.job_id AND jobs.archived = 1"
-                    ")"
-                )
-                if owner_user_id is not None:
-                    granted = tuple(
-                        str(item) for item in granted_job_ids if str(item)
-                    )
-                    if granted:
-                        placeholders = ",".join("?" for _ in granted)
-                        where.append(
-                            "EXISTS (SELECT 1 FROM jobs "
-                            "WHERE jobs.id = audit_results.job_id "
-                            f"AND (jobs.owner_user_id = ? OR jobs.id IN ({placeholders})))"
-                        )
-                        params.extend((owner_user_id, *granted))
-                    else:
-                        where.append(
-                            "EXISTS (SELECT 1 FROM jobs "
-                            "WHERE jobs.id = audit_results.job_id "
-                            "AND jobs.owner_user_id = ?)"
-                        )
-                        params.append(owner_user_id)
-            elif owner_user_id is not None:
-                # Ownership cannot be proven when the jobs table is absent.
-                where.append("0 = 1")
+            visible, scope_params = self._visible_results_filter(conn, owner_user_id, granted_job_ids)
+            where.append(visible)
+            params.extend(scope_params)
             where_sql = " AND ".join(where) if where else "1 = 1"
             total_row = conn.execute(
                 f"SELECT COUNT(*) AS count FROM audit_results WHERE {where_sql}",
@@ -324,6 +301,287 @@ class AuditResultStore:
             "next_after_id": next_after_id,
             "total": int(total_row["count"] or 0) if total_row else 0,
         }
+
+    def _visible_results_filter(self, conn, owner_user_id, granted_job_ids):
+        if not self._has_jobs_table(conn):
+            return ("1 = 1" if owner_user_id is None else "0 = 1"), []
+        if owner_user_id is None:
+            return (
+                "NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.id = audit_results.job_id AND jobs.archived = 1)",
+                [],
+            )
+        grants = tuple(str(item) for item in granted_job_ids if item)
+        scope = "jobs.owner_user_id = ?"
+        if grants:
+            placeholders = ",".join("?" for _ in grants)
+            scope += f" OR jobs.id IN ({placeholders})"
+        return (
+            "EXISTS (SELECT 1 FROM jobs WHERE jobs.id = audit_results.job_id "
+            f"AND jobs.archived IS NOT 1 AND ({scope}))",
+            [owner_user_id, *grants],
+        )
+
+    def risk_summaries_for_jobs(
+        self, job_ids: Iterable[str]
+    ) -> dict[str, dict[str, object]]:
+        """Build full-result workspace summaries in bounded batch queries."""
+        from .risk_summary import summarize_audit_results
+
+        normalized = tuple(
+            dict.fromkeys(
+                str(job_id).strip()
+                for job_id in job_ids
+                if str(job_id).strip()
+            )
+        )
+        summaries = {job_id: summarize_audit_results(()) for job_id in normalized}
+        with self._lock, self._connect() as conn:
+            for start in range(0, len(normalized), 500):
+                batch = normalized[start:start + 500]
+                placeholders = ",".join("?" for _ in batch)
+                rows = conn.execute(
+                    f"""
+                    WITH inputs AS (
+                        SELECT job_id, decision,
+                               CASE WHEN json_valid(result_json) THEN result_json END AS payload
+                        FROM audit_results WHERE job_id IN ({placeholders})
+                    )
+                    SELECT job_id,
+                           COALESCE(NULLIF(decision, ''), json_extract(payload, '$.decision')) AS decision,
+                           json_extract(payload, '$.audit_completion_status') AS audit_completion_status,
+                           json_type(payload, '$.manual_review_required') AS review_type
+                    FROM inputs ORDER BY job_id
+                    """,
+                    batch,
+                )
+                for job_id, group in groupby(rows, itemgetter("job_id")):
+                    summaries[job_id] = summarize_audit_results(
+                        {
+                            "decision": row["decision"],
+                            "audit_completion_status": row["audit_completion_status"],
+                            "manual_review_required": row["review_type"] == "true",
+                        }
+                        for row in group
+                    )
+        return summaries
+
+    def list_comment_risk_users(
+        self,
+        *,
+        owner_user_id: str | None = None,
+        granted_job_ids: tuple[str, ...] = (),
+    ) -> list[dict]:
+        """Aggregate authorized risky comments by their own source identity."""
+        profiles: dict[str, dict] = {}
+        window_end = datetime.now(timezone.utc).timestamp()
+        window_start = window_end - (30 * 24 * 60 * 60)
+        after_id = 0
+        while True:
+            with self._lock, self._connect() as conn:
+                visible, params = self._visible_results_filter(conn, owner_user_id, granted_job_ids)
+                rows = conn.execute(
+                    f"SELECT * FROM audit_results WHERE id > ? AND {visible} ORDER BY id LIMIT 16",
+                    [after_id, *params],
+                ).fetchall()
+            if not rows:
+                break
+            for row in rows:
+                self._collect_comment_risk_profiles(
+                    profiles,
+                    self._row_to_item(row),
+                    window_start=window_start,
+                    window_end=window_end,
+                )
+            after_id = rows[-1]["id"]
+
+        output = []
+        for profile in profiles.values():
+            comments = sorted(
+                profile.pop("_comments_by_key").values(),
+                key=lambda item: item["occurred_at"],
+                reverse=True,
+            )
+            high = sum(item["risk_level"] == "high" for item in comments)
+            medium = sum(item["risk_level"] == "medium" for item in comments)
+            review = sum(item["risk_level"] == "review" for item in comments)
+            if not (high >= 1 or medium + review >= 2):
+                continue
+            profile.update(
+                violation_count=len(comments),
+                high_risk_count=high,
+                medium_risk_count=medium,
+                pending_review_count=review,
+                comment_area_count=len(
+                    {item["source_audit_result_id"] for item in comments}
+                ),
+                latest_at=comments[0]["occurred_at"] if comments else "",
+                comments=comments,
+            )
+            output.append(profile)
+        return sorted(
+            output,
+            key=lambda item: (
+                -int(item["high_risk_count"]),
+                -int(item["medium_risk_count"]),
+                -int(item["pending_review_count"]),
+                str(item["latest_at"]),
+            ),
+        )
+
+    @classmethod
+    def _collect_comment_risk_profiles(
+        cls,
+        profiles: dict[str, dict],
+        result: dict,
+        *,
+        window_start: float,
+        window_end: float,
+    ) -> None:
+        comments = result.get("comments") or []
+        if not isinstance(comments, list):
+            return
+        platform = cls._comment_platform(result.get("platform"))
+        result_id = int(result.get("audit_result_id") or result.get("id") or 0)
+        job_id = str(result.get("job_id") or "")
+        analyzed_at = str(result.get("analyzed_at") or result.get("updated_at") or "")
+        source_title = str(
+            result.get("content_title")
+            or result.get("title_zh")
+            or result.get("title")
+            or result.get("note_id")
+            or "来源内容"
+        )
+        for raw in comments:
+            if not isinstance(raw, dict):
+                continue
+            risk_level = cls._comment_risk_level(raw)
+            if not risk_level:
+                continue
+            comment_id = str(raw.get("comment_id") or raw.get("id") or "").strip()
+            if not comment_id:
+                continue
+            occurred_at = cls._comment_occurred_at(raw, analyzed_at)
+            occurred_timestamp = cls._iso_timestamp(occurred_at)
+            # Unknown timestamps cannot be proven to belong to the recent window.
+            if not (window_start <= occurred_timestamp <= window_end):
+                continue
+            sec_uid = str(raw.get("sec_uid") or "").strip()
+            public_id = cls._comment_public_douyin_id(raw, platform)
+            internal_user_id = str(raw.get("user_id") or "").strip()
+            if sec_uid:
+                stable_key = f"{platform}:sec_uid:{sec_uid}"
+            elif public_id:
+                stable_key = f"{platform}:public_id:{public_id}"
+            elif internal_user_id:
+                stable_key = f"{platform}:internal_id:{internal_user_id}"
+            else:
+                stable_key = f"{platform}:source:{result_id}:{comment_id}"
+            profile = profiles.setdefault(
+                stable_key,
+                {
+                    "id": stable_key,
+                    "platform": platform,
+                    "display_name": str(
+                        raw.get("nickname") or public_id or internal_user_id or "评论用户"
+                    ),
+                    "public_douyin_id": public_id,
+                    "sec_uid": sec_uid,
+                    "profile_url": (
+                        f"https://www.douyin.com/user/{quote(sec_uid, safe='')}"
+                        if platform == "dy" and sec_uid
+                        else ""
+                    ),
+                    "avatar_url": str(raw.get("avatar") or raw.get("avatar_url") or ""),
+                    "_comments_by_key": {},
+                },
+            )
+            comment = {
+                "source_comment_id": comment_id,
+                "content": str(raw.get("content") or raw.get("text") or ""),
+                "risk_level": risk_level,
+                "risk_score": cls._comment_risk_score(raw, risk_level),
+                "source_audit_result_id": result_id,
+                "source_job_id": job_id,
+                "source_title": source_title,
+                "occurred_at": occurred_at,
+            }
+            library = raw.get("primary_library")
+            if isinstance(library, dict):
+                comment["primary_library"] = {
+                    "id": str(library.get("id") or ""),
+                    "label": str(library.get("label") or library.get("name") or ""),
+                }
+            dedupe_key = f"{platform}:{comment_id}"
+            previous = profile["_comments_by_key"].get(dedupe_key)
+            if previous is None or occurred_at > previous["occurred_at"]:
+                profile["_comments_by_key"][dedupe_key] = comment
+
+    @staticmethod
+    def _comment_platform(value: object) -> str:
+        normalized = str(value or "").strip().lower()
+        return {"抖音": "dy", "douyin": "dy", "小红书": "xhs", "xiaohongshu": "xhs"}.get(
+            normalized, normalized or "unknown"
+        )
+
+    @staticmethod
+    def _comment_public_douyin_id(comment: dict, platform: str) -> str:
+        if platform != "dy":
+            return ""
+        for key in ("user_unique_id", "short_user_id"):
+            value = str(comment.get(key) or "").strip()
+            if value.lower() not in {"", "0", "none", "null", "undefined"}:
+                return value
+        return ""
+
+    @staticmethod
+    def _comment_risk_level(comment: dict) -> str:
+        value = str(
+            comment.get("risk_level")
+            or comment.get("evidence_risk_level")
+            or ""
+        ).strip().lower()
+        if value in {"high", "高", "高危"}:
+            return "high"
+        if value in {"medium", "mid", "中", "中危"}:
+            return "medium"
+        if value in {"low", "review", "pending", "待复核"}:
+            return "review"
+        return ""
+
+    @staticmethod
+    def _comment_risk_score(comment: dict, risk_level: str) -> int:
+        raw = comment.get("risk_score")
+        try:
+            return max(0, min(100, int(float(raw))))
+        except (TypeError, ValueError):
+            return {"high": 90, "medium": 65, "review": 45}[risk_level]
+
+    @staticmethod
+    def _comment_occurred_at(comment: dict, fallback: str) -> str:
+        raw = comment.get("create_time") or comment.get("created_at")
+        try:
+            if raw not in (None, ""):
+                value = float(raw)
+                if value > 10_000_000_000:
+                    value /= 1000
+                return datetime.fromtimestamp(value, timezone.utc).isoformat()
+        except (TypeError, ValueError, OSError):
+            pass
+        text = str(raw or "").strip()
+        return text if AuditResultStore._iso_timestamp(text) > 0 else fallback
+
+    @staticmethod
+    def _iso_timestamp(value: object) -> float:
+        text = str(value or "").strip()
+        if not text:
+            return 0.0
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return 0.0
+        # Existing audit rows use local naive timestamps; datetime.timestamp()
+        # applies the process timezone and preserves that established meaning.
+        return parsed.timestamp()
 
     def get_result(
         self,

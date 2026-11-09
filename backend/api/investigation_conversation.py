@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.api.contracts import (
+    AuditRiskSummaryResponse,
     CreateInvestigationTurnRequest,
     GenerateInvestigationConfirmationPreviewRequest,
     InvestigationMessageResponse,
@@ -71,6 +72,7 @@ class InvestigationWorkspaceListItem(BaseModel):
     run_status: str
     presentation_stage: str
     read_error: str = ""
+    risk_summary: AuditRiskSummaryResponse | None = None
 
 
 class InvestigationWorkspaceListResponse(BaseModel):

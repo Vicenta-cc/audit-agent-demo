@@ -24,6 +24,12 @@ class PublicApiModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+class AuditRiskSummaryResponse(PublicApiModel):
+    status: Literal["risk", "review", "safe", "empty"]
+    risk_count: int = Field(ge=0)
+    review_count: int = Field(ge=0)
+
+
 class ReportVersionSummaryResponse(PublicApiModel):
     report_version_id: str
     report_id: str

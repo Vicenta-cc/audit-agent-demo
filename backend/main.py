@@ -467,6 +467,7 @@ investigation_creation_conversation_service = InvestigationCreationConversationS
     tool_service=investigation_creation_tool_service,
     store=investigation_agent_service.store,
     report_service=investigation_agent_service,
+    audit_result_store=audit_result_store,
     fake_runtime=settings.hermes_creation_fake_runtime,
     principal_resolver=(
         auth_store.principal_for_user if _authz_enabled() else None
@@ -867,6 +868,27 @@ class CrawlerAccountUpdateRequest(BaseModel):
 
 class CommentUserRelationRequest(BaseModel):
     relation_context: dict = Field(default_factory=dict)
+
+
+class CommentRiskUserProfile(BaseModel):
+    id: str
+    platform: str
+    display_name: str
+    public_douyin_id: str = ""
+    sec_uid: str = ""
+    profile_url: str = ""
+    avatar_url: str = ""
+    violation_count: int = 0
+    high_risk_count: int = 0
+    medium_risk_count: int = 0
+    pending_review_count: int = 0
+    comment_area_count: int = 0
+    latest_at: str = ""
+    comments: list[dict] = Field(default_factory=list)
+
+
+class CommentRiskUserListResponse(BaseModel):
+    items: list[CommentRiskUserProfile] = Field(default_factory=list)
 
 
 class AuditResultReviewRequest(BaseModel):
@@ -2274,6 +2296,17 @@ def send_crawler_login_input(
 def list_monitored_users(principal: Principal = Depends(principal_provider)):
     owner = None if not _authz_enabled() or principal.is_admin else principal.id
     return {"items": job_store.list_monitored_users(owner_user_id=owner)}
+
+
+@app.get("/api/comment-risk-users", response_model=CommentRiskUserListResponse)
+def list_comment_risk_users(principal: Principal = Depends(principal_provider)):
+    owner, grants = _job_list_scope(principal)
+    return {
+        "items": audit_result_store.list_comment_risk_users(
+            owner_user_id=owner,
+            granted_job_ids=grants,
+        )
+    }
 
 
 @app.post("/api/monitored-users/from-audit-result")

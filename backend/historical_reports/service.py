@@ -1,15 +1,35 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from threading import RLock
 from typing import Any
 
 from backend.historical_reports.catalog import HistoricalReportSpec
 from backend.historical_reports.importer import HistoricalReportImporter
 from backend.historical_reports.store import HistoricalReportWorkspaceStore
+from backend.audit_agent.risk_summary import summarize_audit_results
 from backend.investigation.errors import (
     InvestigationSessionNotFoundError,
     InvestigationTurnNotFoundError,
 )
+
+
+def _frozen_finding_risk_input(payload: dict[str, Any]) -> dict[str, Any]:
+    effective = payload.get("raw_effective_result")
+    if not isinstance(effective, dict):
+        effective = {}
+    return {
+        "decision": payload.get("decision") or effective.get("decision") or "",
+        "manual_review_required": bool(
+            payload.get("manual_review_required")
+            or effective.get("manual_review_required")
+        ),
+        "audit_completion_status": (
+            payload.get("audit_completion_status")
+            or effective.get("audit_completion_status")
+            or ""
+        ),
+    }
 
 
 class HistoricalReportDemoService:
@@ -228,6 +248,15 @@ class HistoricalReportDemoService:
             "conversation": conversation,
             "latest_turn": latest_turn,
         }
+
+    @lru_cache(maxsize=32)
+    def risk_summary_for_version(self, version_id: str) -> dict[str, Any]:
+        # Version snapshots are immutable. Cache only the compact summary;
+        # access to the parent workspace is checked on every API request.
+        snapshot = self.report_store.load_immutable_snapshot(version_id)
+        return summarize_audit_results(
+            _frozen_finding_risk_input(finding.payload) for finding in snapshot.findings
+        )
 
     def _current_anchor(self, workspace: dict[str, Any], principal_id: str) -> str:
         anchor = self._anchor(str(workspace["id"]), principal_id)

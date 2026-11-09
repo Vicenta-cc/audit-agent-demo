@@ -7,6 +7,7 @@ import threading
 from contextlib import closing
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 from uuid import uuid4
 from typing import Callable
 
@@ -226,6 +227,8 @@ class JobStore:
                     display_name TEXT,
                     profile_url TEXT,
                     raw_identity TEXT,
+                    public_douyin_id TEXT,
+                    sec_uid TEXT,
                     source_comment_id TEXT,
                     source_comment_text TEXT,
                     source_risk_content TEXT,
@@ -329,6 +332,8 @@ class JobStore:
                 "source_comment_text": "TEXT",
                 "source_risk_content": "TEXT",
                 "analysis_status": "TEXT NOT NULL DEFAULT 'job_created'",
+                "public_douyin_id": "TEXT",
+                "sec_uid": "TEXT",
             }.items():
                 if column not in related_columns:
                     conn.execute(f"ALTER TABLE suspected_related_accounts ADD COLUMN {column} {definition}")
@@ -863,27 +868,36 @@ class JobStore:
             author.get("user_url"),
             author.get("url"),
         )
+        if platform == "dy":
+            # Douyin profile links are trustworthy only when they are derived
+            # from this author's own sec_uid. Do not expose a legacy/client URL
+            # when the stable profile identifier is absent.
+            profile_url = self._douyin_profile_url(author.get("sec_uid"))
         raw_identity = self._first_text(
             author.get("sec_uid"),
             author.get("user_id"),
             author.get("user_unique_id"),
             author.get("short_user_id"),
-            display_name,
         )
+        result_id = int(audit_result.get("audit_result_id") or audit_result.get("id") or 0) or None
         stable_key = self._stable_account_key(
             platform=platform,
             profile_url=profile_url,
             raw_identity=raw_identity,
-            display_name=display_name,
+            display_name="",
         )
+        if not raw_identity and not profile_url:
+            if not result_id:
+                raise ValueError("audit result has no stable author identity")
+            stable_key = f"source-result:{result_id}"
         if not platform or not stable_key:
             raise ValueError("audit result has no stable author identity")
 
-        result_id = int(audit_result.get("audit_result_id") or audit_result.get("id") or 0) or None
         source_job_id = self._first_text(audit_result.get("job_id"))
         now = datetime.now().isoformat(timespec="seconds")
 
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             monitored_id = self._upsert_monitored_user(
                 conn,
                 owner_user_id=owner,
@@ -915,7 +929,9 @@ class JobStore:
             return {}
 
         author = parent_audit_result.get("author") if isinstance(parent_audit_result.get("author"), dict) else {}
-        parent_platform = str(parent_audit_result.get("platform") or author.get("platform") or "").strip()
+        parent_platform = self._normalize_platform_label(
+            parent_audit_result.get("platform") or author.get("platform")
+        )
         parent_display_name = self._first_text(
             author.get("nickname"),
             author.get("user_unique_id"),
@@ -932,59 +948,71 @@ class JobStore:
             author.get("user_url"),
             author.get("url"),
         )
+        if parent_platform == "dy":
+            parent_profile_url = self._douyin_profile_url(author.get("sec_uid"))
         parent_raw_identity = self._first_text(
             author.get("sec_uid"),
             author.get("user_id"),
             author.get("user_unique_id"),
             author.get("short_user_id"),
-            parent_display_name,
         )
+        parent_result_id = int(parent_audit_result.get("audit_result_id") or parent_audit_result.get("id") or 0) or None
         parent_stable_key = self._stable_account_key(
             platform=parent_platform,
             profile_url=parent_profile_url,
             raw_identity=parent_raw_identity,
-            display_name=parent_display_name,
+            display_name="",
         )
+        if not parent_raw_identity and not parent_profile_url:
+            if not parent_result_id:
+                raise ValueError("parent audit result has no stable author identity")
+            parent_stable_key = f"source-result:{parent_result_id}"
         if not parent_platform or not parent_stable_key:
             raise ValueError("parent audit result has no stable author identity")
 
         comment_id = self._first_text(relation_context.get("source_comment_id"))
+        if not comment_id:
+            raise ValueError("relation_context.source_comment_id is required")
         source_comment = self._find_source_comment(parent_audit_result, comment_id)
-        suspect_platform = self._normalize_platform_label(
-            self._first_text(relation_context.get("suspect_platform"), parent_platform)
-        )
+        if not source_comment:
+            raise ValueError("source comment was not found in parent audit result")
+        suspect_platform = self._normalize_platform_label(parent_platform)
         suspect_display_name = self._first_text(
-            relation_context.get("suspect_display_name"),
             source_comment.get("nickname"),
             source_comment.get("user_unique_id"),
             source_comment.get("short_user_id"),
             source_comment.get("user_id"),
             "评论者",
         )
-        suspect_profile_url = self._first_text(relation_context.get("suspect_profile_url"))
+        suspect_sec_uid = self._first_text(source_comment.get("sec_uid"))
+        suspect_public_douyin_id = self._public_douyin_id(source_comment, suspect_platform)
+        suspect_profile_url = (
+            self._douyin_profile_url(suspect_sec_uid)
+            if suspect_platform == "dy" and suspect_sec_uid
+            else ""
+        )
         suspect_raw_identity = self._first_text(
-            relation_context.get("suspect_raw_identity"),
-            source_comment.get("sec_uid"),
-            source_comment.get("user_id"),
+            suspect_sec_uid,
             source_comment.get("user_unique_id"),
             source_comment.get("short_user_id"),
-            suspect_display_name,
+            source_comment.get("user_id"),
         )
         suspect_stable_key = self._stable_account_key(
             platform=suspect_platform,
             profile_url=suspect_profile_url,
             raw_identity=suspect_raw_identity,
-            display_name=suspect_display_name,
+            display_name="",
         )
+        if not suspect_raw_identity and not suspect_profile_url:
+            suspect_stable_key = f"source-comment:{parent_result_id or 'unknown'}:{comment_id}"
         if not suspect_platform or not suspect_stable_key:
             raise ValueError("relation_context has no stable suspect identity")
 
-        parent_result_id = int(parent_audit_result.get("audit_result_id") or parent_audit_result.get("id") or 0) or None
         parent_job_id = self._first_text(parent_audit_result.get("job_id"), relation_context.get("source_job_id"))
         source_comment_text = self._first_text(
-            relation_context.get("source_comment_text"),
             source_comment.get("content"),
             source_comment.get("text"),
+            relation_context.get("source_comment_text"),
         )
         source_risk_content = self._first_text(
             relation_context.get("source_risk_content"),
@@ -995,6 +1023,7 @@ class JobStore:
         now = datetime.now().isoformat(timespec="seconds")
 
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             monitored_id = self._upsert_monitored_user(
                 conn,
                 owner_user_id=owner,
@@ -1017,6 +1046,8 @@ class JobStore:
                 display_name=suspect_display_name,
                 profile_url=suspect_profile_url,
                 raw_identity=suspect_raw_identity,
+                public_douyin_id=suspect_public_douyin_id,
+                sec_uid=suspect_sec_uid,
                 source_comment_id=comment_id,
                 source_comment_text=source_comment_text,
                 source_risk_content=source_risk_content,
@@ -1061,17 +1092,34 @@ class JobStore:
         author: dict,
         now: str,
     ) -> str:
-        row = conn.execute(
-            "SELECT id FROM monitored_users "
-            "WHERE owner_user_id = ? AND platform = ? AND stable_key = ?",
-            (owner_user_id, platform, stable_key),
-        ).fetchone()
+        sec_uid = self._first_text(author.get("sec_uid"))
+        if platform == "dy" and sec_uid:
+            stable_key = f"sec_uid:{sec_uid}"
+            # Older releases keyed these rows by source URL or raw ID. Reuse
+            # only a row whose own stored author proves the same identity.
+            row = conn.execute(
+                """
+                SELECT id FROM monitored_users
+                WHERE owner_user_id = ? AND platform = ? AND (
+                    stable_key = ? OR
+                    CASE WHEN json_valid(author_json) THEN json_extract(author_json, '$.sec_uid') END = ?
+                )
+                ORDER BY (stable_key = ?) DESC, created_at, id LIMIT 1
+                """,
+                (owner_user_id, platform, stable_key, sec_uid, stable_key),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT id FROM monitored_users "
+                "WHERE owner_user_id = ? AND platform = ? AND stable_key = ?",
+                (owner_user_id, platform, stable_key),
+            ).fetchone()
         if row:
             monitored_id = row["id"]
             conn.execute(
                 """
                 UPDATE monitored_users
-                SET display_name = COALESCE(NULLIF(?, ''), display_name),
+                SET stable_key = ?, display_name = COALESCE(NULLIF(?, ''), display_name),
                     profile_url = COALESCE(NULLIF(?, ''), profile_url),
                     raw_identity = COALESCE(NULLIF(?, ''), raw_identity),
                     source_audit_result_id = COALESCE(?, source_audit_result_id),
@@ -1081,6 +1129,7 @@ class JobStore:
                 WHERE id = ?
                 """,
                 (
+                    stable_key,
                     display_name,
                     profile_url,
                     raw_identity,
@@ -1130,6 +1179,8 @@ class JobStore:
         display_name: str,
         profile_url: str,
         raw_identity: str,
+        public_douyin_id: str,
+        sec_uid: str,
         source_comment_id: str,
         source_comment_text: str,
         source_risk_content: str,
@@ -1139,22 +1190,30 @@ class JobStore:
         analysis_status: str,
         now: str,
     ) -> str:
+        if platform == "dy" and sec_uid:
+            stable_key = f"sec_uid:{sec_uid}"
+        # Legacy client-supplied identity keys do not prove which user wrote a
+        # comment. A matching parent result + exact source comment can do so.
         row = conn.execute(
             """
-            SELECT id
-            FROM suspected_related_accounts
-            WHERE monitored_user_id = ? AND platform = ? AND stable_key = ?
+            SELECT id FROM suspected_related_accounts
+            WHERE owner_user_id = ? AND monitored_user_id = ? AND platform = ?
+              AND (stable_key = ? OR (source_audit_result_id = ? AND source_comment_id = ?))
+            ORDER BY (stable_key = ?) DESC, created_at, id LIMIT 1
             """,
-            (monitored_user_id, platform, stable_key),
+            (owner_user_id, monitored_user_id, platform, stable_key,
+             source_audit_result_id, source_comment_id, stable_key),
         ).fetchone()
         if row:
             related_id = row["id"]
             conn.execute(
                 """
                 UPDATE suspected_related_accounts
-                SET display_name = COALESCE(NULLIF(?, ''), display_name),
+                SET stable_key = ?, display_name = COALESCE(NULLIF(?, ''), display_name),
                     profile_url = COALESCE(NULLIF(?, ''), profile_url),
                     raw_identity = COALESCE(NULLIF(?, ''), raw_identity),
+                    public_douyin_id = COALESCE(NULLIF(?, ''), public_douyin_id),
+                    sec_uid = COALESCE(NULLIF(?, ''), sec_uid),
                     source_comment_id = COALESCE(NULLIF(?, ''), source_comment_id),
                     source_comment_text = COALESCE(NULLIF(?, ''), source_comment_text),
                     source_risk_content = COALESCE(NULLIF(?, ''), source_risk_content),
@@ -1170,9 +1229,12 @@ class JobStore:
                 WHERE id = ?
                 """,
                 (
+                    stable_key,
                     display_name,
                     profile_url,
                     raw_identity,
+                    public_douyin_id,
+                    sec_uid,
                     source_comment_id,
                     source_comment_text,
                     source_risk_content,
@@ -1192,11 +1254,11 @@ class JobStore:
             """
             INSERT INTO suspected_related_accounts (
                 id, owner_user_id, monitored_user_id, platform, stable_key, display_name, profile_url,
-                raw_identity, source_comment_id, source_comment_text, source_risk_content,
+                raw_identity, public_douyin_id, sec_uid, source_comment_id, source_comment_text, source_risk_content,
                 source_audit_result_id, source_job_id, analysis_job_id, analysis_status,
                 created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 related_id,
@@ -1207,6 +1269,8 @@ class JobStore:
                 display_name,
                 profile_url,
                 raw_identity,
+                public_douyin_id,
+                sec_uid,
                 source_comment_id,
                 source_comment_text,
                 source_risk_content,
@@ -1236,16 +1300,24 @@ class JobStore:
             """,
             (row["id"],),
         ).fetchall()
+        author = self._loads_json(row["author_json"], {})
+        platform = row["platform"]
+        profile_url = row["profile_url"] or ""
+        sec_uid = self._first_text(author.get("sec_uid")) if isinstance(author, dict) else ""
+        if platform == "dy":
+            profile_url = self._douyin_profile_url(sec_uid)
         return {
             "id": row["id"],
             "platform": row["platform"],
             "stable_key": row["stable_key"],
             "display_name": row["display_name"] or "",
-            "profile_url": row["profile_url"] or "",
+            "profile_url": profile_url,
+            "public_douyin_id": self._public_douyin_id(author, platform),
+            "sec_uid": sec_uid,
             "raw_identity": row["raw_identity"] or "",
             "source_audit_result_id": row["source_audit_result_id"],
             "source_job_id": row["source_job_id"] or "",
-            "author": self._loads_json(row["author_json"], {}),
+            "author": author,
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "suspected_related_accounts": [
@@ -1257,14 +1329,17 @@ class JobStore:
     def _row_to_related_account(self, row: sqlite3.Row) -> dict:
         job_status = row["job_status"] or ""
         analysis_status = job_status or row["analysis_status"] or "job_created"
+        sec_uid = row["sec_uid"] or ""
         return {
             "id": row["id"],
             "monitored_user_id": row["monitored_user_id"],
             "platform": row["platform"],
             "stable_key": row["stable_key"],
             "display_name": row["display_name"] or "",
-            "profile_url": row["profile_url"] or "",
+            "profile_url": self._douyin_profile_url(sec_uid) if row["platform"] == "dy" and sec_uid else "",
             "raw_identity": row["raw_identity"] or "",
+            "public_douyin_id": row["public_douyin_id"] or "",
+            "sec_uid": sec_uid,
             "source_comment_id": row["source_comment_id"] or "",
             "source_comment_text": row["source_comment_text"] or "",
             "source_risk_content": row["source_risk_content"] or "",
@@ -1331,6 +1406,20 @@ class JobStore:
             return text.rstrip("/").lower()
         path = parsed.path.rstrip("/")
         return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{path}"
+
+    @staticmethod
+    def _douyin_profile_url(sec_uid: object) -> str:
+        value = str(sec_uid or "").strip()
+        return f"https://www.douyin.com/user/{quote(value, safe='')}" if value else ""
+
+    def _public_douyin_id(self, identity: dict, platform: str) -> str:
+        if self._normalize_platform_label(platform) != "dy" or not isinstance(identity, dict):
+            return ""
+        for key in ("user_unique_id", "short_user_id"):
+            value = self._first_text(identity.get(key))
+            if value.lower() not in {"", "0", "none", "null", "undefined"}:
+                return value
+        return ""
 
     def _normalize_platform_label(self, value: str) -> str:
         text = self._first_text(value).lower()

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import Field
 
 from backend.api.contracts import (
+    AuditRiskSummaryResponse,
     CreateInvestigationTurnRequest,
     InvestigationActivityEventResponse,
     InvestigationAnswerDraftResponse,
@@ -108,6 +109,7 @@ class HistoricalWorkspaceResponse(PublicApiModel):
     latest_turn: HistoricalTurnStatusResponse | None = None
     activity_events: tuple[InvestigationActivityEventResponse, ...] = ()
     answer_draft: InvestigationAnswerDraftResponse | None = None
+    risk_summary: AuditRiskSummaryResponse
 
 
 class HistoricalWorkspaceListResponse(PublicApiModel):
@@ -286,6 +288,9 @@ def _workspace_response(service: Any, item: dict[str, Any]) -> HistoricalWorkspa
             )
             if latest_turn is not None and latest_turn.status == "running"
             else None
+        ),
+        risk_summary=AuditRiskSummaryResponse.model_validate(
+            service.risk_summary_for_version(str(item["report_version_id"]))
         ),
     )
 
