@@ -1565,6 +1565,121 @@ def _run_maintenance_probe(bundle, *, timeout=None, check_login=False, expected_
                 receipt_pipe.close()
 
 
+def _direct_transport_key(db, snapshot):
+    from tools.bound_proxy import route_health_key
+    if not db.execute("SELECT 1 FROM probe_health.sqlite_master WHERE type='table' AND name='collection_route_health'").fetchone():
+        return None
+    key = route_health_key(snapshot)
+    row = db.execute("SELECT stop_code FROM probe_health.collection_route_health WHERE proxy_id=? AND config_revision=?",
+                     (key, snapshot.config_revision)).fetchone()
+    return key if row and row[0] == 'PROXY_TRANSPORT_FAILED' else None
+
+
+def _direct_login_transport_marker(db, bundle):
+    """Check the account and login under the same transaction as the final marker removal."""
+    from datetime import datetime
+    snapshot = bundle.snapshot
+    account = db.execute("SELECT * FROM crawler_accounts WHERE id=?", (bundle.account_id,)).fetchone()
+    now = time.time()
+    if (not account or account['status'] != 'active' or account['proxy_id'] or account['proxy_required']
+            or account['route_mode'] == 'direct_degraded' or account['binding_revision'] != snapshot.binding_revision
+            or account['shared_exit_key'] != snapshot.observed_exit_ip
+            or account['shared_exit_generation'] != snapshot.exit_generation
+            or (account['paused_until'] or 0) > now or account['recovery_incident'] or account['failure_kind']):
+        return None
+    if account['cooldown_until']:
+        try:
+            if datetime.fromisoformat(account['cooldown_until']).timestamp() > now:
+                return None
+        except (ValueError, TypeError, OverflowError):
+            return None
+    shared = db.execute("SELECT * FROM crawler_shared_exits WHERE service_exit=1 ORDER BY observed_at DESC LIMIT 1").fetchone()
+    if (not shared or shared['exit_key'] != snapshot.observed_exit_ip or shared['generation'] != snapshot.exit_generation
+            or shared['pause_reason'] or (shared['paused_until'] or 0) > now):
+        return None
+    if db.execute("SELECT 1 FROM crawler_route_admissions WHERE state='active' AND (account_id=? OR exit_key=?)",
+                  (bundle.account_id, snapshot.observed_exit_ip)).fetchone():
+        raise CollectionRouteError('PROXY_BUSY')
+    login = db.execute("""SELECT 1 FROM crawler_login_operations WHERE id=? AND account_id=? AND owner_user_id=?
+                        AND stage='created' AND intent='check_or_login' AND engine='v2' AND expected_auth_revision=?
+                        AND expected_platform_account_id=? AND profile_generation=?""",
+                       (bundle.execution_id, bundle.account_id, bundle.owner_id, account['auth_state_revision'],
+                        account['platform_account_id'], account['profile_generation'])).fetchone()
+    if not login:
+        return None
+    if account['route_state'] == 'manual_required' and account['pause_reason'] == 'MANUAL_RECOVERY_FAILED':
+        # Older logins could fail before the browser obtained the profile. Verify
+        # the preceding transport incident and the unchanged, same-identity login.
+        events = db.execute("""SELECT event_type,operation_id,shared_exit_key FROM crawler_route_events
+                            WHERE account_id=? AND event_type NOT IN ('route_admitted','route_ended')
+                            ORDER BY id DESC LIMIT 3""", (bundle.account_id,)).fetchall()
+        if ([e['event_type'] for e in events] != ['manual_required', 'manual_recovery_claimed', 'transport_blocked']
+                or events[0]['operation_id'] != events[1]['operation_id']
+                or any(e['shared_exit_key'] != snapshot.observed_exit_ip for e in events)):
+            return None
+        prior = db.execute("""SELECT 1 FROM crawler_manual_recovery_operations r JOIN crawler_login_operations l
+                            ON l.id=r.login_operation_id AND l.account_id=r.account_id AND l.owner_user_id=r.owner_id
+                            WHERE r.login_operation_id=? AND r.account_id=? AND r.exit_key=? AND r.exit_generation=?
+                            AND r.state='finished' AND r.result='uncertain' AND r.risk_recorded=0 AND r.initial_login=0
+                            AND r.expected_identity=? AND l.intent='check_or_login' AND l.stage='failed'
+                            AND l.expected_platform_account_id=r.expected_identity AND l.expected_auth_revision=?
+                            AND l.profile_generation=? AND l.owner_user_id=?
+                            AND l.error_code='MEDIA_CHANNEL_EOF' AND l.profile_authority_established=0
+                            AND l.credentials_reset=0 AND COALESCE(l.credentials_changed,0)=0""",
+                           (events[0]['operation_id'], bundle.account_id, snapshot.observed_exit_ip,
+                            snapshot.exit_generation, account['platform_account_id'], account['auth_state_revision'],
+                            account['profile_generation'], bundle.owner_id)).fetchone()
+        if not prior or account['recovery_state'] != 'manual_uncertain' or account['risk_count']:
+            return None
+    elif account['route_state'] != 'transport_blocked' or account['pause_reason']:
+        return None
+    return _direct_transport_key(db, snapshot)
+
+
+def verify_direct_login_transport(account_id, operation_id, owner_id, account_handle, accounts):
+    """Probe a known transport incident before opening or modifying a manual recovery claim."""
+    from dataclasses import replace
+    from backend.task_admission.resources import ExecutionLeaseBundle
+    from .crawler_child_runtime import require_browser_available
+    require_browser_available(account_id, store=accounts, owner_id=owner_id, operation_id=operation_id)
+    snapshot = resolve_account_route(account_id, account_store=accounts, allow_probe=True)
+    if not snapshot or snapshot.route_mode != 'legacy_direct':
+        return
+    authorize_route_owner(account_id, None, owner_id, account_store=accounts)
+    with accounts._connect() as db:
+        # get_direct_route may intentionally omit stale observations. Use this
+        # baseline only in a maintenance probe, never to authorize collection.
+        shared = db.execute("""SELECT s.* FROM crawler_shared_exits s JOIN crawler_accounts a
+                            ON a.shared_exit_key=s.exit_key AND a.shared_exit_generation=s.generation
+                            WHERE a.id=? AND s.service_exit=1""", (account_id,)).fetchone()
+        if not shared:
+            return
+        ip = shared['exit_key']
+        snapshot = replace(snapshot, observed_exit_ip=ip, observed_exit_at=shared['observed_at'],
+                           exit_generation=shared['generation'], scope_ids=tuple(sorted(
+                               ('dy','dy:account:'+account_id,'dy:service_exit:'+ip,'dy:exit:'+ip))))
+        bundle = ExecutionLeaseBundle(operation_id, owner_id, account_id, snapshot)
+        bundle.account_store = accounts
+        bundle.direct_login_transport_probe = True
+        db.execute('ATTACH DATABASE ? AS probe_health', (snapshot.scheduler_db_path,))
+        if not _direct_transport_key(db, snapshot):
+            return
+        if not _direct_login_transport_marker(db, bundle):
+            raise CollectionRouteError('PROXY_TRANSPORT_FAILED')
+    if not bundle.acquire(account_handle=account_handle, max_active_accounts=1):
+        raise CollectionRouteError('PROXY_BUSY')
+    try:
+        if not bundle.acquire_exit_capacity(ip):
+            raise CollectionRouteError('PROXY_BUSY')
+        receipt = _run_maintenance_probe(bundle)
+        if receipt.ip != ip:
+            raise CollectionRouteError('PROXY_EXIT_CHANGED')
+        if not getattr(bundle, 'direct_login_transport_verified', False):
+            raise CollectionRouteError('PROXY_UNAVAILABLE')
+    finally:
+        bundle.close()
+
+
 def _retire_verified_probe_uncertainty(bundle,receipt):
     """Parent-only compare/delete after complete validated probe and group drain."""
     snapshot=bundle.snapshot
@@ -1580,6 +1695,14 @@ def _retire_verified_probe_uncertainty(bundle,receipt):
     with accounts._connect() as db:
         db.execute('ATTACH DATABASE ? AS probe_health',(snapshot.scheduler_db_path,))
         db.execute('BEGIN IMMEDIATE')
+        if getattr(bundle, 'direct_login_transport_probe', False):
+            key = _direct_login_transport_marker(db, bundle)
+            if key:
+                db.execute("""DELETE FROM probe_health.collection_route_health WHERE proxy_id=? AND config_revision=?
+                            AND stop_code='PROXY_TRANSPORT_FAILED'""", (key, snapshot.config_revision))
+                accounts.observe_shared_exit(receipt.ip, observed_at=receipt.observed_at, service_exit=True, connection=db)
+                bundle.direct_login_transport_verified = True
+            return
         if snapshot.route_mode in {'direct_degraded', 'legacy_direct'}:
             account = db.execute('SELECT * FROM crawler_accounts WHERE id=?', (snapshot.account_id,)).fetchone()
             shared = db.execute('SELECT * FROM crawler_shared_exits WHERE exit_key=?', (receipt.ip,)).fetchone()

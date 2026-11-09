@@ -443,6 +443,14 @@ class CrawlerLoginV2Manager:
             manual_claim = None
             from .crawler_route import acquire_route_execution, RouteConfigPipe
             try:
+                if (not migration_id and intent == "check_or_login" and settings.crawler_safety_enabled
+                        and (account.get("route_state") == "transport_blocked" or
+                             account.get("pause_reason") == "MANUAL_RECOVERY_FAILED"
+                             and account.get("recovery_state") == "manual_uncertain"
+                             and not account.get("recovery_incident") and not account.get("risk_count"))
+                        and not account.get("proxy_id") and not account.get("proxy_required")):
+                    from .crawler_route import verify_direct_login_transport
+                    verify_direct_login_transport(account["id"], op["id"], user_id, handles[-1], self.store)
                 if not migration_id and settings.crawler_safety_enabled and account.get('route_state') in {'manual_required','challenge_paused','recovery_check'}:
                     if not self.lease_factory:
                         from .crawler_route import reconcile_stopped_route_admissions

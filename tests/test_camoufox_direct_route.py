@@ -250,3 +250,80 @@ def test_degraded_direct_renewal_rejects_changed_binding(direct, monkeypatch):
             parent_authority_renew_ticket(bundle, row['ack'])
     finally:
         bundle.close()
+
+
+@pytest.mark.parametrize("scenario", [
+    "blocked", "legacy", "wrong_exit", "disabled_during_probe", "challenge_during_probe",
+    "expired_cooldown", "future_cooldown", "shared_pause", "changed_generation", "changed_binding", "cancelled", "unknown_origin", "active_admission",
+])
+def test_login_probe_only_retires_proven_transport_incident(direct, monkeypatch, scenario):
+    from backend.audit_agent.crawler_login_operation_store import CrawlerLoginOperationStore
+    from backend.task_admission.resources import acquire_account_handle
+    store, account = direct
+    aid = account['id']
+    ip = '203.0.113.8'
+    store.save_auth_state(aid, 'fixture-encrypted', 'fixture-owner')
+    ops = CrawlerLoginOperationStore(store)
+    def start_login(key):
+        return ops.begin(account_id=aid, owner_user_id='owner', application_session_id='session',
+                         owner_token_hash='owner-token', request_key_hash=key, request_fingerprint=key)['id']
+    generation = store.observe_shared_exit(ip, service_exit=True)['shared_exit_generation']
+    store.set_route_state(aid, state='transport_blocked', shared_exit_key=ip, generation=generation)
+    if scenario != 'blocked':
+        old = start_login('old')
+        claim = store.begin_manual_recovery(aid, old, owner_id='owner', allow_active=True, observed_exit=ip, generation=generation)
+        assert claim
+        store.finish_manual_recovery(aid, old, claim, 'cancelled' if scenario == 'cancelled' else 'uncertain', owner_id='owner')
+        ops.mark_stage(old, 'failed', error_code='MEDIA_CHANNEL_EOF' if scenario != 'unknown_origin' else 'ACCOUNT_VERIFY')
+    current = start_login('current')
+    route = app.resolve_account_route(aid, account_store=store, allow_probe=True)
+    from tools.bound_proxy import route_health_key
+    from dataclasses import replace
+    key = route_health_key(replace(route, observed_exit_ip=ip, exit_generation=generation))
+    marker = (key, 1, 'PROXY_TRANSPORT_FAILED')
+    with sqlite3.connect(route.scheduler_db_path) as db:
+        db.execute('CREATE TABLE collection_route_health(proxy_id TEXT,config_revision INTEGER,stop_code TEXT,PRIMARY KEY(proxy_id,config_revision))')
+        db.executemany('INSERT INTO collection_route_health VALUES(?,?,?)', [marker, ('other',1,'PROXY_TRANSPORT_FAILED')])
+    state_before = store.get(aid)['route_state']
+    with store._connect() as db:
+        if scenario in {'expired_cooldown', 'future_cooldown'}:
+            from datetime import datetime, timedelta
+            until = datetime.now() + timedelta(hours=-1 if scenario == 'expired_cooldown' else 1)
+            db.execute('UPDATE crawler_accounts SET cooldown_until=? WHERE id=?', (until.isoformat(), aid))
+        if scenario == 'shared_pause':
+            db.execute("UPDATE crawler_shared_exits SET pause_reason='ACCOUNT_CHALLENGE' WHERE exit_key=?", (ip,))
+        if scenario == 'active_admission':
+            db.execute("INSERT INTO crawler_route_admissions VALUES('other',?, ?,1,'active',?)",(aid,ip,time.time()))
+    def probe(bundle):
+        with store._connect() as db:
+            if scenario == 'disabled_during_probe':
+                db.execute("UPDATE crawler_accounts SET status='disabled' WHERE id=?", (aid,))
+            if scenario == 'challenge_during_probe':
+                db.execute("UPDATE crawler_accounts SET recovery_incident='challenge' WHERE id=?", (aid,))
+            if scenario == 'changed_binding':
+                db.execute("UPDATE crawler_accounts SET binding_revision=binding_revision+1 WHERE id=?", (aid,))
+            if scenario == 'changed_generation':
+                db.execute("UPDATE crawler_shared_exits SET generation=generation+1")
+        receipt = app.route_contract().ProbeReceipt('service-direct',1,'probe',
+                    '203.0.113.22' if scenario == 'wrong_exit' else ip,time.time(),generation)
+        app._retire_verified_probe_uncertainty(bundle,receipt)
+        return receipt
+    monkeypatch.setattr(app, '_run_maintenance_probe', probe)
+    with acquire_account_handle('dy',aid) as handle:
+        if scenario == 'active_admission':
+            with pytest.raises(app.CollectionRouteError, match='PROXY_BUSY'):
+                app.verify_direct_login_transport(aid,current,'owner',handle,store)
+            assert store.get(aid)['route_state'] == state_before
+            with store._connect() as db:
+                db.execute("UPDATE crawler_route_admissions SET state='closed' WHERE operation_id='other'")
+            app.verify_direct_login_transport(aid,current,'owner',handle,store)
+        elif scenario not in {'legacy','blocked','expired_cooldown'}:
+            with pytest.raises(app.CollectionRouteError):
+                app.verify_direct_login_transport(aid,current,'owner',handle,store)
+        else:
+            app.verify_direct_login_transport(aid,current,'owner',handle,store)
+    with sqlite3.connect(route.scheduler_db_path) as db:
+        rows=db.execute('SELECT * FROM collection_route_health').fetchall()
+    assert ('other',1,'PROXY_TRANSPORT_FAILED') in rows
+    assert (marker not in rows) == (scenario in {'blocked','legacy','expired_cooldown','active_admission'})
+    assert store.get(aid)['route_state'] == state_before

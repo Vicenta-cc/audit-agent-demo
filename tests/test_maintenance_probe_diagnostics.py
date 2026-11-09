@@ -12,7 +12,7 @@ from scripts import crawler_proxy_probe as helper
 
 def test_real_crawler_httpx_exception_is_classified_without_raw_message():
     script="import httpx;from scripts.crawler_proxy_probe import emit_probe_diagnostic;emit_probe_diagnostic(httpx.ConnectError('https://secret.invalid/password'))"
-    result=subprocess.run(['/Users/hose/project/zhanyun/media-crawler/.venv/bin/python','-c',script],capture_output=True,text=True,check=True,timeout=5)
+    result=subprocess.run([str(app.settings.crawler_login_python),'-c',script],capture_output=True,text=True,check=True,timeout=5)
     assert 'secret' not in result.stdout+result.stderr
     assert json.loads(result.stdout.split(' ',1)[1])=={'stage':'unknown','error_class':'httpx','category':'unknown'}
 

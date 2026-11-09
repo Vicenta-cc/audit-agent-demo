@@ -990,6 +990,13 @@ class AuditPipeline:
                                 raise RuntimeError(
                                     "crawler_account_verification_required: 当前没有结束冷却的可用账号。"
                                 )
+                            if (settings.crawler_safety_enabled and request.platform == "dy"
+                                    and preferred_account_id in safety_ids and configured
+                                    and configured.get("status") == "active"):
+                                if configured.get("route_state") == "transport_blocked":
+                                    raise RuntimeError("ACCOUNT_ROUTE_BLOCKED：采集出口不可用，请在采集账号页检查原账号的出口。")
+                                if configured.get("route_state") == "manual_required":
+                                    raise RuntimeError("ACCOUNT_MANUAL_REQUIRED：采集账号需人工处理，请在采集账号页查看记录并核验。")
                             raise CrawlerAuthenticationError("当前没有可用采集账号，请重新登录")
                         if not candidates and settings.app_auth_mode == "required":
                             raise CrawlerAuthenticationError(

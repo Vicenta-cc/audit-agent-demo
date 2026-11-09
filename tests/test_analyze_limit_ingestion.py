@@ -23,6 +23,7 @@ os.environ["HERMES_HOME"] = str(_RUNTIME_ROOT / "hermes")
 atexit.register(shutil.rmtree, _RUNTIME_ROOT, True)
 
 import backend.audit_agent.pipeline as pipeline_module
+from backend.audit_agent.crawler_account_store import CrawlerAccountStore
 from backend.audit_agent.crawler_adapter import CrawlOutput, MediaCrawlerAdapter
 from backend.audit_agent.ingestion import (
     AuditResultStore,
@@ -658,10 +659,7 @@ def test_authoritative_pipeline_fails_cleanly_when_account_pool_is_empty(
     monkeypatch.setattr(
         pipeline_module,
         "crawler_account_store",
-        SimpleNamespace(
-            get=lambda _account_id: None,
-            available_accounts=lambda _platform: [],
-        ),
+        CrawlerAccountStore(tmp_path / "empty-accounts.sqlite3"),
     )
     monkeypatch.setattr(pipeline_module.settings, "outputs_dir", tmp_path / "outputs")
     monkeypatch.setattr(
@@ -853,3 +851,29 @@ def test_creator_only_delivers_its_own_spool_and_requires_complete_payload(tmp_p
     Path(refs[0]["raw_item_path"]).write_text("{")
     with pytest.raises(SelectedContentPayloadUnavailableError):
         db.validated_selection_for_task("task", complete_only=True)
+
+
+@pytest.mark.parametrize(
+    ("route_state", "reason"),
+    [
+        ("transport_blocked", "ACCOUNT_ROUTE_BLOCKED"),
+        ("manual_required", "ACCOUNT_MANUAL_REQUIRED"),
+    ],
+)
+def test_resume_identifies_blocked_route_with_active_account(tmp_path, monkeypatch, route_state, reason):
+    account = {"id": "local-test", "platform": "dy", "status": "active", "route_state": route_state}
+    store = pipeline_module.crawler_account_store
+    monkeypatch.setattr(pipeline_module.settings, "app_auth_mode", "disabled")
+    monkeypatch.setattr(pipeline_module.settings, "crawler_safety_enabled", True)
+    monkeypatch.setattr(pipeline_module, "_authorized_crawler_account_ids", lambda _: {account["id"]})
+    monkeypatch.setattr(store, "available_accounts", lambda platform: [])
+    monkeypatch.setattr(store, "get", lambda identifier: account if identifier == account["id"] else None)
+    jobs, _, _ = _run_pipeline(
+        tmp_path, monkeypatch, job_id="resume-blocked", mode="creator",
+        crawler=CandidateCrawler([]),
+        task_parameters={"platform": "dy", "crawler_account_id": account["id"],
+                         "creator_url": "https://www.douyin.com/user/test"},
+    )
+    error = jobs.get("resume-blocked")["error"]
+    assert reason in error
+    assert "登录态已失效" not in error
