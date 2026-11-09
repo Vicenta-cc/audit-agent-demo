@@ -746,3 +746,110 @@ def test_authenticated_pipeline_never_falls_back_to_anonymous_crawling(
     assert job["status"] == "failed"
     assert job["error"].startswith("crawler_account_login_required:")
     assert crawler.calls == []
+
+
+def test_creator_resume_keeps_committed_progress_and_submits_only_new_ids(tmp_path, monkeypatch):
+    """A legacy run without a cursor, a mid-page stop, and a second resume."""
+    job_id = "creator-resume"
+    params = dict(platform="dy", creator_url="https://www.douyin.com/user/fixture",
+                  max_total_notes=10, max_notes=10, auto_analyze=True)
+    # Existing tasks have durable SQL memberships but no stored listing cursor.
+    old = CandidateCrawler([{"aweme_id": str(i), "desc": "old"} for i in range(1, 8)])
+    jobs, _, analyzed = _run_pipeline(tmp_path, monkeypatch, job_id=job_id, mode="creator",
+                                       crawler=old, analyze_limit=10, task_parameters=params)
+    assert analyzed == list(map(str, range(1, 8)))
+    first_log_count = len(jobs.get(job_id)["logs"])
+
+    class ResumeAdapter(MediaCrawlerAdapter):
+        def __init__(self):
+            super().__init__(tmp_path)
+            self.launches = []
+
+        def _run_command(self, *, command, content_callback, save_root, **kwargs):
+            save_root.mkdir(parents=True, exist_ok=True)
+            skip = Path(command[command.index("--skip_aweme_ids_file") + 1]).read_text().splitlines()
+            cursor = command[command.index("--dy_creator_resume_cursor") + 1]
+            limit = int(command[command.index("--crawler_max_notes_count") + 1])
+            self.launches.append((cursor, limit, set(skip)))
+            stdout = save_root / "mediacrawler_stdout.log"
+            if not cursor:
+                stdout.write_text('CREATOR_PAGE_DELIVERED {"cursor":"","next":"page2","exhausted":false,"ids":[]}\n')
+                content_callback([{"aweme_id": "7"}], [])
+                content_callback([{"aweme_id": "8", "desc": "new"}], [])
+                # The interrupted page has not emitted a completed-page receipt.
+                raise RuntimeError("simulated interruption before finishing page 2")
+            assert cursor == "page2"
+            stdout.write_text('CREATOR_PAGE_DELIVERED {"cursor":"page2","next":"","exhausted":true,"ids":["9","10"]}\n')
+            for i in [8, 9, 9, 10]:
+                content_callback([{"aweme_id": str(i), "desc": "new"}], [])
+            return CrawlOutput("dy", [], [], save_root)
+
+    adapter = ResumeAdapter()
+    jobs, _, first_new = _run_pipeline(tmp_path, monkeypatch, job_id=job_id, mode="creator",
+                                        crawler=adapter, analyze_limit=10, task_parameters=params)
+    assert first_new == ["8"]
+    assert json.loads(jobs.get(job_id)["creator_checkpoint"])["cursor"] == "page2"
+    jobs, ingestion, second_new = _run_pipeline(tmp_path, monkeypatch, job_id=job_id, mode="creator",
+                                                crawler=adapter, analyze_limit=10, task_parameters=params)
+    assert jobs.get(job_id)["status"] == "completed", jobs.get(job_id)["error"]
+    assert second_new == ["9", "10"]
+    assert adapter.launches == [("", 3, set(map(str, range(1, 8)))), ("page2", 2, set(map(str, range(1, 9))))]
+    logs = [row["message"] for row in jobs.get(job_id)["logs"][first_log_count:]]
+    assert [s for s in logs if s.startswith("已爬取")] == [
+        "已爬取 7/10 条", "已爬取 8/10 条", "已爬取 8/10 条", "已爬取 9/10 条", "已爬取 10/10 条",
+    ]
+    assert ingestion.stats_for_task(job_id)["ingested_count"] == 10
+    _, _, completed = _run_pipeline(tmp_path, monkeypatch, job_id=job_id, mode="creator",
+                                     crawler=adapter, analyze_limit=10, task_parameters=params)
+    assert not completed and len(adapter.launches) == 2
+
+
+def test_creator_empty_last_page_commits_actual_count(tmp_path, monkeypatch):
+    class Exhausted(MediaCrawlerAdapter):
+        def _run_command(self, *, save_root, content_callback, **kwargs):
+            save_root.mkdir(parents=True, exist_ok=True)
+            (save_root / "mediacrawler_stdout.log").write_text(
+                'CREATOR_PAGE_DELIVERED {"cursor":"","next":"last","ids":["x"],"exhausted":false}\n'
+                'CREATOR_PAGE_DELIVERED {"cursor":"last","next":"","ids":[],"exhausted":true}\n'
+            )
+            content_callback([], [])
+            assert not jobs.get(job_id)["creator_checkpoint"]
+            content_callback([{"aweme_id": "x", "desc": "only post"}], [])
+            return CrawlOutput("dy", [], [], save_root)
+
+    job_id = "short-creator"
+    jobs = JobStore(tmp_path / "audit.sqlite3")
+    jobs, ingestion, analyzed = _run_pipeline(
+        tmp_path, monkeypatch, job_id=job_id, mode="creator", analyze_limit=10,
+        crawler=Exhausted(tmp_path), task_parameters=dict(platform="dy", auto_analyze=True, max_total_notes=10)
+    )
+    assert analyzed == ["x"]
+    assert ingestion.stats_for_task(job_id)["ingested_count"] == 1
+    job = jobs.get(job_id)
+    assert job["status"] == "completed" and json.loads(job["creator_checkpoint"])["exhausted"]
+    assert "主页已读完，已采集 1/10 条" in [entry["message"] for entry in job["logs"]]
+
+
+def test_creator_only_delivers_its_own_spool_and_requires_complete_payload(tmp_path):
+    adapter = MediaCrawlerAdapter(tmp_path)
+    root = tmp_path / "douyin" / "jsonl"
+    root.mkdir(parents=True)
+    for run, key in (("previous", "stale"), ("current", "new")):
+        (root / f"{run}_creator_contents_date.jsonl").write_text(json.dumps({"aweme_id": key}) + "\n")
+        (root / f"{run}_creator_comments_date.jsonl").write_text(json.dumps({"aweme_id": key}) + "\n")
+    received = []
+    adapter._emit_new_content(tmp_path, "dy", set(), lambda items, comments: received.append((items, comments)), "current")
+    assert received == [([{"aweme_id": "new"}], [{"aweme_id": "new"}])]
+
+    db = IngestionStore(tmp_path / "audit.sqlite3")
+    from backend.audit_agent.ingestion import BatchWriter
+    batches = BatchWriter(job_id="task", platform="dy", root=tmp_path, keyword="", batch_size=1)
+    db.ingest_batch(batches.add([{"aweme_id": "half", "desc": "partial"}], [])[0], tmp_path / "raw_items")
+    db.mark_collection_status("dy", "half", "partial")
+    assert db.validated_selection_for_task("task", complete_only=True) == ([], [])
+    db.ingest_batch(batches.add([{"aweme_id": "half", "desc": "complete"}], [])[0], tmp_path / "raw_items")
+    _, refs = db.validated_selection_for_task("task", complete_only=True)
+    assert [ref["item"]["desc"] for ref in refs] == ["complete"]
+    Path(refs[0]["raw_item_path"]).write_text("{")
+    with pytest.raises(SelectedContentPayloadUnavailableError):
+        db.validated_selection_for_task("task", complete_only=True)

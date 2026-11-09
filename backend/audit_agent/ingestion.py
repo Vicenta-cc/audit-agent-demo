@@ -1037,7 +1037,7 @@ class IngestionStore:
                 )
                 inserted = cursor.rowcount == 1
                 row = conn.execute(
-                    "SELECT id, analyze_status, raw_item_path, result_path FROM contents WHERE platform = ? AND content_key = ?",
+                    "SELECT id, analyze_status, raw_item_path, result_path, collection_status FROM contents WHERE platform = ? AND content_key = ?",
                     (platform, content_key),
                 ).fetchone()
                 if not row:
@@ -1085,7 +1085,7 @@ class IngestionStore:
                 ).fetchone()
                 task_status = str(task_row["analyze_status"] or "queued") if task_row else "queued"
                 shared_raw_path = str(row["raw_item_path"] or "")
-                shared_complete = self._valid_raw_payload(Path(shared_raw_path), platform, content_key)
+                shared_complete = row["collection_status"] == "complete" and self._valid_raw_payload(Path(shared_raw_path), platform, content_key)
                 task_raw_path = str(task_row["raw_item_path"] or (shared_raw_path if shared_complete else raw_path)) if task_row else str(raw_path)
 
                 # A complete shared payload is immutable for this phase.  New tasks
@@ -1182,7 +1182,7 @@ class IngestionStore:
             refs.append(self._ref_from_payload(membership, payload, raw_path))
         return refs
 
-    def selection_membership_for_task(self, task_id: str, limit: int = 0) -> list[dict]:
+    def selection_membership_for_task(self, task_id: str, limit: int = 0, *, complete_only: bool = False) -> list[dict]:
         """Return the frozen SQL selection without consulting raw payload files."""
         sql = """
             SELECT
@@ -1198,8 +1198,10 @@ class IngestionStore:
             FROM task_contents tc
             LEFT JOIN contents c ON c.id = tc.content_id
             WHERE tc.task_id = ?
-            ORDER BY tc.id ASC
         """
+        if complete_only:
+            sql += " AND c.collection_status = 'complete'"
+        sql += " ORDER BY tc.id ASC"
         params: list[object] = [task_id]
         if limit > 0:
             sql += " LIMIT ?"
@@ -1227,10 +1229,10 @@ class IngestionStore:
         return self.validated_selection_for_task(task_id, limit=limit)[1]
 
     def validated_selection_for_task(
-        self, task_id: str, limit: int = 0
+        self, task_id: str, limit: int = 0, *, complete_only: bool = False
     ) -> tuple[list[dict], list[dict]]:
         """Hydrate every selected SQL member or fail closed with a stable error."""
-        memberships = self.selection_membership_for_task(task_id, limit=limit)
+        memberships = self.selection_membership_for_task(task_id, limit=limit, complete_only=complete_only)
         refs: list[dict] = []
         for membership in memberships:
             task_content_id = int(membership["task_content_id"])

@@ -456,6 +456,8 @@ class AuditPipeline:
                 if confirmed_limit_value is not None and getattr(request, "auto_analyze", None) is None
                 else None
             )
+            dy_creator = request.run_crawler and request.platform == "dy" and request.crawl_mode == "creator"
+            membership_options = {"complete_only": True} if dy_creator else {}
             selected_memberships: list[dict] = []
             selected_refs: list[dict] = []
             selected_identities: set[str] = set()
@@ -484,7 +486,7 @@ class AuditPipeline:
                     keyword=request.keyword if request.crawl_mode == "search" else (request.creator_url or request.creator_id),
                     category=request.lexicon_category if getattr(request, "keyword_source", "keyword") == "lexicon" else "",
                     root=source_root,
-                    batch_size=1 if selection_limit is not None else None,
+                    batch_size=1 if dy_creator or selection_limit is not None else None,
                 )
                 raw_items_dir = source_root / "raw_items"
                 stop_flusher = threading.Event()
@@ -505,9 +507,9 @@ class AuditPipeline:
                 if analysis_media_scope == "image_text":
                     job_store.log(self.job_id, "当前分析范围：仅分析图文内容，视频内容只入库不审核")
                 stream_items_enabled = (
-                    settings.stream_crawl_analysis or selection_limit is not None or geographic
+                    settings.stream_crawl_analysis or selection_limit is not None or geographic or dy_creator
                 )
-                use_batch_ingestion = selection_limit is not None or (
+                use_batch_ingestion = dy_creator or selection_limit is not None or (
                     stream_items_enabled and settings.batch_ingestion_enabled
                 )
                 stream_analysis = (
@@ -518,11 +520,11 @@ class AuditPipeline:
                     job_store.update(self.job_id, analysis_status="running")
                 skip_final_supplement = use_batch_ingestion and auto_analyze_crawled_content
                 stream_callback_enabled = use_batch_ingestion or stream_analysis
-                if selection_limit is not None:
+                if dy_creator or selection_limit is not None:
                     (
                         selected_memberships,
                         selected_refs,
-                    ) = self.ingestion.validated_selection_for_task(self.job_id)
+                    ) = self.ingestion.validated_selection_for_task(self.job_id, **membership_options)
                     selected_identities = {
                         str(membership.get("content_key") or "")
                         for membership in selected_memberships
@@ -549,6 +551,22 @@ class AuditPipeline:
                         return
                     last_progress["done"] = done
                     job_store.log(self.job_id, f"已爬取 {done}/{total} 条")
+
+                creator_target = min(crawl_total_notes, selection_limit) if selection_limit is not None else crawl_total_notes
+                if dy_creator:
+                    creator_ref = request.creator_url or request.creator_id
+                    checkpoint_json = job_snapshot.get("creator_checkpoint") or ""
+                    checkpoint = json.loads(checkpoint_json) if checkpoint_json else {}
+                    if checkpoint and checkpoint.get("creator") != creator_ref:
+                        raise ValueError("主页续抓断点与任务主页不匹配")
+                    log_crawl_progress(len(selected_identities), creator_target)
+
+                def persist_creator_checkpoint(cursor: str, exhausted: bool) -> None:
+                    nonlocal checkpoint, checkpoint_json
+                    page = {"creator": creator_ref, "cursor": cursor, "exhausted": exhausted}
+                    updated = json.dumps(page, ensure_ascii=False)
+                    job_store.advance_creator_checkpoint(self.job_id, active_crawl_epoch, checkpoint_json, updated)
+                    checkpoint, checkpoint_json = page, updated
 
                 def persist_crawl_checkpoint(keyword: str, page: int) -> None:
                     # The crawler reports the page it is about to request. Persisting
@@ -609,6 +627,16 @@ class AuditPipeline:
                 def enqueue_stream_batch(
                     contents: list[dict], comments: list[dict]
                 ) -> None:
+                    if dy_creator:
+                        for item in contents:
+                            if not crawl_epoch_is_current():
+                                raise RuntimeError("主页续抓轮次已经结束")
+                            key = content_identity(item, "dy")
+                            if not key or key in selected_identities or len(selected_identities) >= creator_target:
+                                continue
+                            for path in batch_writer.add([item], comments):
+                                ingest_completed_batch(path, creator_key=key)
+                        return
                     if selection_limit is not None:
                         refresh_selected_contents()
                         for content in contents:
@@ -638,12 +666,15 @@ class AuditPipeline:
                     if stream_analysis:
                         put_stream_entry((contents, comments))
 
-                def ingest_completed_batch(batch_path: Path) -> None:
+                def ingest_completed_batch(batch_path: Path, *, creator_key: str = "") -> None:
                     queued = self.ingestion.ingest_batch(batch_path, raw_items_dir)
                     job_store.log(
                         self.job_id,
                         f"ingestion 完成 batch：{batch_path.name}，新内容 {len(queued)} 条",
                     )
+                    if creator_key:
+                        selected_identities.add(creator_key)
+                        log_crawl_progress(len(selected_identities), creator_target)
                     if stream_analysis:
                         for ref in queued:
                             put_stream_entry(ref)
@@ -899,7 +930,11 @@ class AuditPipeline:
                         daemon=True,
                     )
                     stream_analyzer.start()
-                if use_batch_ingestion and selection_limit is None:
+                if dy_creator and stream_analysis:
+                    for ref in selected_refs:
+                        if ref["analyze_status"] == "queued":
+                            put_stream_entry(ref)
+                if use_batch_ingestion and selection_limit is None and not dy_creator:
                     batch_flusher = threading.Thread(
                         target=flush_batches_periodically,
                         name=f"audit-batch-flusher-{self.job_id}",
@@ -909,7 +944,8 @@ class AuditPipeline:
 
                 crawl_returned = False
                 try:
-                    with (_crawler_lock if settings.app_auth_mode != "required" else nullcontext()):
+                    def collect_from_accounts():
+                        nonlocal crawler_account_id
                         from backend.task_admission.resources import account_lease, selected_account
                         execution_account = control().get("execution_account") or {}
                         preferred_account_id = str(
@@ -1077,11 +1113,19 @@ class AuditPipeline:
                             if request.crawl_mode == "creator":
                                 creator_ref = request.creator_url or request.creator_id
                                 job_store.log(self.job_id, f"启动 MediaCrawler 博主主页爬取 {request.platform}: {creator_ref}")
-                                # 博主主页任务以单任务总采集上限为本任务采集上限
+                                resume_options = {}
+                                remaining = crawl_total_notes
+                                if dy_creator:
+                                    remaining = creator_target - len(selected_identities)
+                                    if remaining <= 0 or checkpoint.get("exhausted"):
+                                        return CrawlOutput(request.platform, [], [], save_root)
+                                    resume_options = dict(committed_ids=selected_identities,
+                                                          resume_cursor=checkpoint.get("cursor", ""),
+                                                          commit_page=persist_creator_checkpoint)
                                 return self.crawler.run_creator(
                                     platform=request.platform,
                                     creator_id=creator_ref,
-                                    max_notes=crawl_total_notes,
+                                    max_notes=remaining,
                                     max_comments=request.max_comments,
                                     max_concurrency=crawler_concurrency,
                                     max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
@@ -1089,7 +1133,7 @@ class AuditPipeline:
                                     collect_comments=bool(getattr(request, "collect_comments", True)),
                                     collect_media=bool(getattr(request, "collect_media", True)),
                                     save_root=save_root,
-                                    progress_callback=log_crawl_progress,
+                                    progress_callback=None if dy_creator else log_crawl_progress,
                                     content_callback=enqueue_stream_batch if stream_callback_enabled else None,
                                     stream_items=stream_callback_enabled,
                                     stop_checker=crawl_stop_requested,
@@ -1097,6 +1141,7 @@ class AuditPipeline:
                                     account_id=crawler_account_id,
                                     route_context=getattr(self, "_collection_route_context", None),
                                     started_callback=mark_crawler_started,
+                                    **resume_options,
                                 )
                             if (
                                 request.crawl_mode == "search"
@@ -1318,6 +1363,17 @@ class AuditPipeline:
                                 raise last_account_error
                             else:
                                 raise RuntimeError("crawler_account_login_required: 当前没有可用采集账号。")
+                        return output
+
+                    if dy_creator and (len(selected_identities) >= creator_target or checkpoint.get("exhausted")):
+                        output = CrawlOutput(request.platform, [], [], crawl_dir)
+                    else:
+                        with (_crawler_lock if settings.app_auth_mode != "required" else nullcontext()):
+                            output = collect_from_accounts()
+                    if dy_creator:
+                        enqueue_stream_batch(output.contents, output.comments)
+                        if checkpoint.get("exhausted") and len(selected_identities) < creator_target:
+                            job_store.log(self.job_id, f"主页已读完，已采集 {len(selected_identities)}/{creator_target} 条")
                     crawl_returned = True
                 finally:
                     if batch_flusher:
@@ -1379,16 +1435,14 @@ class AuditPipeline:
                 self.job_id,
                 f"crawler output loaded: contents={len(output.contents)}, comments={len(output.comments)}",
             )
-            if selection_limit is not None:
+            if dy_creator or selection_limit is not None:
                 if request.run_crawler:
-                    if not geographic:
+                    if not geographic and not dy_creator:
                         enqueue_stream_batch(output.contents, output.comments)
                     (
                         selected_memberships,
                         selected_refs,
-                    ) = self.ingestion.validated_selection_for_task(
-                        self.job_id
-                    )
+                    ) = self.ingestion.validated_selection_for_task(self.job_id, **membership_options)
                 else:
                     (
                         selected_memberships,
@@ -1406,6 +1460,7 @@ class AuditPipeline:
                     request.run_crawler
                     and not geographic
                     and not selected_memberships
+                    and not (dy_creator and checkpoint.get("exhausted"))
                     and not job_store.control(self.job_id).get("no_suspicious_content")
                 ):
                     raise RuntimeError(
@@ -1440,7 +1495,7 @@ class AuditPipeline:
             if geographic and request.run_crawler:
                 selected_memberships, selected_refs = self.ingestion.validated_selection_for_task(self.job_id)
                 ingested_refs_by_key = self._refs_by_content_key(selected_refs)
-            elif selection_limit is not None and request.run_crawler:
+            elif (dy_creator or selection_limit is not None) and request.run_crawler:
                 ingested_refs_by_key = self._refs_by_content_key(selected_refs)
             elif not skip_final_supplement and output.contents:
                 ingested_refs_by_key = self._ingest_loaded_output(

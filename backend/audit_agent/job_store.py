@@ -159,6 +159,7 @@ class JobStore:
                     start_page INTEGER,
                     crawl_checkpoint_page INTEGER,
                     crawl_checkpoint_keyword TEXT,
+                    creator_checkpoint TEXT,
                     max_notes INTEGER,
                     max_total_notes INTEGER NOT NULL DEFAULT 5,
                     max_comments INTEGER,
@@ -281,6 +282,8 @@ class JobStore:
                 conn.execute("ALTER TABLE jobs ADD COLUMN max_items_per_minute INTEGER NOT NULL DEFAULT 5")
             if "search_sort" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN search_sort TEXT NOT NULL DEFAULT 'general'")
+            if "creator_checkpoint" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN creator_checkpoint TEXT")
             if "crawl_checkpoint_page" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN crawl_checkpoint_page INTEGER")
             if "crawl_checkpoint_keyword" not in columns:
@@ -691,6 +694,18 @@ class JobStore:
         values.append(job_id)
         with self._lock, self._connect() as conn:
             conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE id = ?", values)
+
+    def advance_creator_checkpoint(self, job_id: str, epoch: int, previous: str, updated: str) -> None:
+        """Fence a completed page to the task attempt that actually ingested it."""
+        with self._lock, self._connect() as conn:
+            changed = conn.execute(
+                """UPDATE jobs SET creator_checkpoint = ? WHERE id = ?
+                   AND COALESCE(creator_checkpoint, '') = ?
+                   AND COALESCE(json_extract(control, '$.crawl_epoch'), 0) = ?""",
+                (updated, job_id, previous, epoch),
+            )
+            if changed.rowcount != 1:
+                raise RuntimeError("主页续抓断点已变更，请重新读取任务进度")
 
     def control(self, job_id: str) -> dict:
         job = self.get(job_id)

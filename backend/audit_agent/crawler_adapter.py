@@ -118,6 +118,36 @@ class CrawlerRateLimitError(RuntimeError):
     """Shared platform cooldown; do not mark an account expired or rotate it."""
 
 
+class CreatorPageReceipts:
+    """Advance contiguous listing pages only after every delivered ID is in the task DB."""
+
+    def __init__(self, save_root: Path, cursor: str, committed_ids: set[str],
+                 commit_page: Callable[[str, bool], None]):
+        self.path = save_root / "mediacrawler_stdout.log"
+        self.cursor = cursor
+        self.committed_ids = committed_ids
+        self.commit_page = commit_page
+        self.offset = 0
+        self.exhausted = False
+
+    def advance(self) -> None:
+        with self.path.open("rb") as stream:
+            stream.seek(self.offset)
+            while line := stream.readline():
+                if not line.endswith(b"\n"):
+                    return
+                if line.startswith(b"CREATOR_PAGE_DELIVERED "):
+                    page = json.loads(line.split(b" ", 1)[1])
+                    if page["cursor"] != self.cursor:
+                        raise CrawlerCollectionIncompleteError("主页分页断点顺序不一致")
+                    if not self.committed_ids.issuperset(page["ids"]):
+                        return  # The spool may deliver the last content row on its next poll.
+                    self.commit_page(page["next"], page["exhausted"])
+                    self.cursor = page["next"]
+                    self.exhausted = page["exhausted"]
+                self.offset = stream.tell()
+
+
 class MediaCrawlerAdapter:
     def __init__(self, media_crawler_dir: Path | None = None, account_store=None):
         self.media_crawler_dir = media_crawler_dir or settings.media_crawler_dir
@@ -358,6 +388,9 @@ class MediaCrawlerAdapter:
         collect_comments: bool = True,
         collect_media: bool = True,
         route_context=None,
+        committed_ids: set[str] | None = None,
+        resume_cursor: str = "",
+        commit_page: Callable[[str, bool], None] | None = None,
     ) -> CrawlOutput:
         self._validate_platform(platform)
         max_items_per_minute, account_pacing = self._account_pacing(account_id, max_items_per_minute)
@@ -396,19 +429,39 @@ class MediaCrawlerAdapter:
             str(save_root),
             *account_pacing,
         ]
-        return self._run_command(
-            command=command,
-            save_root=save_root,
-            platform=platform,
-            max_notes=max_notes,
-            progress_callback=progress_callback,
-            content_callback=content_callback,
-            stop_checker=stop_checker,
-            auth_state=auth_state,
-            started_callback=started_callback,
-            checkpoint_callback=checkpoint_callback,
-            account_id=account_id, route_context=route_context,
-        )
+        with ExitStack() as inputs:
+            receipts = None
+            if committed_ids is not None:
+                if platform != "dy" or not stream_items or content_callback is None or commit_page is None:
+                    raise ValueError("creator resume requires a managed Douyin streaming task")
+                target = len(committed_ids) + max_notes
+                skip_file = inputs.enter_context(tempfile.NamedTemporaryFile(mode="w", encoding="utf-8"))
+                skip_file.write("\n".join(sorted(committed_ids)))
+                skip_file.flush()
+                command.extend(["--skip_aweme_ids_file", str(Path(skip_file.name).resolve()),
+                                "--dy_creator_resume_cursor", resume_cursor])
+                receipts = CreatorPageReceipts(save_root, resume_cursor, committed_ids, commit_page)
+
+                def deliver(contents: list[dict], comments: list[dict]) -> None:
+                    content_callback(contents, comments)
+                    receipts.advance()
+
+            output = self._run_command(
+                command=command,
+                save_root=save_root,
+                platform=platform,
+                max_notes=max_notes,
+                progress_callback=progress_callback,
+                content_callback=deliver if receipts else content_callback,
+                stop_checker=stop_checker,
+                auth_state=auth_state,
+                started_callback=started_callback,
+                checkpoint_callback=checkpoint_callback,
+                account_id=account_id, route_context=route_context,
+            )
+            if receipts and len(committed_ids) < target and not receipts.exhausted and not (stop_checker and stop_checker()):
+                raise CrawlerCollectionIncompleteError("主页未读完且新作品未全部入库，已保存断点")
+            return output
 
     def run_detail(
         self,
@@ -729,6 +782,7 @@ class MediaCrawlerAdapter:
                     if authority:
                         authority.close()
                     raise route_pipe.error or CollectionRouteError("PROXY_CONFIG_INVALID")
+                creator_run = spool.run_id if "--dy_creator_resume_cursor" in command else ""
                 last_count = -1
                 seen_content_ids: set[str] = set()
                 stop_reason = ""
@@ -873,6 +927,7 @@ class MediaCrawlerAdapter:
                                 platform,
                                 seen_content_ids,
                                 content_callback,
+                                creator_run,
                             )
                         if checkpoint_callback and stderr_path.exists():
                             try:
@@ -899,6 +954,7 @@ class MediaCrawlerAdapter:
                             platform,
                             seen_content_ids,
                             content_callback,
+                            creator_run,
                         )
 
                     returncode = completed.returncode
@@ -928,7 +984,8 @@ class MediaCrawlerAdapter:
                     if 'COLLECTION_INCOMPLETE' in terminal_log:
                         raise collection_incomplete_error(save_root, platform)
 
-                    output = self.load_latest_output(save_root, platform)
+                    output = (self._load_platform_output(save_root, platform, creator_run)
+                              if creator_run else self.load_latest_output(save_root, platform))
                     output.command = command
                     return output
                 except BaseException as exc:
@@ -1118,8 +1175,10 @@ class MediaCrawlerAdapter:
         platform: str,
         seen_content_ids: set[str],
         callback: ContentCallback,
+        creator_run: str = "",
     ) -> None:
-        output = self._load_platform_output(save_root, platform)
+        output = (self._load_platform_output(save_root, platform, creator_run)
+                  if creator_run else self._load_platform_output(save_root, platform))
         new_contents = []
         for item in output.contents:
             content_id = self._content_identity(item, platform)
@@ -1133,26 +1192,18 @@ class MediaCrawlerAdapter:
         else:
             callback([], output.comments)
 
-    def _load_platform_output(self, save_root: Path, platform: str) -> CrawlOutput:
-        """Load only the selected platform directory while the process is live."""
+    def _load_platform_output(self, save_root: Path, platform: str, creator_run: str = "") -> CrawlOutput:
+        """Managed creator runs only deliver rows published by their own child spool."""
         platform_dir = save_root / PLATFORM_DATA_DIRS[platform] / "jsonl"
-        if not platform_dir.exists():
-            return self._with_completed_details(CrawlOutput(
-                platform=platform,
-                contents=[],
-                comments=[],
-                output_dir=save_root,
-            ))
-        content_files = sorted(platform_dir.glob("*_contents_*.jsonl"))
-        comment_files = sorted(platform_dir.glob("*_comments_*.jsonl"))
-        creator_files = sorted(platform_dir.glob("*_creators_*.jsonl"))
-        return self._with_completed_details(CrawlOutput(
-            platform=platform,
-            contents=[item for path in content_files for item in self._read_jsonl(path)],
-            comments=[item for path in comment_files for item in self._read_jsonl(path)],
-            creators=[item for path in creator_files for item in self._read_jsonl(path)],
-            output_dir=save_root,
-        ))
+        prefix = f"{creator_run}_" if creator_run else ""
+
+        def rows(kind: str) -> list[dict]:
+            return [item for path in sorted(platform_dir.glob(f"{prefix}*_{kind}_*.jsonl"))
+                    for item in self._read_jsonl(path)]
+
+        output = CrawlOutput(platform=platform, contents=rows("contents"), comments=rows("comments"),
+                             creators=rows("creators"), output_dir=save_root)
+        return output if creator_run else self._with_completed_details(output)
 
     def _with_completed_details(self, output: CrawlOutput) -> CrawlOutput:
         """Replay completed detail payloads, never partial attempt directories.
