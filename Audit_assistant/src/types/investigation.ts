@@ -253,12 +253,13 @@ export interface InvestigationSession {
   };
 }
 
-export type InvestigationRiskStatus = "risk" | "review" | "safe" | "empty";
+export type InvestigationRiskStatus = "risk" | "safe" | "empty";
 
 export interface InvestigationRiskSummary {
   status: InvestigationRiskStatus;
-  risk_count: number;
-  review_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
 }
 
 // Knowledge Base & Recall Library Types

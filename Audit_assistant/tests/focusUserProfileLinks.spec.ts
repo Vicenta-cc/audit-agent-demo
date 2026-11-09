@@ -28,31 +28,21 @@ test.beforeEach(async ({ context, page }) => {
         { id: "rel-f", platform: "dy", display_name: "伪造主页账号", public_douyin_id: "spoofed-url", sec_uid: "spoofed-url", profile_url: "https://example.com/user/spoofed-url", source_comment_id: "comment-f", analysis_status: "linked" }
       ]
     }] } });
-    if (path === "/api/comment-risk-users") return route.fulfill({ json: { items: [
-      {
-        id: "comment-public", platform: "dy", display_name: "评论用户甲",
-        public_douyin_id: "comment-public-id", sec_uid: "sec-comment-public",
-        profile_url: "https://www.douyin.com/user/sec-comment-public", avatar_url: "",
-        violation_count: 1, high_risk_count: 1, medium_risk_count: 0,
-        pending_review_count: 0, comment_area_count: 1, latest_at: now,
-        comments: [{ source_comment_id: "source-comment-1", content: "评论证据", risk_level: "high", risk_score: 88, source_audit_result_id: 1, source_job_id: "job-1", source_title: "来源内容", occurred_at: now }]
-      },
-      {
-        id: "comment-sec-only", platform: "dy", display_name: "仅稳定标识",
-        public_douyin_id: "", sec_uid: "sec-comment-only",
-        profile_url: "https://www.douyin.com/user/sec-comment-only", avatar_url: "",
-        violation_count: 1, high_risk_count: 1, medium_risk_count: 0,
-        pending_review_count: 0, comment_area_count: 1, latest_at: now,
-        comments: [{ source_comment_id: "source-comment-2", content: "另一评论证据", risk_level: "high", risk_score: 80, source_audit_result_id: 2, source_job_id: "job-2", source_title: "另一来源", occurred_at: now }]
-      }
-    ] } });
     if (path === "/api/me/task-quota") return route.fulfill({ json: { enabled: false } });
     return route.fulfill({ json: { items: [] } });
   });
 });
 
 test("focus users use public Douyin ids and each relation row's own trusted profile URL", async ({ page }) => {
+  const penetrationRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/comment-risk-users") {
+      penetrationRequests.push(request.url());
+    }
+  });
   await page.goto("/users");
+
+  await expect(page.getByRole("tab", { name: /用户穿透/ })).toHaveCount(0);
 
   const mainLink = page.getByRole("link", { name: "重点账号" }).first();
   await expect(mainLink).toHaveAttribute("href", "https://www.douyin.com/user/sec-main");
@@ -83,66 +73,18 @@ test("focus users use public Douyin ids and each relation row's own trusted prof
   const spoofedProfile = page.locator(".related-comment-item-compact").filter({ hasText: "伪造主页账号" });
   await expect(spoofedProfile.getByRole("link")).toHaveCount(0);
   await expect(spoofedProfile.getByText("主页链接不可用", { exact: true })).toBeVisible();
+  expect(penetrationRequests).toHaveLength(0);
 });
 
-test("comment-risk users load from the real endpoint and keep copy failures honest", async ({ page }) => {
-  await page.goto("/users");
-  await page.getByRole("tab", { name: /用户穿透/ }).click();
-
-  await expect(page.getByRole("link", { name: "评论用户甲" })).toHaveAttribute("href", "https://www.douyin.com/user/sec-comment-public");
-  await expect(page.getByRole("link", { name: "抖音号：comment-public-id" })).toBeVisible();
-
-  await page.evaluate(() => {
-    Object.defineProperty(Navigator.prototype, "clipboard", {
-      configurable: true,
-      get: () => ({ writeText: () => Promise.reject(new Error("denied")) })
-    });
+test("signed-in account list can retry a failure without showing demo accounts", async ({ page }) => {
+  let first = true;
+  await page.route("**/api/monitored-users", route => {
+    if (!first) return route.fallback();
+    first = false;
+    return route.fulfill({ status: 503, json: { detail: "监控对象暂时不可用" } });
   });
-  await page.getByRole("button", { name: "复制抖音号" }).click();
-  await expect(page.getByText("抖音号复制失败，请手动复制", { exact: true })).toBeVisible();
-
-  await page.getByRole("button", { name: /仅稳定标识/ }).click();
-  await expect(page.getByRole("link", { name: "仅稳定标识" })).toHaveAttribute("href", "https://www.douyin.com/user/sec-comment-only");
-  await expect(page.getByText("抖音号：未提供", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "复制抖音号" })).toHaveCount(0);
-});
-
-test("monitored users remain usable during a slow or failed comment lookup and retry", async ({ page }) => {
-  let retry = false;
-  let release!: () => void;
-  const pending = new Promise<void>(resolve => { release = resolve; });
-  await page.route("**/api/comment-risk-users", async route => {
-    if (retry) return route.fallback();
-    await pending;
-    await route.fulfill({ status: 503, json: { detail: "评论用户暂时不可用" } });
-  });
-
   await page.goto("/users");
-  const main = page.getByRole("link", { name: "重点账号", exact: true });
-  await expect(main).toBeVisible();
-  const profiles = page.getByRole("tab", { name: /用户穿透/ });
-  await profiles.click();
-  await expect(page.getByText("正在加载评论用户...")).toBeVisible();
-  release();
-  await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
-  await page.getByRole("tab", { name: "监控对象" }).click();
-  await expect(main).toBeVisible();
-  await profiles.click();
-  retry = true;
-  await page.getByRole("button", { name: "重试" }).click();
-  await expect(page.getByRole("link", { name: "评论用户甲" })).toBeVisible();
-});
-
-test("an unavailable monitored list shows a retry while comment users are still accessible", async ({ page }) => {
-  let retry = false;
-  await page.route("**/api/monitored-users", route => retry ? route.fallback() :
-    route.fulfill({ status: 503, json: { detail: "监控对象暂时不可用" } }));
-  await page.goto("/users");
-  await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
-  await page.getByRole("tab", { name: /用户穿透/ }).click();
-  await expect(page.getByRole("link", { name: "评论用户甲" })).toBeVisible();
-  await page.getByRole("tab", { name: "监控对象" }).click();
-  retry = true;
   await page.getByRole("button", { name: "重试" }).click();
   await expect(page.getByRole("link", { name: "重点账号", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /用户穿透/ })).toHaveCount(0);
 });

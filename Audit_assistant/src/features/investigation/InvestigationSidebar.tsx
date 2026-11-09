@@ -140,8 +140,23 @@ export function InvestigationSidebar({
                         {session.status}
                       </span>
                       {risk ? (
-                        <span className={`inv-risk-pill is-${risk.tone}`} aria-label={`风险状态：${risk.label}`}>
-                          {risk.label}
+                        <span
+                          className="inv-risk-levels"
+                          aria-label={risk.map((item) => `${item.label}风险 ${item.count}`).join("，")}
+                        >
+                          {risk.map((item) => (
+                            <span className={`inv-risk-level is-${item.tone}`} key={item.tone}>
+                              <span
+                                className={`inv-risk-level-count ${item.count === 0 ? "is-zero" : ""}`}
+                                aria-label={`${item.label}风险 ${item.count}`}
+                                title={`${item.label}风险 ${item.count}`}
+                              >
+                                <span className="inv-risk-level-number" aria-hidden="true">
+                                  {item.count}
+                                </span>
+                              </span>
+                            </span>
+                          ))}
                         </span>
                       ) : null}
                     </div>
@@ -246,29 +261,12 @@ export function InvestigationSidebar({
 
 export function riskSummaryPresentation(
   summary?: InvestigationSession["riskSummary"]
-): { label: string; tone: "risk" | "review" | "safe" | "empty" } | null {
+): Array<{ label: "高" | "中" | "低"; count: number; tone: "high" | "medium" | "low" }> | null {
   if (!summary) return null;
-  const riskCount = Math.max(0, Number(summary.risk_count) || 0);
-  const reviewCount = Math.max(0, Number(summary.review_count) || 0);
-  if (summary.status === "risk") {
-    if (riskCount === 0) {
-      return reviewCount > 0
-        ? { label: `待复核 ${reviewCount}`, tone: "review" }
-        : null;
-    }
-    const label = reviewCount > 0
-      ? `风险 ${riskCount} · 待复核 ${reviewCount}`
-      : `风险 ${riskCount}`;
-    return { label, tone: "risk" };
-  }
-  if (summary.status === "review") {
-    return { label: `待复核 ${reviewCount}`, tone: "review" };
-  }
-  if (summary.status === "safe") {
-    return { label: "未发现风险", tone: "safe" };
-  }
-  if (summary.status === "empty") {
-    return { label: "暂无研判数据", tone: "empty" };
-  }
-  return null;
+  const count = (value: number) => Math.max(0, Number(value) || 0);
+  return [
+    { label: "高", count: count(summary.high_count), tone: "high" },
+    { label: "中", count: count(summary.medium_count), tone: "medium" },
+    { label: "低", count: count(summary.low_count), tone: "low" }
+  ];
 }

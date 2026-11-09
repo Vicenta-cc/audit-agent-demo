@@ -41,7 +41,7 @@ function workspace(): HistoricalReportWorkspace {
     report_version_id: "report-version:8c355a5ba03f45619795813af83ac669",
     run_status: "PUBLISHED",
     import_semantics: "historical",
-    risk_summary: { status: "review", risk_count: 0, review_count: 3 },
+    risk_summary: { status: "risk", high_count: 0, medium_count: 3, low_count: 0 },
     draft: {
       task_name: "我好累心好累监控任务",
       subject: "调查评论风险",
@@ -143,7 +143,7 @@ test("historical report API uses only workspace-scoped public routes", async () 
 
 test("Display Timeline remains separate from the real report conversation", () => {
   const session = buildHistoricalReportSession(workspace(), report());
-  expect(session.riskSummary).toEqual({ status: "review", risk_count: 0, review_count: 3 });
+  expect(session.riskSummary).toEqual({ status: "risk", high_count: 0, medium_count: 3, low_count: 0 });
   expect(session.messages.slice(0, 5).map((message) => message.id)).toEqual([
     "display-1", "display-2", "display-3", "display-4", "display-5"
   ]);

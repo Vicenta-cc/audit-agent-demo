@@ -2,38 +2,31 @@ import { useApplicationAuth } from "../auth/AuthBoundary";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AccountHeader } from "./AccountHeader";
-import { AccountSidebar, type FocusSidebarMode } from "./AccountSidebar";
+import { AccountSidebar } from "./AccountSidebar";
 import { AccountTabs, type AccountTabKey } from "./AccountTabs";
 import { OverviewTab } from "./OverviewTab";
 import { RelatedAccountsCard } from "./RelatedAccountsCard";
 import { RiskHistoryPreviewCard } from "./RiskHistoryPreviewCard";
 import { MonitoringTimeline } from "./MonitoringTimeline";
 import { MonitoringPlanCard } from "./MonitoringPlanCard";
-import { CommentRiskProfileView } from "./CommentRiskProfileView";
 import { Toast } from "../../components/feedback/Toast";
 import { EmptyState } from "../../components/feedback/EmptyState";
 import { ErrorState } from "../../components/feedback/ErrorState";
 import { LoadingState } from "../../components/feedback/LoadingState";
-import { fetchCommentRiskProfiles, fetchMonitoredAccountDetail, fetchMonitoredAccounts } from "../../services/focusUsers";
-import { fetchMockCommentRiskProfiles } from "../../mocks/userPenetration";
-import type { CommentRiskProfile, MonitoredAccount, RiskOutput } from "../../types/focusUsers";
+import { fetchMonitoredAccountDetail, fetchMonitoredAccounts } from "../../services/focusUsers";
+import type { MonitoredAccount, RiskOutput } from "../../types/focusUsers";
 
 export function FocusUsersPage() {
   const { user } = useApplicationAuth();
   const demoMode = !user;
   const navigate = useNavigate();
-  const [sidebarMode, setSidebarMode] = useState<FocusSidebarMode>("monitored");
   const [accounts, setAccounts] = useState<MonitoredAccount[]>([]);
-  const [penetrationUsers, setPenetrationUsers] = useState<CommentRiskProfile[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
-  const [selectedPenetrationUserId, setSelectedPenetrationUserId] = useState<string>("");
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<AccountTabKey>("overview");
   const [isRefetching, setIsRefetching] = useState(false);
   const [detailLoadingAccountId, setDetailLoadingAccountId] = useState("");
   const [loading, setLoading] = useState(true);
-  const [profilesLoading, setProfilesLoading] = useState(true);
-  const [profilesError, setProfilesError] = useState("");
   const [error, setError] = useState("");
   const [toast, setToast] = useState<{ message: string; tone?: "success" | "info" } | null>(null);
 
@@ -53,26 +46,9 @@ export function FocusUsersPage() {
     }
   }, [demoMode]);
 
-  const loadProfiles = useCallback(async () => {
-    setProfilesLoading(true);
-    setProfilesError("");
-    try {
-      const profiles = await (demoMode ? fetchMockCommentRiskProfiles() : fetchCommentRiskProfiles());
-      setPenetrationUsers(profiles);
-      setSelectedPenetrationUserId((current) => (
-        current && profiles.some((item) => item.id === current) ? current : profiles[0]?.id ?? ""
-      ));
-    } catch (err) {
-      setProfilesError(err instanceof Error ? err.message : "评论用户数据加载失败");
-    } finally {
-      setProfilesLoading(false);
-    }
-  }, [demoMode]);
-
   useEffect(() => {
     void loadAccounts();
-    void loadProfiles();
-  }, [loadAccounts, loadProfiles]);
+  }, [loadAccounts]);
 
   useEffect(() => {
     if (!toast) {
@@ -96,23 +72,9 @@ export function FocusUsersPage() {
     });
   }, [accounts, query]);
 
-  const filteredPenetrationUsers = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    if (!keyword) return penetrationUsers;
-    return penetrationUsers.filter((profile) => (
-      profile.name.toLowerCase().includes(keyword)
-      || profile.publicDouyinId.toLowerCase().includes(keyword)
-    ));
-  }, [penetrationUsers, query]);
-
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === selectedAccountId) ?? accounts[0],
     [accounts, selectedAccountId]
-  );
-
-  const selectedPenetrationUser = useMemo(
-    () => penetrationUsers.find((profile) => profile.id === selectedPenetrationUserId) ?? penetrationUsers[0],
-    [penetrationUsers, selectedPenetrationUserId]
   );
 
   const notify = (message: string, tone: "success" | "info" = "success") => {
@@ -160,11 +122,6 @@ export function FocusUsersPage() {
       .finally(() => setDetailLoadingAccountId((current) => current === accountId ? "" : current));
   };
 
-  const handleModeChange = (mode: FocusSidebarMode) => {
-    setSidebarMode(mode);
-    setQuery("");
-  };
-
   const handleOpenAnalysisTask = (taskId: string) => {
     if (!taskId) {
       notify("该关联账号尚未创建分析任务", "info");
@@ -181,47 +138,34 @@ export function FocusUsersPage() {
     navigate(`/tasks/${encodeURIComponent(risk.jobId)}/outputs/${encodeURIComponent(risk.id)}`);
   };
 
-  const viewingProfiles = sidebarMode === "penetration";
-  const listLoading = viewingProfiles ? profilesLoading : loading;
-  const listError = viewingProfiles ? profilesError : error;
+  if (loading) {
+    return (
+      <main className="focus-users-shell">
+        <LoadingState label="正在加载真实重点用户与评论关系..." />
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="focus-users-shell">
+        <ErrorState message={error} onRetry={() => void loadAccounts()} />
+      </main>
+    );
+  }
 
   return (
     <main className="focus-users-shell">
       <div className="focus-users-layout">
         <AccountSidebar
-          mode={sidebarMode}
-          listReady={!listLoading && !listError}
-          profilesReady={!profilesLoading && !profilesError}
           accounts={filteredAccounts}
-          penetrationUsers={filteredPenetrationUsers}
           selectedAccountId={selectedAccount?.id ?? ""}
-          selectedPenetrationUserId={selectedPenetrationUser?.id ?? ""}
           searchValue={query}
-          onModeChange={handleModeChange}
           onSearchChange={setQuery}
           onSelectAccount={handleSelectAccount}
-          onSelectPenetrationUser={setSelectedPenetrationUserId}
         />
 
-        {listLoading ? (
-          <LoadingState label={viewingProfiles ? "正在加载评论用户..." : "正在加载监控对象..."} />
-        ) : listError ? (
-          <ErrorState message={listError} onRetry={viewingProfiles ? loadProfiles : loadAccounts} />
-        ) : viewingProfiles ? (
-          selectedPenetrationUser ? (
-            <CommentRiskProfileView
-              profile={selectedPenetrationUser}
-              onCopyDouyinId={(succeeded) => notify(
-                succeeded ? "抖音号已复制" : "抖音号复制失败，请手动复制",
-                succeeded ? "success" : "info"
-              )}
-            />
-          ) : (
-            <section className="loading-panel">
-              <EmptyState title="暂无穿透用户" description="当前近 30 天数据中没有满足入选规则的评论用户。" />
-            </section>
-          )
-        ) : selectedAccount ? (
+        {selectedAccount ? (
           <section className="account-workspace" aria-label="账号详情工作区">
             {detailLoadingAccountId === selectedAccount.id ? (
               <div className="loading-panel account-detail-loading">

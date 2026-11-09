@@ -188,13 +188,12 @@
 .inv-session-badges {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-wrap: nowrap;
+  gap: 7px;
   min-width: 0;
 }
 
-.inv-status-pill,
-.inv-risk-pill {
+.inv-status-pill {
   display: inline-flex;
   align-items: center;
   padding: 1px 6px;
@@ -202,6 +201,8 @@
   font-size: 10.5px;
   font-weight: 500;
   line-height: 16px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .inv-status-pill.st-读取异常 { background: #fef2f2; color: #b91c1c; }
@@ -210,11 +211,51 @@
 .inv-status-pill.st-研判中 { background: #e0e7ff; color: #3730a3; }
 .inv-status-pill.st-报告已生成 { background: #d1fae5; color: #065f46; }
 .inv-status-pill.st-已创建 { background: #e2e8f0; color: #334155; }
+.inv-status-pill.st-调查失败 { background: #fef2f2; color: #b91c1c; }
+.inv-status-pill.st-调查已中断 { background: #f1f5f9; color: #475569; }
 
-.inv-risk-pill.is-risk { background: #fee2e2; color: #b91c1c; }
-.inv-risk-pill.is-review { background: #dbeafe; color: #1d4ed8; }
-.inv-risk-pill.is-safe { background: #dcfce7; color: #166534; }
-.inv-risk-pill.is-empty { background: #f1f5f9; color: #64748b; }
+.inv-risk-levels,
+.inv-risk-level {
+  display: inline-flex;
+  align-items: center;
+}
+
+.inv-risk-levels {
+  gap: 3px;
+  padding: 1px 3px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  white-space: nowrap;
+}
+
+.inv-risk-level {
+  line-height: 14px;
+}
+
+.inv-risk-level-count {
+  display: inline-grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  border-radius: 999px;
+  color: #ffffff;
+}
+
+.inv-risk-level-number {
+  display: block;
+  font-family: Arial, "Helvetica Neue", sans-serif;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1;
+  transform: translateY(0.35px);
+}
+
+.inv-risk-level.is-high .inv-risk-level-count { background: #f06b7a; }
+.inv-risk-level.is-medium .inv-risk-level-count { background: #f2a93b; }
+.inv-risk-level.is-low .inv-risk-level-count { background: #55bd86; }
+.inv-risk-level .inv-risk-level-count.is-zero { background: #b8bec6; color: #ffffff; }
 
 .inv-more-trigger {
   opacity: 0;
