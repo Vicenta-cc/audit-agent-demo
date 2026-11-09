@@ -25,6 +25,7 @@ export function formatRunFailureMessage(run: InvestigationRunProjection) {
   if (run.recovery_blocker?.startsWith("geographic_")) return "部分地域采集记录需要核对，暂不能自动继续；已完成的审核结果会保留。";
   if (run.error_code === "geographic_preflight_deferred") return "后续采集暂未开始，正在等待采集线路或执行条件恢复；已完成的审核结果会保留。";
   const signal = `${run.error_code} ${run.error_message}`.toLowerCase();
+  if (run.error_code === "crawler_scheduler_database_busy") return "采集调度数据库繁忙，本次采集已中断。";
   if (run.available_actions?.ended && (signal.includes("crawler") || signal.includes("account"))) {
     return "本次任务已结束。请检查采集账号或采集服务后，在新对话发起调查。";
   }
