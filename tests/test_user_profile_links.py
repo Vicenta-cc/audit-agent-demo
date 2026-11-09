@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
+from scripts.backfill_related_account_profiles import backfill_related_account_profiles
 from backend.audit_agent.ingestion import AuditResultStore
 from backend.audit_agent.job_store import JobStore
 from backend.investigation_creation.principal import Principal
@@ -140,11 +142,15 @@ def test_comment_relation_requires_the_exact_source_comment(tmp_path):
         raise AssertionError("missing source comment must not create a relation")
 
 
-def test_legacy_related_url_is_not_exposed_without_verified_sec_uid(tmp_path):
-    store = JobStore(tmp_path / "identity.sqlite3")
-    account = store.upsert_monitored_user_from_audit_result(
-        _parent(), owner_user_id="owner-a"
-    )
+def _insert_legacy_relation(
+    store: JobStore,
+    *,
+    account_id: str,
+    relation_id: str,
+    profile_url: str = "",
+    source_comment_id: str = "",
+    source_audit_result_id: int | None = None,
+) -> None:
     now = "2026-11-09T00:00:00"
     with store._connect() as conn:
         conn.execute(
@@ -152,44 +158,128 @@ def test_legacy_related_url_is_not_exposed_without_verified_sec_uid(tmp_path):
             INSERT INTO suspected_related_accounts (
                 id, owner_user_id, monitored_user_id, platform, stable_key,
                 display_name, profile_url, raw_identity, source_comment_id,
-                analysis_status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                source_audit_result_id, analysis_status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                "legacy-related",
+                relation_id,
                 "owner-a",
-                account["id"],
+                account_id,
                 "dy",
-                "name:同名用户",
-                "同名用户",
-                "https://www.douyin.com/user/unverified",
-                "同名用户",
-                "legacy-comment",
+                f"legacy:{relation_id}",
+                relation_id,
+                profile_url,
+                relation_id,
+                source_comment_id,
+                source_audit_result_id,
                 "linked",
                 now,
                 now,
             ),
         )
-    related = store.list_monitored_users(owner_user_id="owner-a")[0][
-        "suspected_related_accounts"
-    ][0]
-    assert related["profile_url"] == ""
-    assert related["public_douyin_id"] == ""
 
 
-def test_monitored_user_does_not_expose_unverified_douyin_profile_url(tmp_path):
+def test_legacy_related_urls_accept_only_official_douyin_profiles(tmp_path):
+    store = JobStore(tmp_path / "identity.sqlite3")
+    account = store.upsert_monitored_user_from_audit_result(
+        _parent(), owner_user_id="owner-a"
+    )
+    _insert_legacy_relation(
+        store,
+        account_id=account["id"],
+        relation_id="legacy-official",
+        profile_url="https://www.douyin.com/user/legacy-sec",
+    )
+    _insert_legacy_relation(
+        store,
+        account_id=account["id"],
+        relation_id="legacy-unsafe",
+        profile_url="https://example.com/user/wrong",
+    )
+
+    related = {
+        item["id"]: item
+        for item in store.list_monitored_users(owner_user_id="owner-a")[0][
+            "suspected_related_accounts"
+        ]
+    }
+    assert related["legacy-official"]["profile_url"] == (
+        "https://www.douyin.com/user/legacy-sec"
+    )
+    assert related["legacy-unsafe"]["profile_url"] == ""
+
+
+def test_monitored_user_accepts_only_official_douyin_profile_url_without_sec_uid(tmp_path):
     store = JobStore(tmp_path / "identity.sqlite3")
     parent = _parent()
     parent["author"].pop("sec_uid")
     parent["author"]["profile_url"] = "https://www.douyin.com/user/unverified"
-
     account = store.upsert_monitored_user_from_audit_result(
         parent, owner_user_id="owner-a"
     )
-
     assert account["public_douyin_id"] == "parent-public"
-    assert account["sec_uid"] == ""
-    assert account["profile_url"] == ""
+    assert account["profile_url"] == "https://www.douyin.com/user/unverified"
+    with store._connect() as conn:
+        conn.execute("UPDATE monitored_users SET stable_key = 'id:parent-public' WHERE id = ?", (account["id"],))
+    assert store.upsert_monitored_user_from_audit_result(parent, owner_user_id="owner-a")["id"] == account["id"]
+
+    parent["author"]["profile_url"] = "https://example.com/user/unverified"
+    unsafe = store.upsert_monitored_user_from_audit_result(
+        parent, owner_user_id="owner-b"
+    )
+    assert unsafe["profile_url"] == ""
+
+
+def test_legacy_relation_backfills_identity_from_exact_source_comment(tmp_path):
+    path = tmp_path / "identity.sqlite3"
+    store = JobStore(path)
+    results = AuditResultStore(path)
+    store.create(job_id="source-job", owner_user_id="owner-a", platform="dy")
+    audit = results.upsert_result(
+        job_id="source-job",
+        platform="dy",
+        content_key="source-post",
+        result={
+            "comments": [
+                {
+                    "comment_id": "source-comment",
+                    "user_unique_id": "backfilled-public",
+                    "sec_uid": "backfilled/sec",
+                }
+            ]
+        },
+    )
+    account = store.upsert_monitored_user_from_audit_result(
+        _parent(), owner_user_id="owner-a"
+    )
+    _insert_legacy_relation(
+        store,
+        account_id=account["id"],
+        relation_id="legacy-backfill",
+        source_comment_id="source-comment",
+        source_audit_result_id=audit["id"],
+    )
+
+    # Cross-owner and cross-platform pointers cannot supply a relation identity.
+    for mismatch, owner, platform in (("owner", "owner-b", "dy"), ("platform", "owner-a", "xhs")):
+        job_id = "mismatch-" + mismatch
+        store.create(job_id=job_id, owner_user_id=owner, platform=platform)
+        other = results.upsert_result(job_id=job_id, platform=platform, content_key="other-post",
+            result={"comments": [{"comment_id": "source-comment", "sec_uid": "wrong-user"}]})
+        _insert_legacy_relation(store, account_id=account["id"], relation_id=job_id,
+            source_comment_id="source-comment", source_audit_result_id=other["id"])
+    assert backfill_related_account_profiles(path)["updated_relations"] == 1
+    assert all(not row["sec_uid"] for row in
+        store.list_monitored_users(owner_user_id="owner-a")[0]["suspected_related_accounts"])
+    report = backfill_related_account_profiles(path, apply=True)
+    assert Path(report["backup"]).is_file()
+    assert report["updated_relations"] == 1
+
+    assert backfill_related_account_profiles(path)["updated_relations"] == 0
+    related = next(row for row in store.list_monitored_users(owner_user_id="owner-a")[0]["suspected_related_accounts"] if row["id"] == "legacy-backfill")
+    assert related["public_douyin_id"] == "backfilled-public"
+    assert related["sec_uid"] == "backfilled/sec"
+    assert related["profile_url"] == "https://www.douyin.com/user/backfilled%2Fsec"
 
 
 def test_comment_risk_user_profiles_are_authorized_and_keep_same_names_separate(tmp_path):

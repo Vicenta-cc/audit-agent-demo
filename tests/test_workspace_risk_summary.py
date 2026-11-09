@@ -83,19 +83,23 @@ def test_workspace_list_returns_compact_risk_summaries_and_isolates_errors(
         "status": "risk",
         "risk_count": 1,
         "review_count": 1,
+        "high_count": 1, "medium_count": 0, "low_count": 0,
     }
     assert by_id[sessions["review"].id]["risk_summary"] == {
         "status": "review",
+        "high_count": 0, "medium_count": 0, "low_count": 0,
         "risk_count": 0,
         "review_count": 1,
     }
     assert by_id[sessions["safe"].id]["risk_summary"] == {
         "status": "safe",
+        "high_count": 0, "medium_count": 0, "low_count": 0,
         "risk_count": 0,
         "review_count": 0,
     }
     assert by_id[sessions["empty"].id]["risk_summary"] == {
         "status": "empty",
+        "high_count": 0, "medium_count": 0, "low_count": 0,
         "risk_count": 0,
         "review_count": 0,
     }
@@ -110,6 +114,7 @@ def test_historical_workspace_summary_comes_from_frozen_findings():
             findings=(
                 SimpleNamespace(payload={
                     "decision": "reject",
+                    "risk_level": "中",
                     "raw_effective_result": {
                         "audit_completion_status": "completed",
                         "manual_review_required": False,
@@ -125,6 +130,7 @@ def test_historical_workspace_summary_comes_from_frozen_findings():
                 SimpleNamespace(payload={
                     "decision": "pass",
                     "raw_effective_result": {
+                        "risk_level": "low",
                         "audit_completion_status": "partial",
                         "manual_review_required": True,
                     },
@@ -142,6 +148,7 @@ def test_historical_workspace_summary_comes_from_frozen_findings():
     )
     expected = {
         "status": "risk",
+        "high_count": 0, "medium_count": 1, "low_count": 1,
         "risk_count": 1,
         "review_count": 2,
     }
@@ -181,6 +188,8 @@ def test_workspace_summary_counts_all_rows_and_handles_legacy_json(tmp_path):
                ("manual", "pass", '{"manual_review_required":true}'),
                ("integer", "pass", '{"manual_review_required":1}')],
         )
+        conn.execute("UPDATE audit_results SET risk_level = 'high' WHERE decision = 'reject'")
     result = store.risk_summaries_for_jobs(("large", "absent"))
-    assert result["large"] == {"status": "risk", "risk_count": 1001, "review_count": 2}
+    assert result["large"] == {"status": "risk", "risk_count": 1001, "review_count": 2,
+                               "high_count": 1001, "medium_count": 0, "low_count": 0}
     assert result["absent"]["status"] == "empty"

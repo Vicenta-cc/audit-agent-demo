@@ -7,7 +7,7 @@ import threading
 from contextlib import closing
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from uuid import uuid4
 from typing import Callable
 
@@ -869,10 +869,10 @@ class JobStore:
             author.get("url"),
         )
         if platform == "dy":
-            # Douyin profile links are trustworthy only when they are derived
-            # from this author's own sec_uid. Do not expose a legacy/client URL
-            # when the stable profile identifier is absent.
-            profile_url = self._douyin_profile_url(author.get("sec_uid"))
+            profile_url = (
+                self._douyin_profile_url(author.get("sec_uid"))
+                or self._verified_douyin_profile_url(profile_url)
+            )
         raw_identity = self._first_text(
             author.get("sec_uid"),
             author.get("user_id"),
@@ -949,7 +949,10 @@ class JobStore:
             author.get("url"),
         )
         if parent_platform == "dy":
-            parent_profile_url = self._douyin_profile_url(author.get("sec_uid"))
+            parent_profile_url = (
+                self._douyin_profile_url(author.get("sec_uid"))
+                or self._verified_douyin_profile_url(parent_profile_url)
+            )
         parent_raw_identity = self._first_text(
             author.get("sec_uid"),
             author.get("user_id"),
@@ -986,11 +989,20 @@ class JobStore:
         )
         suspect_sec_uid = self._first_text(source_comment.get("sec_uid"))
         suspect_public_douyin_id = self._public_douyin_id(source_comment, suspect_platform)
-        suspect_profile_url = (
-            self._douyin_profile_url(suspect_sec_uid)
-            if suspect_platform == "dy" and suspect_sec_uid
-            else ""
-        )
+        suspect_profile_url = ""
+        if suspect_platform == "dy":
+            suspect_profile_url = (
+                self._douyin_profile_url(suspect_sec_uid)
+                or self._verified_douyin_profile_url(
+                    self._first_text(
+                        source_comment.get("profile_url"),
+                        source_comment.get("homepage_url"),
+                        source_comment.get("homepage"),
+                        source_comment.get("user_url"),
+                        source_comment.get("url"),
+                    )
+                )
+            )
         suspect_raw_identity = self._first_text(
             suspect_sec_uid,
             source_comment.get("user_unique_id"),
@@ -1109,10 +1121,14 @@ class JobStore:
                 (owner_user_id, platform, stable_key, sec_uid, stable_key),
             ).fetchone()
         else:
+            # Releases before official-URL fallback may key this same author
+            # by raw identity. An exact source result belongs to one author.
             row = conn.execute(
-                "SELECT id FROM monitored_users "
-                "WHERE owner_user_id = ? AND platform = ? AND stable_key = ?",
-                (owner_user_id, platform, stable_key),
+                """SELECT id FROM monitored_users
+                   WHERE owner_user_id = ? AND platform = ?
+                     AND (stable_key = ? OR (? = 'dy' AND source_audit_result_id = ?))
+                   ORDER BY (stable_key = ?) DESC, created_at, id LIMIT 1""",
+                (owner_user_id, platform, stable_key, platform, source_audit_result_id, stable_key),
             ).fetchone()
         if row:
             monitored_id = row["id"]
@@ -1302,10 +1318,14 @@ class JobStore:
         ).fetchall()
         author = self._loads_json(row["author_json"], {})
         platform = row["platform"]
-        profile_url = row["profile_url"] or ""
+        stored_profile_url = row["profile_url"] or ""
+        profile_url = stored_profile_url
         sec_uid = self._first_text(author.get("sec_uid")) if isinstance(author, dict) else ""
         if platform == "dy":
-            profile_url = self._douyin_profile_url(sec_uid)
+            profile_url = (
+                self._douyin_profile_url(sec_uid)
+                or self._verified_douyin_profile_url(stored_profile_url)
+            )
         return {
             "id": row["id"],
             "platform": row["platform"],
@@ -1330,13 +1350,19 @@ class JobStore:
         job_status = row["job_status"] or ""
         analysis_status = job_status or row["analysis_status"] or "job_created"
         sec_uid = row["sec_uid"] or ""
+        profile_url = ""
+        if row["platform"] == "dy":
+            profile_url = (
+                self._douyin_profile_url(sec_uid)
+                or self._verified_douyin_profile_url(row["profile_url"] or "")
+            )
         return {
             "id": row["id"],
             "monitored_user_id": row["monitored_user_id"],
             "platform": row["platform"],
             "stable_key": row["stable_key"],
             "display_name": row["display_name"] or "",
-            "profile_url": self._douyin_profile_url(sec_uid) if row["platform"] == "dy" and sec_uid else "",
+            "profile_url": profile_url,
             "raw_identity": row["raw_identity"] or "",
             "public_douyin_id": row["public_douyin_id"] or "",
             "sec_uid": sec_uid,
@@ -1412,17 +1438,31 @@ class JobStore:
         value = str(sec_uid or "").strip()
         return f"https://www.douyin.com/user/{quote(value, safe='')}" if value else ""
 
-    def _public_douyin_id(self, identity: dict, platform: str) -> str:
-        if self._normalize_platform_label(platform) != "dy" or not isinstance(identity, dict):
+    @staticmethod
+    def _verified_douyin_profile_url(value: object) -> str:
+        try:
+            parsed = urlparse(str(value or "").strip())
+        except ValueError:
+            return ""
+        path = parsed.path.rstrip("/")
+        if (parsed.scheme.lower() != "https" or parsed.netloc.lower() != "www.douyin.com"
+                or not re.fullmatch(r"/user/[A-Za-z0-9_-]+", path)):
+            return ""
+        return f"https://www.douyin.com{path}"
+
+    @classmethod
+    def _public_douyin_id(cls, identity: dict, platform: str) -> str:
+        if cls._normalize_platform_label(platform) != "dy" or not isinstance(identity, dict):
             return ""
         for key in ("user_unique_id", "short_user_id"):
-            value = self._first_text(identity.get(key))
+            value = cls._first_text(identity.get(key))
             if value.lower() not in {"", "0", "none", "null", "undefined"}:
                 return value
         return ""
 
-    def _normalize_platform_label(self, value: str) -> str:
-        text = self._first_text(value).lower()
+    @classmethod
+    def _normalize_platform_label(cls, value: str) -> str:
+        text = cls._first_text(value).lower()
         return {
             "抖音": "dy",
             "douyin": "dy",
@@ -1432,7 +1472,8 @@ class JobStore:
             "kuaishou": "ks",
         }.get(text, text)
 
-    def _first_text(self, *values) -> str:
+    @staticmethod
+    def _first_text(*values) -> str:
         for value in values:
             text = str(value or "").strip()
             if text:

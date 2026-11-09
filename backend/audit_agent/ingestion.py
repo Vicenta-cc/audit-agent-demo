@@ -342,11 +342,12 @@ class AuditResultStore:
                 rows = conn.execute(
                     f"""
                     WITH inputs AS (
-                        SELECT job_id, decision,
+                        SELECT job_id, decision, risk_level,
                                CASE WHEN json_valid(result_json) THEN result_json END AS payload
                         FROM audit_results WHERE job_id IN ({placeholders})
                     )
                     SELECT job_id,
+                           COALESCE(NULLIF(risk_level, ''), json_extract(payload, '$.risk_level')) AS risk_level,
                            COALESCE(NULLIF(decision, ''), json_extract(payload, '$.decision')) AS decision,
                            json_extract(payload, '$.audit_completion_status') AS audit_completion_status,
                            json_type(payload, '$.manual_review_required') AS review_type
@@ -358,6 +359,7 @@ class AuditResultStore:
                     summaries[job_id] = summarize_audit_results(
                         {
                             "decision": row["decision"],
+                            "risk_level": row["risk_level"],
                             "audit_completion_status": row["audit_completion_status"],
                             "manual_review_required": row["review_type"] == "true",
                         }

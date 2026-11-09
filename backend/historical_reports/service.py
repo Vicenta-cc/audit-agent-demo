@@ -19,6 +19,7 @@ def _frozen_finding_risk_input(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(effective, dict):
         effective = {}
     return {
+        "risk_level": payload.get("risk_level") or effective.get("risk_level") or "",
         "decision": payload.get("decision") or effective.get("decision") or "",
         "manual_review_required": bool(
             payload.get("manual_review_required")

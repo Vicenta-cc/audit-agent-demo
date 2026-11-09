@@ -14,6 +14,7 @@ from typing import Any, Callable, Literal
 from urllib.parse import urlsplit
 
 from backend.audit_agent.config import settings
+from backend.audit_agent.risk_summary import summarize_audit_results
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
 from backend.hermes_runtime.adapter import HermesReportToolsUnavailable, HermesRuntimeBinding, prepare_creation_history, session_runtime_home
 from backend.hermes_runtime.service import HermesInvestigationAgentService
@@ -804,7 +805,7 @@ class InvestigationCreationConversationService:
             if self.audit_result_store is not None
             else {}
         )
-        empty_summary = {"status": "empty", "risk_count": 0, "review_count": 0}
+        empty_summary = summarize_audit_results(())
         for item in page:
             if item.get("read_error"):
                 continue

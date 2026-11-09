@@ -28,6 +28,9 @@ class AuditRiskSummaryResponse(PublicApiModel):
     status: Literal["risk", "review", "safe", "empty"]
     risk_count: int = Field(ge=0)
     review_count: int = Field(ge=0)
+    high_count: int = Field(ge=0, default=0)
+    medium_count: int = Field(ge=0, default=0)
+    low_count: int = Field(ge=0, default=0)
 
 
 class ReportVersionSummaryResponse(PublicApiModel):
