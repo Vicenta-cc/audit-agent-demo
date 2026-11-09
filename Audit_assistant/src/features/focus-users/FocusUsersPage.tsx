@@ -14,7 +14,7 @@ import { Toast } from "../../components/feedback/Toast";
 import { EmptyState } from "../../components/feedback/EmptyState";
 import { ErrorState } from "../../components/feedback/ErrorState";
 import { LoadingState } from "../../components/feedback/LoadingState";
-import { fetchMonitoredAccountDetail, fetchMonitoredAccounts } from "../../services/focusUsers";
+import { fetchCommentRiskProfiles, fetchMonitoredAccountDetail, fetchMonitoredAccounts } from "../../services/focusUsers";
 import { fetchMockCommentRiskProfiles } from "../../mocks/userPenetration";
 import type { CommentRiskProfile, MonitoredAccount, RiskOutput } from "../../types/focusUsers";
 
@@ -38,26 +38,28 @@ export function FocusUsersPage() {
     setLoading(true);
     setError("");
     try {
-      const items = await fetchMonitoredAccounts();
+      const [items, profiles] = await Promise.all([
+        fetchMonitoredAccounts(),
+        user ? fetchCommentRiskProfiles() : fetchMockCommentRiskProfiles()
+      ]);
       setAccounts(items);
+      setPenetrationUsers(profiles);
       setSelectedAccountId((current) => (
         current && items.some((item) => item.id === current) ? current : items[0]?.id ?? ""
+      ));
+      setSelectedPenetrationUserId((current) => (
+        current && profiles.some((item) => item.id === current) ? current : profiles[0]?.id ?? ""
       ));
     } catch (err) {
       setError(err instanceof Error ? err.message : "重点用户数据加载失败");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     void loadAccounts();
-    if (user) return;
-    void fetchMockCommentRiskProfiles().then((profiles) => {
-      setPenetrationUsers(profiles);
-      setSelectedPenetrationUserId(profiles[0]?.id ?? "");
-    });
-  }, [loadAccounts, user]);
+  }, [loadAccounts]);
 
   useEffect(() => {
     if (!toast) {
@@ -75,7 +77,7 @@ export function FocusUsersPage() {
     return accounts.filter((account) => {
       return (
         account.name.toLowerCase().includes(keyword) ||
-        account.platformAccountId.toLowerCase().includes(keyword) ||
+        account.publicDouyinId.toLowerCase().includes(keyword) ||
         account.id.toLowerCase().includes(keyword)
       );
     });
@@ -84,7 +86,10 @@ export function FocusUsersPage() {
   const filteredPenetrationUsers = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return penetrationUsers;
-    return penetrationUsers.filter((profile) => profile.name.toLowerCase().includes(keyword));
+    return penetrationUsers.filter((profile) => (
+      profile.name.toLowerCase().includes(keyword)
+      || profile.publicDouyinId.toLowerCase().includes(keyword)
+    ));
   }, [penetrationUsers, query]);
 
   const selectedAccount = useMemo(
@@ -197,7 +202,13 @@ export function FocusUsersPage() {
 
         {sidebarMode === "penetration" ? (
           selectedPenetrationUser ? (
-            <CommentRiskProfileView profile={selectedPenetrationUser} />
+            <CommentRiskProfileView
+              profile={selectedPenetrationUser}
+              onCopyDouyinId={(succeeded) => notify(
+                succeeded ? "抖音号已复制" : "抖音号复制失败，请手动复制",
+                succeeded ? "success" : "info"
+              )}
+            />
           ) : (
             <section className="loading-panel">
               <EmptyState title="暂无穿透用户" description="当前近 30 天数据中没有满足入选规则的评论用户。" />
@@ -214,7 +225,10 @@ export function FocusUsersPage() {
                 <AccountHeader
                   account={selectedAccount}
                   isRefetching={isRefetching}
-                  onCopyId={() => notify("平台账号 ID 已复制")}
+                  onCopyId={(succeeded) => notify(
+                    succeeded ? "抖音号已复制" : "抖音号复制失败，请手动复制",
+                    succeeded ? "success" : "info"
+                  )}
                   onRefetch={handleRefetch}
                   onCancelWatch={() => notify("已提交取消持续观察申请")}
                   onTaskView={() => handleOpenAnalysisTask(selectedAccount.sourceJobId)}

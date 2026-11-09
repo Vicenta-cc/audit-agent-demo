@@ -613,6 +613,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         title: item.title,
         updatedAt: formatSessionTimestamp(item.updated_at),
         updatedAtIso: item.updated_at,
+        riskSummary: item.read_error ? undefined : item.risk_summary,
         status: item.read_error ? "读取异常"
           : item.run_status === "PUBLISHED" ? "报告已生成"
           : item.run_status === "AUDIT_COMPLETED" ? "审核完成"
@@ -622,11 +623,21 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           : item.presentation_stage === "confirmation" ? "等待确认" : "配置中"
       }));
       // Keep already loaded conversations and in-flight turns; summaries only fill missing rows.
-      setSessions((current) => sortInvestigationSessions([
-        ...current.filter((session) => Boolean(session.creationBinding)),
-        ...restored.filter((session) => !current.some((existing) => existing.id === session.id)),
-        ...current.filter((session) => !session.creationBinding)
-      ]));
+      setSessions((current) => {
+        const currentCreationSessions = current
+          .filter((session) => Boolean(session.creationBinding))
+          .map((session) => {
+            const summary = restored.find((item) => item.id === session.id);
+            return summary
+              ? { ...session, riskSummary: summary.riskSummary }
+              : session;
+          });
+        return sortInvestigationSessions([
+          ...currentCreationSessions,
+          ...restored.filter((session) => !current.some((existing) => existing.id === session.id)),
+          ...current.filter((session) => !session.creationBinding)
+        ]);
+      });
     }).catch((error) => {
       console.error("Failed to load investigation workspaces", error);
       if (active) setWorkspaceLoadError("调查会话读取失败，请刷新后重试。");
@@ -702,13 +713,23 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     void getInvestigationWorkspaceState(investigationId).then((state) => {
       if (deletedSessionIdsRef.current.has(investigationId)) return;
       const restored = restoreInvestigationWorkspace(state);
-      setSessions((current) => sortInvestigationSessions([
-        restored,
-        ...current.filter((session) => (
-          session.id !== restored.id
-          && session.creationBinding?.workspaceSessionId !== restored.id
-        ))
-      ]));
+      setSessions((current) => {
+        const previous = current.find((session) => (
+          session.id === restored.id
+          || session.creationBinding?.workspaceSessionId === restored.id
+        ));
+        const restoredWithSummary = {
+          ...restored,
+          riskSummary: previous?.riskSummary
+        };
+        return sortInvestigationSessions([
+          restoredWithSummary,
+          ...current.filter((session) => (
+            session.id !== restored.id
+            && session.creationBinding?.workspaceSessionId !== restored.id
+          ))
+        ]);
+      });
       if (selectedInvestigationIdRef.current === investigationId) {
         setActiveSessionId(restored.id);
         setActiveDrawer(null);

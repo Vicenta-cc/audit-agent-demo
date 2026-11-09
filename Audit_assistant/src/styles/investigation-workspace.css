@@ -182,15 +182,26 @@
   align-items: center;
   justify-content: space-between;
   margin-top: 2px;
+  gap: 8px;
 }
 
-.inv-status-pill {
+.inv-session-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.inv-status-pill,
+.inv-risk-pill {
   display: inline-flex;
   align-items: center;
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 10.5px;
   font-weight: 500;
+  line-height: 16px;
 }
 
 .inv-status-pill.st-读取异常 { background: #fef2f2; color: #b91c1c; }
@@ -199,6 +210,11 @@
 .inv-status-pill.st-研判中 { background: #e0e7ff; color: #3730a3; }
 .inv-status-pill.st-报告已生成 { background: #d1fae5; color: #065f46; }
 .inv-status-pill.st-已创建 { background: #e2e8f0; color: #334155; }
+
+.inv-risk-pill.is-risk { background: #fee2e2; color: #b91c1c; }
+.inv-risk-pill.is-review { background: #dbeafe; color: #1d4ed8; }
+.inv-risk-pill.is-safe { background: #dcfce7; color: #166534; }
+.inv-risk-pill.is-empty { background: #f1f5f9; color: #64748b; }
 
 .inv-more-trigger {
   opacity: 0;

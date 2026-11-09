@@ -110,6 +110,9 @@ export function InvestigationSidebar({
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             {filteredSessions.map((session) => {
               const isActive = activeSubView === null && session.id === activeSessionId;
+              const risk = session.status === "读取异常"
+                ? null
+                : riskSummaryPresentation(session.riskSummary);
               return (
                 <div
                   key={session.id}
@@ -132,9 +135,16 @@ export function InvestigationSidebar({
                   </div>
 
                   <div className="inv-session-meta">
-                    <span className={`inv-status-pill st-${session.status}`} style={{ fontSize: "11px", padding: "1px 5px", height: "18px" }}>
-                      {session.status}
-                    </span>
+                    <div className="inv-session-badges">
+                      <span className={`inv-status-pill st-${session.status}`}>
+                        {session.status}
+                      </span>
+                      {risk ? (
+                        <span className={`inv-risk-pill is-${risk.tone}`} aria-label={`风险状态：${risk.label}`}>
+                          {risk.label}
+                        </span>
+                      ) : null}
+                    </div>
                     <span className="inv-session-time">{session.updatedAt}</span>
                   </div>
 
@@ -232,4 +242,33 @@ export function InvestigationSidebar({
       </div>
     </aside>
   );
+}
+
+export function riskSummaryPresentation(
+  summary?: InvestigationSession["riskSummary"]
+): { label: string; tone: "risk" | "review" | "safe" | "empty" } | null {
+  if (!summary) return null;
+  const riskCount = Math.max(0, Number(summary.risk_count) || 0);
+  const reviewCount = Math.max(0, Number(summary.review_count) || 0);
+  if (summary.status === "risk") {
+    if (riskCount === 0) {
+      return reviewCount > 0
+        ? { label: `待复核 ${reviewCount}`, tone: "review" }
+        : null;
+    }
+    const label = reviewCount > 0
+      ? `风险 ${riskCount} · 待复核 ${reviewCount}`
+      : `风险 ${riskCount}`;
+    return { label, tone: "risk" };
+  }
+  if (summary.status === "review") {
+    return { label: `待复核 ${reviewCount}`, tone: "review" };
+  }
+  if (summary.status === "safe") {
+    return { label: "未发现风险", tone: "safe" };
+  }
+  if (summary.status === "empty") {
+    return { label: "暂无研判数据", tone: "empty" };
+  }
+  return null;
 }

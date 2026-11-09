@@ -63,7 +63,7 @@ export function AccountSidebar({
         <input
           type="search"
           value={searchValue}
-          placeholder={mode === "monitored" ? "搜索账号名称 / ID" : "搜索用户名称"}
+          placeholder={mode === "monitored" ? "搜索账号名称 / 抖音号" : "搜索用户名称 / 抖音号"}
           onChange={(event) => onSearchChange(event.target.value)}
         />
       </label>
@@ -89,6 +89,7 @@ export function AccountSidebar({
               <AccountAvatar name={profile.name} src={profile.avatarUrl} variant="list" />
               <div className="account-list-content">
                 <span className="account-list-name">{profile.name}</span>
+                {profile.platform === "抖音" && profile.publicDouyinId ? <span className="account-list-scope">抖音号：{profile.publicDouyinId}</span> : null}
               </div>
             </button>
           ))
@@ -123,6 +124,7 @@ function MonitoredAccountItem({ account, selected, onSelect }: MonitoredAccountI
       <AccountAvatar name={account.name} src={account.avatarUrl} variant="list" />
       <div className="account-list-content">
         <span className="account-list-name">{account.name}</span>
+        {account.platform === "抖音" && account.publicDouyinId ? <span className="account-list-scope">抖音号：{account.publicDouyinId}</span> : null}
       </div>
     </button>
   );

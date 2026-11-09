@@ -199,6 +199,7 @@ export interface InvestigationSession {
   id: string;
   title: string;
   status: TaskSessionStatus;
+  riskSummary?: InvestigationRiskSummary;
   updatedAt: string;
   updatedAtIso?: string;
   draft: TaskDraft;
@@ -250,6 +251,14 @@ export interface InvestigationSession {
       answerDraft?: import("./investigations").InvestigationAnswerDraft;
     };
   };
+}
+
+export type InvestigationRiskStatus = "risk" | "review" | "safe" | "empty";
+
+export interface InvestigationRiskSummary {
+  status: InvestigationRiskStatus;
+  risk_count: number;
+  review_count: number;
 }
 
 // Knowledge Base & Recall Library Types

@@ -77,6 +77,8 @@ export function formatCommentRiskTime(value: string): string {
 
 function buildProfile(id: string, sourceComments: RiskCommentRecord[]): CommentRiskProfile {
   const comments = [...sourceComments].sort((left, right) => Date.parse(right.occurredAt) - Date.parse(left.occurredAt));
+  const secUid = comments[0].identity.sec_uid || "";
+  const publicDouyinId = comments[0].identity.user_unique_id || comments[0].identity.short_user_id || "";
   const highRiskCount = comments.filter((comment) => comment.riskLevel === "high").length;
   const mediumRiskCount = comments.filter((comment) => comment.riskLevel === "medium").length;
   const pendingReviewCount = comments.filter((comment) => comment.riskLevel === "review").length;
@@ -86,6 +88,11 @@ function buildProfile(id: string, sourceComments: RiskCommentRecord[]): CommentR
     name: comments[0].authorName,
     platform: comments[0].platform,
     avatarUrl: comments[0].avatarUrl,
+    publicDouyinId,
+    secUid,
+    profileUrl: comments[0].platform === "抖音" && secUid
+      ? `https://www.douyin.com/user/${encodeURIComponent(secUid)}`
+      : "",
     violationCount: comments.length,
     highRiskCount,
     mediumRiskCount,

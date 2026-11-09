@@ -1,5 +1,6 @@
 import { apiRequest, withQuery } from "./apiClient";
 import { waitForTurn, type InvestigationTurnWaitOptions } from "./investigations";
+import type { InvestigationRiskSummary } from "../types/investigation";
 import type {
   ConfirmationPreview,
   InvestigationDraftConfiguration,
@@ -23,6 +24,7 @@ export interface InvestigationWorkspaceListItem {
   run_status: string;
   presentation_stage: string;
   read_error?: string;
+  risk_summary?: InvestigationRiskSummary;
 }
 
 export async function listInvestigationWorkspaces() {
