@@ -8752,6 +8752,7 @@
 .r31-risk-tag.is-high { color: var(--r31-risk-high); background: #faeded; }
 .r31-risk-tag.is-medium { color: var(--r31-risk-medium); background: #fff2e6; }
 .r31-risk-tag.is-low { color: var(--r31-risk-low); background: #fbf6df; }
+.r31-risk-tag.is-unknown { color: #434e60; background: #edf0f4; }
 
 .r31-post-row > p,
 .r31-appendix-row > p {
