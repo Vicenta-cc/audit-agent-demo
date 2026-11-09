@@ -408,7 +408,7 @@ const DEFAULT_MOCK_MONITORED_ACCOUNTS: MonitoredAccount[] = [
   }
 ];
 
-export async function fetchMonitoredAccounts(): Promise<MonitoredAccount[]> {
+export async function fetchMonitoredAccounts({ demoMode }: { demoMode: boolean }): Promise<MonitoredAccount[]> {
   try {
     const payload = await apiRequest<{ items?: ApiMonitoredUser[] }>("/api/monitored-users");
     const items = payload.items ?? [];
@@ -420,9 +420,10 @@ export async function fetchMonitoredAccounts(): Promise<MonitoredAccount[]> {
       return accounts;
     }
   } catch (err) {
+    if (!demoMode) throw err;
     console.warn("API fetch failed, falling back to local monitored accounts:", err);
   }
-  return DEFAULT_MOCK_MONITORED_ACCOUNTS;
+  return demoMode ? DEFAULT_MOCK_MONITORED_ACCOUNTS : [];
 }
 
 export async function fetchCommentRiskProfiles(): Promise<CommentRiskProfile[]> {

@@ -6,6 +6,8 @@ export type FocusSidebarMode = "monitored" | "penetration";
 
 interface AccountSidebarProps {
   mode: FocusSidebarMode;
+  listReady: boolean;
+  profilesReady: boolean;
   accounts: MonitoredAccount[];
   penetrationUsers: CommentRiskProfile[];
   selectedAccountId: string;
@@ -19,6 +21,8 @@ interface AccountSidebarProps {
 
 export function AccountSidebar({
   mode,
+  listReady,
+  profilesReady,
   accounts,
   penetrationUsers,
   selectedAccountId,
@@ -54,7 +58,7 @@ export function AccountSidebar({
           onClick={() => onModeChange("penetration")}
         >
           用户穿透
-          <span className="focus-tab-count">{penetrationUsers.length}</span>
+          {profilesReady && <span className="focus-tab-count">{penetrationUsers.length}</span>}
         </button>
       </div>
 
@@ -69,7 +73,7 @@ export function AccountSidebar({
       </label>
 
       <div className="account-list">
-        {mode === "monitored" ? (
+        {!listReady ? null : mode === "monitored" ? (
           accounts.length ? accounts.map((account) => (
             <MonitoredAccountItem
               key={account.id}

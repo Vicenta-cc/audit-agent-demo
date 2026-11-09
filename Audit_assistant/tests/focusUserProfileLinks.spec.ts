@@ -106,3 +106,43 @@ test("comment-risk users load from the real endpoint and keep copy failures hone
   await expect(page.getByText("抖音号：未提供", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "复制抖音号" })).toHaveCount(0);
 });
+
+test("monitored users remain usable during a slow or failed comment lookup and retry", async ({ page }) => {
+  let retry = false;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/comment-risk-users", async route => {
+    if (retry) return route.fallback();
+    await pending;
+    await route.fulfill({ status: 503, json: { detail: "评论用户暂时不可用" } });
+  });
+
+  await page.goto("/users");
+  const main = page.getByRole("link", { name: "重点账号", exact: true });
+  await expect(main).toBeVisible();
+  const profiles = page.getByRole("tab", { name: /用户穿透/ });
+  await profiles.click();
+  await expect(page.getByText("正在加载评论用户...")).toBeVisible();
+  release();
+  await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
+  await page.getByRole("tab", { name: "监控对象" }).click();
+  await expect(main).toBeVisible();
+  await profiles.click();
+  retry = true;
+  await page.getByRole("button", { name: "重试" }).click();
+  await expect(page.getByRole("link", { name: "评论用户甲" })).toBeVisible();
+});
+
+test("an unavailable monitored list shows a retry while comment users are still accessible", async ({ page }) => {
+  let retry = false;
+  await page.route("**/api/monitored-users", route => retry ? route.fallback() :
+    route.fulfill({ status: 503, json: { detail: "监控对象暂时不可用" } }));
+  await page.goto("/users");
+  await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
+  await page.getByRole("tab", { name: /用户穿透/ }).click();
+  await expect(page.getByRole("link", { name: "评论用户甲" })).toBeVisible();
+  await page.getByRole("tab", { name: "监控对象" }).click();
+  retry = true;
+  await page.getByRole("button", { name: "重试" }).click();
+  await expect(page.getByRole("link", { name: "重点账号", exact: true })).toBeVisible();
+});

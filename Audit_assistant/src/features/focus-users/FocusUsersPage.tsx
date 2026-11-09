@@ -20,6 +20,7 @@ import type { CommentRiskProfile, MonitoredAccount, RiskOutput } from "../../typ
 
 export function FocusUsersPage() {
   const { user } = useApplicationAuth();
+  const demoMode = !user;
   const navigate = useNavigate();
   const [sidebarMode, setSidebarMode] = useState<FocusSidebarMode>("monitored");
   const [accounts, setAccounts] = useState<MonitoredAccount[]>([]);
@@ -31,6 +32,8 @@ export function FocusUsersPage() {
   const [isRefetching, setIsRefetching] = useState(false);
   const [detailLoadingAccountId, setDetailLoadingAccountId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [profilesLoading, setProfilesLoading] = useState(true);
+  const [profilesError, setProfilesError] = useState("");
   const [error, setError] = useState("");
   const [toast, setToast] = useState<{ message: string; tone?: "success" | "info" } | null>(null);
 
@@ -38,28 +41,38 @@ export function FocusUsersPage() {
     setLoading(true);
     setError("");
     try {
-      const [items, profiles] = await Promise.all([
-        fetchMonitoredAccounts(),
-        user ? fetchCommentRiskProfiles() : fetchMockCommentRiskProfiles()
-      ]);
+      const items = await fetchMonitoredAccounts({ demoMode });
       setAccounts(items);
-      setPenetrationUsers(profiles);
       setSelectedAccountId((current) => (
         current && items.some((item) => item.id === current) ? current : items[0]?.id ?? ""
-      ));
-      setSelectedPenetrationUserId((current) => (
-        current && profiles.some((item) => item.id === current) ? current : profiles[0]?.id ?? ""
       ));
     } catch (err) {
       setError(err instanceof Error ? err.message : "重点用户数据加载失败");
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [demoMode]);
+
+  const loadProfiles = useCallback(async () => {
+    setProfilesLoading(true);
+    setProfilesError("");
+    try {
+      const profiles = await (demoMode ? fetchMockCommentRiskProfiles() : fetchCommentRiskProfiles());
+      setPenetrationUsers(profiles);
+      setSelectedPenetrationUserId((current) => (
+        current && profiles.some((item) => item.id === current) ? current : profiles[0]?.id ?? ""
+      ));
+    } catch (err) {
+      setProfilesError(err instanceof Error ? err.message : "评论用户数据加载失败");
+    } finally {
+      setProfilesLoading(false);
+    }
+  }, [demoMode]);
 
   useEffect(() => {
     void loadAccounts();
-  }, [loadAccounts]);
+    void loadProfiles();
+  }, [loadAccounts, loadProfiles]);
 
   useEffect(() => {
     if (!toast) {
@@ -112,7 +125,7 @@ export function FocusUsersPage() {
     }
     setIsRefetching(true);
     try {
-      let items = await fetchMonitoredAccounts();
+      let items = await fetchMonitoredAccounts({ demoMode });
       const currentId = selectedAccountId || items[0]?.id || "";
       const current = items.find((item) => item.id === currentId);
       if (current && !current.riskDataLoaded) {
@@ -168,27 +181,17 @@ export function FocusUsersPage() {
     navigate(`/tasks/${encodeURIComponent(risk.jobId)}/outputs/${encodeURIComponent(risk.id)}`);
   };
 
-  if (loading) {
-    return (
-      <main className="focus-users-shell">
-        <LoadingState label="正在加载真实重点用户与评论关系..." />
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main className="focus-users-shell">
-        <ErrorState message={error} onRetry={() => void loadAccounts()} />
-      </main>
-    );
-  }
+  const viewingProfiles = sidebarMode === "penetration";
+  const listLoading = viewingProfiles ? profilesLoading : loading;
+  const listError = viewingProfiles ? profilesError : error;
 
   return (
     <main className="focus-users-shell">
       <div className="focus-users-layout">
         <AccountSidebar
           mode={sidebarMode}
+          listReady={!listLoading && !listError}
+          profilesReady={!profilesLoading && !profilesError}
           accounts={filteredAccounts}
           penetrationUsers={filteredPenetrationUsers}
           selectedAccountId={selectedAccount?.id ?? ""}
@@ -200,7 +203,11 @@ export function FocusUsersPage() {
           onSelectPenetrationUser={setSelectedPenetrationUserId}
         />
 
-        {sidebarMode === "penetration" ? (
+        {listLoading ? (
+          <LoadingState label={viewingProfiles ? "正在加载评论用户..." : "正在加载监控对象..."} />
+        ) : listError ? (
+          <ErrorState message={listError} onRetry={viewingProfiles ? loadProfiles : loadAccounts} />
+        ) : viewingProfiles ? (
           selectedPenetrationUser ? (
             <CommentRiskProfileView
               profile={selectedPenetrationUser}
