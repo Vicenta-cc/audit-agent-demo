@@ -282,21 +282,23 @@ def test_approved_detail_media_is_found_by_audit_and_after_restart(confirmed, tm
         outside.unlink()
 
 
-def test_unapproved_detail_media_is_not_discovered(confirmed, tmp_path):
+def test_wrong_post_detail_media_is_not_discovered(confirmed, tmp_path):
     from backend.audit_agent.pipeline import AuditPipeline
     events = []
-    class Outside(Crawler):
+    class WrongPost(Crawler):
         def run_detail(self, **kw):
             output = super().run_detail(**kw)
-            output.contents[0]['title'] = '北京市欠薪'
+            output.contents[0]['aweme_id'] = 'different-post'
             folder = kw['save_root'] / 'douyin' / 'videos' / 'same'
             folder.mkdir(parents=True)
             (folder / 'video.mp4').write_bytes(b'\x00\x00\x00\x18ftypmp42')
             return output
-    runner, _, _ = runtime(confirmed, tmp_path, crawler=Outside(events))
+    runner, _, _ = runtime(confirmed, tmp_path, crawler=WrongPost(events))
     runner.root = tmp_path / 'crawler' / 'geographic'
     runner.sink.raw_root = runner.root / 'delivered'
-    assert runner.run()[0]['handed_off'] == 0
+    with pytest.raises(ValueError, match='unexpected content identity'):
+        runner.run()
+    assert not any(kind == 'delivery' for kind, _ in events)
     pipeline = AuditPipeline.__new__(AuditPipeline)
     pipeline.job_id = runner.bridge.plan['runtime_binding']['job_id']
     pipeline.ingestion = runner.ingestion
