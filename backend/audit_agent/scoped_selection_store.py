@@ -7,6 +7,7 @@ from __future__ import annotations
 from contextlib import closing, nullcontext
 from copy import deepcopy
 from pathlib import Path
+import hashlib
 import json
 import sqlite3
 import tempfile
@@ -93,9 +94,20 @@ class Store:
                     db.rollback()
                     raise
 
-    def _validate_snapshot(self, snap, execution_id):
+    @staticmethod
+    def _streamed_digest(fields):
+        # Existing receipts use canonical UTF-8 JSON. Stream the identical bytes
+        # to avoid materializing both a full Unicode string and its UTF-8 copy.
+        encoder = json.JSONEncoder(sort_keys=True, ensure_ascii=False,
+                                   separators=(',', ':'), allow_nan=False)
+        checksum = hashlib.sha256()
+        for chunk in encoder.iterencode(fields):
+            checksum.update(chunk.encode('utf-8'))
+        return checksum.hexdigest()
+
+    def _validate_snapshot(self, snap, execution_id, *, digest_function=digest):
         if (snap['plan']['execution_id'] != execution_id or
-                snap.get('snapshot_digest') != digest({k: v for k, v in snap.items() if k != 'snapshot_digest'})):
+                snap.get('snapshot_digest') != digest_function({k: v for k, v in snap.items() if k != 'snapshot_digest'})):
             raise ValueError('snapshot binding or integrity mismatch')
         self._validate_plan(snap['plan'])
         for qid, query in snap['queries'].items():

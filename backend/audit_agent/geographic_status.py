@@ -1,10 +1,55 @@
 """Public, bounded geographic progress and completion checks (no raw evidence)."""
+from collections import OrderedDict
+from contextlib import closing
 from copy import deepcopy
+import hashlib
 import json
-import sqlite3
 from pathlib import Path
+import sqlite3
+from threading import Lock
 
 from .geographic_recovery import snapshot_resume_blocker
+
+
+# Workspace polling and the selection drawer must share verification. Never
+# cache raw evidence, or trust a stored digest without checking the actual bytes.
+_projection_lock = Lock()
+_projection_cache = OrderedDict()
+
+
+def _verified_projection(db_path, execution_id, plan_digest):
+    from .geographic_execution_store import GeographicExecutionStore
+
+    uri = Path(db_path).resolve().as_uri() + '?mode=ro'
+    with _projection_lock:
+        with closing(sqlite3.connect(uri, uri=True)) as db:
+            db.execute('BEGIN')
+            row = db.execute('SELECT rowid FROM geographic_executions WHERE execution_id=?',
+                             (execution_id,)).fetchone()
+            if row is None:
+                raise ValueError('geographic state missing')
+            with db.blobopen('geographic_executions', 'snapshot', row[0], readonly=True) as blob:
+                checksum = hashlib.sha256()
+                while chunk := blob.read(1024 * 1024):
+                    checksum.update(chunk)
+                key = (uri, execution_id, plan_digest, checksum.digest())
+                if key in _projection_cache:
+                    _projection_cache.move_to_end(key)
+                    return _projection_cache[key]
+                blob.seek(0)
+                state = json.loads(blob.read())
+        plan = state['plan']
+        validator = object.__new__(GeographicExecutionStore)
+        validator.expected_binding = plan['binding'] | plan['runtime_binding']
+        validator.expected_plan_digest = plan_digest
+        validator._validate_snapshot(state, execution_id, digest_function=validator._streamed_digest)
+        result = (plan['binding'], plan['runtime_binding'], snapshot_resume_blocker(state),
+                  _selection_rows(state))
+        del state
+        _projection_cache[key] = result
+        if len(_projection_cache) > 4:
+            _projection_cache.popitem(last=False)
+        return result
 
 
 def geographic_resume_blocker(job, db_path):
@@ -20,26 +65,15 @@ def geographic_resume_blocker(job, db_path):
         # A pre-admission failure has not yet created a geographic execution.
         return ''
     try:
-        from .geographic_execution_store import GeographicExecutionStore
-        with sqlite3.connect(Path(db_path).resolve().as_uri() + '?mode=ro', uri=True) as db:
-            row = db.execute('SELECT snapshot FROM geographic_executions WHERE execution_id=?',
-                             (summary['execution_id'],)).fetchone()
-        if row is None:
-            return 'geographic_state_reconciliation_required'
-        snapshot = json.loads(row[0])
-        plan = snapshot['plan']
-        runtime = plan['runtime_binding']
+        binding, runtime, blocker, _ = _verified_projection(
+            db_path, summary['execution_id'], summary['plan_digest'])
         raw_plan = job['geographic_plan']
         identity = raw_plan['identity']
         if (runtime['job_id'] != job['id'] or runtime['p2_plan_digest'] != raw_plan['plan_digest']
-                or plan['binding'] != {'owner': identity['owner'], 'session': identity['session_id'],
-                                       'draft': identity['draft_id'], 'revision': identity['revision']}):
+                or binding != {'owner': identity['owner'], 'session': identity['session_id'],
+                               'draft': identity['draft_id'], 'revision': identity['revision']}):
             return 'geographic_state_reconciliation_required'
-        validator = object.__new__(GeographicExecutionStore)
-        validator.expected_binding = plan['binding'] | runtime
-        validator.expected_plan_digest = summary['plan_digest']
-        validator._validate_snapshot(snapshot, summary['execution_id'])
-        return snapshot_resume_blocker(snapshot)
+        return blocker
     except (sqlite3.Error, OSError, ValueError, KeyError, TypeError):
         return 'geographic_state_reconciliation_required'
 
@@ -80,7 +114,6 @@ def selection_page(service, run_id, principal, *, offset=0, limit=50, tier=None)
     from backend.investigation_creation.contracts import parse_confirmed_configuration_snapshot
     from backend.investigation_creation.scope_search_plan import parse_confirmed_scope_search_plan
     from .geographic_bridge import project_plan
-    from .geographic_execution_store import GeographicExecutionStore
     from backend.investigation_creation.adapters import AuditPipelineExecutionAdapter
     run = service.store.get_run(run_id, principal=principal.id)
     if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 100:
@@ -110,26 +143,27 @@ def selection_page(service, run_id, principal, *, offset=0, limit=50, tier=None)
     expected = project_plan(p2, execution_id=summary['execution_id'],run_id=run.id,job_id=run.job_id,config_hash=snapshot.config_hash)
     if summary.get('plan_digest') != expected['plan_digest']:
         raise ValueError('geographic summary binding mismatch')
-    with sqlite3.connect(job_store.db_path.resolve().as_uri()+'?mode=ro',uri=True) as db:
-        row = db.execute('SELECT snapshot FROM geographic_executions WHERE execution_id=?',(expected['execution_id'],)).fetchone()
-    if not row:
-        raise ValueError('geographic state missing')
-    state = json.loads(row[0])
-    validator = object.__new__(GeographicExecutionStore)
-    validator.expected_binding = expected['binding'] | expected['runtime_binding']
-    validator.expected_plan_digest = expected['plan_digest']
-    validator._validate_snapshot(state,expected['execution_id'])
+    binding, runtime, _, rows = _verified_projection(
+        job_store.db_path, expected['execution_id'], expected['plan_digest'])
+    if binding | runtime != expected['binding'] | expected['runtime_binding']:
+        raise ValueError('trusted runtime binding mismatch')
+    if tier is not None:
+        rows = [row for row in rows if row['geo_tier'] == tier]
+    return {'run_id':run.id, **classify_geographic_status(summary),
+            'summary':{k:summary.get(k) for k in ('candidate_occurrences','geographic_evaluation_pending','reserved','collected','handed_off','collected_not_delivered','unfinished_queries','reasons')},
+            'items':[dict(item) for item in rows[offset:offset+limit]], 'total':len(rows), 'offset':offset,'limit':limit}
+
+
+def _selection_rows(state):
     rows=[]
     for query in state['queries'].values():
         occurrences = query['occurrences']
         if query['status'] != 'evaluated' and query.get('capture'):
-            occurrences = [deepcopy(o) | deepcopy(query['evaluations'].get(o['occurrence_id'], {}))
-                           for o in query['capture']['occurrences']]
+            occurrences = (o | query['evaluations'].get(o['occurrence_id'], {})
+                           for o in query['capture']['occurrences'])
         for occurrence in occurrences:
             geo = occurrence.get('geo',{}).get('result',{})
             geo_tier = geo.get('geo_tier')
-            if tier is not None and geo_tier != tier:
-                continue
             score = occurrence.get('risk',{}).get('score',{})
             rows.append({key:occurrence.get(key) for key in ('occurrence_id','query_id','content_key','rank','source_keyword')} |
                         {'geo_tier':geo_tier,'geo_status':geo.get('status'),
@@ -137,6 +171,4 @@ def selection_page(service, run_id, principal, *, offset=0, limit=50, tier=None)
                          'evaluation_status':geo.get('evaluation_status'),
                          'pending_reason':'geographic_response_invalid'
                              if geo.get('evaluation_status') == 'invalid_response' else None})
-    return {'run_id':run.id, **classify_geographic_status(summary),
-            'summary':{k:summary.get(k) for k in ('candidate_occurrences','geographic_evaluation_pending','reserved','collected','handed_off','collected_not_delivered','unfinished_queries','reasons')},
-            'items':rows[offset:offset+limit], 'total':len(rows), 'offset':offset,'limit':limit}
+    return rows

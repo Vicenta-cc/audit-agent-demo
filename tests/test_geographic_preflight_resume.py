@@ -230,3 +230,42 @@ def test_published_projection_never_loads_resume_snapshot(
     assert result['recovery_blocker'] == ''
     assert result['available_actions']['resume_crawl'] is False
     assert result['task_stats']['collection_resumable'] is False
+
+
+def test_concurrent_snapshot_reads_share_validation_and_detect_tampering(
+    confirmed, tmp_path, monkeypatch,
+):
+    import json
+    import sqlite3
+    from concurrent.futures import ThreadPoolExecutor
+    from backend.audit_agent.geographic_execution_store import GeographicExecutionStore
+    from backend.audit_agent.geographic_status import geographic_resume_blocker
+
+    runner, _, _ = runtime(confirmed, tmp_path)
+    jobs = confirmed[0].job_store
+    job_id = runner.bridge.plan['runtime_binding']['job_id']
+    jobs.update_control(job_id, geographic_selection=runner.execution.report())
+    job = jobs.get(job_id)
+    calls = []
+    original = GeographicExecutionStore._validate_snapshot
+
+    def count_checks(self, snapshot, execution_id, **kwargs):
+        calls.append(execution_id)
+        return original(self, snapshot, execution_id, **kwargs)
+
+    monkeypatch.setattr(GeographicExecutionStore, '_validate_snapshot', count_checks)
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        results = list(pool.map(lambda _: geographic_resume_blocker(job, jobs.db_path), range(3)))
+    assert results == ['', '', '']
+    assert calls == [runner.execution.execution_id]
+    assert geographic_resume_blocker({**job, 'id': 'wrong-job'}, jobs.db_path) == 'geographic_state_reconciliation_required'
+
+    with sqlite3.connect(jobs.db_path) as db:
+        state = json.loads(db.execute('SELECT snapshot FROM geographic_executions WHERE execution_id=?',
+                                     (runner.execution.execution_id,)).fetchone()[0])
+        # Keep the stored checksum to verify the cache checks the actual bytes.
+        state['fatal_error'] = 'changed after validation'
+        db.execute('UPDATE geographic_executions SET snapshot=? WHERE execution_id=?',
+                   (json.dumps(state, ensure_ascii=False), runner.execution.execution_id))
+    assert geographic_resume_blocker(job, jobs.db_path) == 'geographic_state_reconciliation_required'
+    assert calls == [runner.execution.execution_id] * 2
