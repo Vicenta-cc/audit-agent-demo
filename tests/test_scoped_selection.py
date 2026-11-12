@@ -251,3 +251,59 @@ def test_risk_binding_preserves_raw_json_scalar_types():
     current['risk'] = old['risk']
     result = select_next_batch(p, states(p, current), state())
     assert result['status'] == 'blocked' and result['reasons'] == ['risk_capture_evidence_mismatch']
+
+
+@pytest.mark.parametrize(('desc', 'status', 'band', 'expected'), [
+    ('#新疆楊大大 #创作者中心 #新疆 #创作灵感', 'no_location', 'strong', 'province_unknown'),
+    ('欠薪＃新疆维吾尔自治区。', 'insufficient_context', 'strong', 'province_unknown'),
+    ('#新疆文旅', 'no_location', 'strong', None),
+    ('#新疆 #北京市', 'no_location', 'strong', None),
+    ('北京市欠薪 #新疆', 'located', 'strong', None),
+    ('北京市和杭州市 #新疆', 'conflict', 'strong', None),
+    ('#新疆', 'no_location', 'weak', None),
+    ('普通正文', 'no_location', 'strong', None),
+])
+def test_province_hashtag_is_a_strong_risk_selection_signal(desc, status, band, expected):
+    from audit_agent.geographic_query_summary import make_query_summary
+    from experiments.geographic_selection.fixtures import fixture_plan, fixture_occurrence
+
+    plan = fixture_plan(queries=('A',))
+    raw = {'status': status, 'locations': []}
+    if status == 'located':
+        raw['locations'] = [{'field': 'desc', 'place': '北京市'}]
+    if status == 'conflict':
+        raw['locations'] = [{'field': 'desc', 'place': place} for place in ('北京市', '杭州市')]
+    candidate = fixture_occurrence(plan, 'A', 'sample', desc=desc, raw_geo=raw,
+                                  risk_response={'suspicion': band, 'reason': 'fixture', 'matched_terms': []},
+                                  nickname='#新疆', comments=[{'content': '#新疆'}])
+    candidate['province_hashtag_supplement'] = True
+    queries = states(plan, candidate)
+    batch = select_next_batch(plan, queries, state())
+    assert batch['tier'] == expected and batch['status'] != 'blocked'
+    if expected:
+        summary = make_query_summary(plan, 'A', queries['A'])
+        assert summary['selection_rows'][0]['geo_tier'] == expected
+        assert summary['selection_rows'][0]['geo_status'] == status
+        assert summary['conflict_count'] == 0
+        from audit_agent.geographic_status import _selection_rows
+        assert _selection_rows({'plan': plan, 'queries': queries}) == summary['selection_rows']
+
+
+def test_weak_local_precedes_strong_province_tag_and_both_can_be_selected():
+    from experiments.geographic_selection.fixtures import fixture_plan, fixture_occurrence
+
+    plan = fixture_plan(queries=('A',), max_notes=2)
+    tagged = fixture_occurrence(plan, 'A', 'tagged', desc='欠薪 #新疆',
+                                raw_geo={'status': 'no_location', 'locations': []},
+                                risk_response={'suspicion': 'strong', 'reason': 'fixture', 'matched_terms': []})
+    local = fixture_occurrence(plan, 'A', 'local', desc='克拉玛依市欠薪', rank=2)
+    queries = states(plan, tagged, local)
+    legacy = states(plan, tagged)
+    assert select_next_batch(plan, legacy, state())['picks'] == []
+    tagged['province_hashtag_supplement'] = True
+    assert select_next_batch(plan, queries, state())['picks'] == [local]
+    after_local = state()
+    after_local.update(occupied=['dy:local'], query_success={'A': 1}, total_success=1)
+    assert select_next_batch(plan, queries, after_local)['picks'] == [tagged]
+    tagged['already_audited'] = True
+    assert select_next_batch(plan, queries, after_local)['picks'] == []

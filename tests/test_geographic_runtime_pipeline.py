@@ -140,6 +140,7 @@ def test_partial_stopped_capture_never_reaches_detail(confirmed, tmp_path):
 @pytest.mark.parametrize(('search_title', 'detail_title', 'expected_tier'), [
     ('克拉玛依市欠薪', '北京市欠薪', 'local'),
     ('欠薪', '欠薪', 'ip_only'),
+    ('欠薪 #新疆', '欠薪', 'province_unknown'),
 ])
 def test_complete_detail_uses_initial_tier_without_second_geo_call(
     confirmed, tmp_path, search_title, detail_title, expected_tier
@@ -150,7 +151,9 @@ def test_complete_detail_uses_initial_tier_without_second_geo_call(
     class ChangedDetail(Crawler):
         def run_search(self, **kw):
             result = super().run_search(**kw)
-            result.contents[0].update(title=search_title, author_ip_location='新疆')
+            result.contents[0]['title'] = search_title
+            if expected_tier == 'ip_only':
+                result.contents[0]['author_ip_location'] = '新疆'
             return result
 
         def run_detail(self, **kw):
@@ -166,7 +169,7 @@ def test_complete_detail_uses_initial_tier_without_second_geo_call(
 
         def audit_text(self, prompt, **kwargs):
             self.calls += 1
-            if expected_tier == 'ip_only':
+            if expected_tier != 'local':
                 return {'status': 'no_location', 'locations': []}
             return {'status': 'located', 'locations': [{'field': 'title', 'place': '克拉玛依市'}]}
 
@@ -181,6 +184,8 @@ def test_complete_detail_uses_initial_tier_without_second_geo_call(
     basis, = delivery_basis_for_job(adapter.ingestion_store, cfg['_verified_geographic_binding']['job_id'])
     assert basis['geo_tier'] == basis['initial_geo_tier'] == expected_tier
     assert basis['initial_evidence_digest'] != basis['detail_evidence_digest']
+    if expected_tier == 'province_unknown':
+        assert basis['selection_signal'] == 'province_hashtag'
 
 
 def test_resume_honors_rejection_recorded_by_previous_runtime(confirmed, tmp_path):

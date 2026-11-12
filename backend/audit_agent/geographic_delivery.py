@@ -37,7 +37,8 @@ def _delivery_evidence(snapshot, attempt_id):
         attempt,
         {'content': receipt['content'], 'content_digest': receipt['content_digest']},
         {'rank': occurrence['rank'], 'evidence_digest': occurrence['evidence_digest'],
-         'risk_band': score['band'], 'risk_score': score['score']},
+         'risk_band': score['band'], 'risk_score': score['score'],
+         'model_geo_tier': occurrence.get('geo', {}).get('result', {}).get('geo_tier')},
         review.get('after_tier', attempt['tier']),
     )
 
@@ -108,6 +109,8 @@ class GeographicDelivery:
                          plan_digest=p['plan_digest'], initial_evidence_digest=occurrence['evidence_digest'],
                          detail_evidence_digest=capture['content_digest'],
                          selection_policy=p['selection_policy'], target_level=p['target_level'])
+            if a['tier'] == 'province_unknown' and occurrence['model_geo_tier'] in ('unresolved', 'ip_only'):
+                basis['selection_signal'] = 'province_hashtag'
             scope = p.get('scope_context', {}).get('scope', {})
             for field, region in (('target_name', 'target'), ('province_name', 'province')):
                 name = scope.get(region, {}).get('name')

@@ -238,9 +238,32 @@ def eligible_tier(plan, occurrence, *, risk_candidate=None):
     return _validated_tier(plan, occurrence)
 
 
+def _has_province_hashtag(occurrence):
+    post = occurrence['candidate']['post']
+    tags = {tag for field in ('title', 'desc')
+            for tag in re.findall(r'[#＃]([\w-]+)', post.get(field, ''))}
+    request = occurrence['geo']['request']
+    scope = request['context']['scope']
+    province = scope.get('province')
+    if not province:
+        return False
+    names = {province['name'], *province['aliases']}
+    if tags.isdisjoint(names):
+        return False
+    other_tags = tags - names
+    if not other_tags:
+        return True
+    # A different administrative hashtag makes this fallback ambiguous.
+    administrative = request['context']['administrative_target']
+    allowed = {administrative['target_code'], administrative['province_code']}
+    return not any(region['code'] not in allowed and not other_tags.isdisjoint({region['name'], *region['aliases']})
+                   for region in request['admin_catalog']['records'])
+
+
 def _validated_tier(plan, occurrence):
     score, risk = occurrence['risk']['score'], occurrence['risk']
-    tier = occurrence['geo']['result']['geo_tier']
+    result = occurrence['geo']['result']
+    tier = result['geo_tier']
     if occurrence.get('already_audited', False) or score['score'] <= 0 or score['band'] not in ('strong', 'weak'):
         return None
     if tier == 'local':
@@ -249,8 +272,14 @@ def _validated_tier(plan, occurrence):
         return None
     if tier == 'province_unknown':
         return tier
-    if tier == 'ip_only' and risk['model_valid'] and score['band'] == 'strong':
-        return tier
+    if risk['model_valid'] and score['band'] == 'strong':
+        # Saved captures without this policy flag retain their original selection on replay.
+        if (occurrence.get('province_hashtag_supplement') is True
+                and result['status'] in ('no_location', 'insufficient_context') and not result['evidence_refs']
+                and _has_province_hashtag(occurrence)):
+            return 'province_unknown'
+        if tier == 'ip_only':
+            return tier
     return None
 
 

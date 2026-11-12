@@ -147,7 +147,8 @@ class GeographicBridge:
         oid = digest({'execution_id': execution_id, 'query_id': query_id, 'content_key': content_key, 'rank': rank})
         return {'occurrence_id': oid, 'execution_id': execution_id, 'query_id': query_id,
             'platform': 'dy', 'content_key': content_key, 'rank': rank, 'source_keyword': query['query'],
-            'candidate': candidate, 'evidence_digest': digest(candidate)}
+            'candidate': candidate, 'evidence_digest': digest(candidate),
+            'province_hashtag_supplement': True}
 
     def risk(self, plan, query, occurrence):
         self._check(plan, query)

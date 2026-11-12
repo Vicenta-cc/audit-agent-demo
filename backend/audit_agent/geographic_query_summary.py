@@ -33,15 +33,20 @@ def make_query_summary(plan, qid, query):
     definition = next(q for q in plan['queries'] if q['query_id'] == qid)
     captured = (query.get('capture') or {}).get('occurrences', ())
     ranked = []
+    public = []
     positive = False
     conflict_count = 0
     for occurrence in query['occurrences']:
-        ranked.append(selection_entry(plan, definition, occurrence))
+        entry = selection_entry(plan, definition, occurrence)
+        ranked.append(entry)
+        row = _public_candidate(occurrence, occurrence)
+        if entry.get('tier') is not None:
+            row['geo_tier'] = entry['tier']
+        public.append(row)
         score = occurrence.get('risk', {}).get('score', {}).get('score')
         if isinstance(score, (float, int)) and score > 0:
             positive = True
-        geo_tier = occurrence.get('geo', {}).get('result', {}).get('geo_tier')
-        conflict_count += geo_tier in {'unresolved', 'conflict'}
+        conflict_count += row['geo_tier'] in {'unresolved', 'conflict'}
 
     pending = []
     for oid, parts in query.get('evaluations', {}).items():
@@ -56,8 +61,6 @@ def make_query_summary(plan, qid, query):
             _public_candidate(o, query['evaluations'].get(o['occurrence_id'], {}))
             for o in captured
         ]
-    else:
-        public = [_public_candidate(o, o) for o in query['occurrences']]
     return {
         'status': query['status'],
         'candidate_count': len(captured),

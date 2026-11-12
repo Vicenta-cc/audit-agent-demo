@@ -9,6 +9,7 @@ import sqlite3
 from threading import Lock
 
 from .geographic_recovery import snapshot_resume_blocker
+from .scoped_selection import selection_entry
 
 
 # Workspace polling and the selection drawer must share verification. Never
@@ -171,7 +172,8 @@ def _selection_rows(state):
         for query_id in queries:
             rows.extend(queries.summary(query_id)['selection_rows'])
         return rows
-    for query in queries.values():
+    definitions = {query['query_id']: query for query in state['plan']['queries']}
+    for qid, query in queries.items():
         occurrences = query['occurrences']
         if query['status'] != 'evaluated' and query.get('capture'):
             occurrences = (o | query['evaluations'].get(o['occurrence_id'], {})
@@ -180,6 +182,10 @@ def _selection_rows(state):
             geo = occurrence.get('geo',{}).get('result',{})
             geo_tier = geo.get('geo_tier')
             score = occurrence.get('risk',{}).get('score',{})
+            if (query['status'] == 'evaluated' and occurrence.get('province_hashtag_supplement')
+                    and geo_tier in ('unresolved', 'ip_only') and score.get('band') == 'strong'):
+                entry = selection_entry(state['plan'], definitions[qid], occurrence)
+                geo_tier = entry.get('tier') or geo_tier
             rows.append({key:occurrence.get(key) for key in ('occurrence_id','query_id','content_key','rank','source_keyword')} |
                         {'geo_tier':geo_tier,'geo_status':geo.get('status'),
                          'risk_band':score.get('band'), 'risk_score':score.get('score'),
