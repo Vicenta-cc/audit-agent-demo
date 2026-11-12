@@ -17,9 +17,9 @@ from .geographic_query_summary import make_query_summary
 
 
 class ScopedExecution:
-    def __init__(self, store, plan, *, capture, risk, geo, detail, review, deliver,
+    def __init__(self, store, plan, *, capture, risk, geo, detail, deliver,
                  validate_geo, account, rotate, stop, checkpoint=lambda stage, payload: None,
-                 durable_geo_attempts=False):
+                 durable_geo_attempts=False, review=None):
         validate_plan(plan)
         self.store = store
         self.plan = deepcopy(plan)
@@ -160,15 +160,15 @@ class ScopedExecution:
             raise ValueError('reconciliation receipt mismatch')
         return self.store.record_receipt(self.execution_id, attempt_id, receipt_id, receipt)
 
-    def _finish_collection(self, attempt):
+    def _record_delivery_decision(self, attempt, receipt):
         aid = attempt['attempt_id']
-
-        def collection_state(s):
-            return (s['receipts'][attempt['receipt_id']],
-                    s['reservations'][attempt['occurrence_id']]['occurrence'] if aid not in s['reviews'] else None)
-
-        receipt, occurrence = self.read_state(collection_state)
-        if occurrence is not None:
+        # The confirmed pipeline uses the selected tier and verified detail receipt.
+        # Offline adapters can still explicitly request their detail review.
+        if self.review is None:
+            review = dict(allowed=True, reason='initial_selection', before_tier=attempt['tier'],
+                          content_digest=receipt['content_digest'])
+        else:
+            occurrence = self.read_state(lambda s: s['reservations'][attempt['occurrence_id']]['occurrence'])
             content = receipt['content']
             changed = digest(content) != occurrence['evidence_digest']
             geo = None
@@ -193,7 +193,13 @@ class ScopedExecution:
                 self.store.record_review(self.execution_id, aid, 'review:' + aid, review)
                 self.store.settle(self.execution_id, aid, 'settle:' + aid)
                 raise
-            self.store.record_review(self.execution_id, aid, 'review:' + aid, review)
+        self.store.record_review(self.execution_id, aid, 'review:' + aid, review)
+
+    def _finish_collection(self, attempt):
+        aid = attempt['attempt_id']
+        receipt, decided = self.read_state(lambda s: (s['receipts'][attempt['receipt_id']], aid in s['reviews']))
+        if not decided:
+            self._record_delivery_decision(attempt, receipt)
         if attempt['status'] == 'collected':
             self.store.settle(self.execution_id, aid, 'settle:' + aid)
             self.checkpoint('after_settle', {'attempt_id': aid})

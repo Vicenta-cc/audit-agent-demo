@@ -74,19 +74,13 @@ def test_geographic_worker_releases_source_route_before_local_analysis(
         return result
     monkeypatch.setattr(AuthoredCrawler, 'run_detail', routed_detail)
 
-    review = GeographicPipeline.review
-    def review_with_live_route(self, *args, **kwargs):
-        assert detail_bundles[-1].pass_fds
-        observed.append('review')
-        return review(self, *args, **kwargs)
-    monkeypatch.setattr(GeographicPipeline, 'review', review_with_live_route)
     progress = GeographicPipeline.progress
-    def settled_with_live_route(self, stage, payload):
-        if stage == 'after_settle':
+    def track_live_route(self, stage, payload):
+        if stage in ('after_receipt', 'after_settle'):
             assert detail_bundles[-1].pass_fds
-            observed.append('settled')
+            observed.append(stage)
         return progress(self, stage, payload)
-    monkeypatch.setattr(GeographicPipeline, 'progress', settled_with_live_route)
+    monkeypatch.setattr(GeographicPipeline, 'progress', track_live_route)
 
     original_queue = queue.Queue
     class DelayedAnalysisQueue(original_queue):
@@ -119,7 +113,7 @@ def test_geographic_worker_releases_source_route_before_local_analysis(
 
     try:
         _run_worker('confirmed', 'disabled', request, creation_stack, tmp_path, monkeypatch)
-        assert observed.index('review') < observed.index('settled') < observed.index('owner_closed')
+        assert observed.index('after_receipt') < observed.index('after_settle') < observed.index('owner_closed')
         assert observed.index('owner_closed') < observed.index('queued') < observed.index('consumed_after_owner_closed')
         assert len(detail_bundles) == 1
         assert all(not bundle.pass_fds for bundle in bundles)
@@ -133,7 +127,7 @@ def test_geographic_worker_releases_source_route_before_local_analysis(
             type(bundle).close(bundle)
 
 
-@pytest.mark.parametrize('interrupt_at', ['review', 'after_settle', 'stop_after_settle'])
+@pytest.mark.parametrize('interrupt_at', ['after_receipt', 'after_settle', 'stop_after_settle'])
 def test_geographic_interruption_releases_actual_detail_fds(
         confirmed, tmp_path, monkeypatch, interrupt_at):
     from contextlib import contextmanager
@@ -157,20 +151,15 @@ def test_geographic_interruption_releases_actual_detail_fds(
         finally:
             bundle.close()
     runner.route_operation = route
-    if interrupt_at == 'review':
-        def interrupted_review(*args):
+    def interrupted_progress(report):
+        stage = 'after_settle' if interrupt_at == 'stop_after_settle' else interrupt_at
+        if report.get('stage') == stage:
             assert bundles[-1].pass_fds
-            raise RuntimeError('offline review interrupted')
-        runner.execution.review = interrupted_review
-    else:
-        def interrupted_progress(report):
-            if report.get('stage') == 'after_settle':
-                assert bundles[-1].pass_fds
-                if interrupt_at == 'stop_after_settle':
-                    stopped[0] = True
-                else:
-                    raise RuntimeError('offline settlement interrupted')
-        runner.on_progress = interrupted_progress
+            if interrupt_at == 'stop_after_settle':
+                stopped[0] = True
+            else:
+                raise RuntimeError('offline checkpoint interrupted')
+    runner.on_progress = interrupted_progress
     if interrupt_at == 'stop_after_settle':
         report, output = runner.run()
         assert report['handed_off'] == 0 and output.contents == []

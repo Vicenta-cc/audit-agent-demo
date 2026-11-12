@@ -129,7 +129,7 @@ def _geographic_progress_message(report: dict) -> str:
     if report.get("stage") == "before_detail":
         return "地域精选：已选中候选，正在采集详情和下载媒体"
     if report.get("stage") == "after_detail":
-        return "地域精选：详情采集完成，正在复核并交付审核"
+        return "地域精选：详情采集完成，正在提交内容审核"
     return ""
 
 

@@ -64,7 +64,7 @@ def runtime(confirmed, tmp_path, *, events=None, crawler=None, fence=lambda db: 
     return instance, events, model
 
 
-def test_formal_capture_barrier_detail_review_durable_delivery_and_restart(confirmed, tmp_path):
+def test_formal_capture_barrier_direct_detail_delivery_and_restart(confirmed, tmp_path):
     runner, events, model = runtime(confirmed, tmp_path)
     report, output = runner.run()
     assert report['handed_off'] == 1 and report['reserved'] == 0
@@ -137,18 +137,71 @@ def test_partial_stopped_capture_never_reaches_detail(confirmed, tmp_path):
     assert runner.execution.snapshot()['state']['total_success'] == 0
 
 
-def test_detail_changed_outside_region_never_creates_membership(confirmed, tmp_path):
-    events=[]
-    class Outside(Crawler):
+@pytest.mark.parametrize(('search_title', 'detail_title', 'expected_tier'), [
+    ('克拉玛依市欠薪', '北京市欠薪', 'local'),
+    ('欠薪', '欠薪', 'ip_only'),
+])
+def test_complete_detail_uses_initial_tier_without_second_geo_call(
+    confirmed, tmp_path, search_title, detail_title, expected_tier
+):
+    from backend.audit_agent.geographic_delivery import delivery_basis_for_job
+
+    events = []
+    class ChangedDetail(Crawler):
+        def run_search(self, **kw):
+            result = super().run_search(**kw)
+            result.contents[0].update(title=search_title, author_ip_location='新疆')
+            return result
+
         def run_detail(self, **kw):
             result = super().run_detail(**kw)
-            result.contents[0]['title'] = '北京市欠薪'
+            result.contents[0]['title'] = detail_title
+            assert 'author_ip_location' not in result.contents[0]
             return result
-    runner, _, _ = runtime(confirmed, tmp_path, events=events, crawler=Outside(events))
+
+    runner, _, _ = runtime(confirmed, tmp_path, events=events, crawler=ChangedDetail(events))
+    class InitialGeo:
+        def __init__(self):
+            self.calls = 0
+
+        def audit_text(self, prompt, **kwargs):
+            self.calls += 1
+            if expected_tier == 'ip_only':
+                return {'status': 'no_location', 'locations': []}
+            return {'status': 'located', 'locations': [{'field': 'title', 'place': '克拉玛依市'}]}
+
+    geo = InitialGeo()
+    runner.bridge.geo_client = geo
     report, output = runner.run()
+    assert geo.calls == report['candidate_occurrences']
+    assert report['collected'] == report['handed_off'] == 1
+    assert report['collected_not_delivered'] == 0
+    assert [item['title'] for item in output.contents] == [detail_title]
+    adapter, cfg = confirmed
+    basis, = delivery_basis_for_job(adapter.ingestion_store, cfg['_verified_geographic_binding']['job_id'])
+    assert basis['geo_tier'] == basis['initial_geo_tier'] == expected_tier
+    assert basis['initial_evidence_digest'] != basis['detail_evidence_digest']
+
+
+def test_resume_honors_rejection_recorded_by_previous_runtime(confirmed, tmp_path):
+    runner, events, _ = runtime(confirmed, tmp_path)
+    previous_decision = {'allowed': False, 'reason': 'tier_or_eligibility_changed',
+                         'before_tier': 'local', 'after_tier': None}
+    def interrupt_after_old_decision(report):
+        if report['stage'] == 'after_receipt':
+            aid = report['progress']['attempt_id']
+            runner.store.record_review(runner.execution.execution_id, aid, 'review:' + aid, previous_decision)
+            raise RuntimeError('stop after legacy decision')
+    runner.on_progress = interrupt_after_old_decision
+    with pytest.raises(RuntimeError, match='stop after legacy decision'):
+        runner.run()
+
+    resumed, _, model = runtime(confirmed, tmp_path, events=events)
+    report, output = resumed.run()
     assert report['collected'] == 1 and report['handed_off'] == 0
-    assert 'collected_not_delivered' in report['reasons'] and output.contents == []
-    assert not any(e[0] == 'delivery' for e in events)
+    assert not output.contents and not model.calls
+    assert [e[0] for e in events].count('detail') == 1
+    assert list(resumed.execution.snapshot()['reviews'].values()) == [previous_decision]
 
 
 def test_detail_auth_failure_cannot_restart_outer_account_sweep(confirmed, tmp_path):

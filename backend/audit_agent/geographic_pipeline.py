@@ -46,7 +46,7 @@ class GeographicPipeline:
             state_lock=state_lock)
         self.sink = GeographicDelivery(ingestion, self.store, projection, self.root / 'delivered')
         self.execution = ScopedExecution(self.store, projection, capture=self.capture,
-            risk=self.risk, geo=self.geo, detail=self.detail, review=self.review,
+            risk=self.risk, geo=self.geo, detail=self.detail,
             deliver=self.deliver, validate_geo=self.bridge.validate_geo,
             account=self.account, rotate=self.rotate, stop=stop, checkpoint=self.progress,
             durable_geo_attempts=True)
@@ -163,10 +163,6 @@ class GeographicPipeline:
             'occurrence_id': occurrence['occurrence_id'], 'rank': occurrence['rank']})
         return self.bridge.geo(plan, query, occurrence, attempt_state=attempt_state, on_attempt=on_attempt)
 
-    def review(self, plan, occurrence, content):
-        self.fence()
-        return self.bridge.review(plan, occurrence, content)
-
     def detail(self, occurrence, attempt, *, account_id, content_callback):
         self.fence()
         if account_id not in self.accounts:
@@ -177,7 +173,7 @@ class GeographicPipeline:
             raise error
         params = self.bridge.p2.collection.effective_parameters
         # Retain only this attempt's source route through approved delivery.
-        # Rejected/empty earlier details cannot accumulate account/exit leases.
+        # Completed or empty earlier details cannot accumulate account/exit leases.
         self._detail_route.close()
         try:
             route_context = self._detail_route.enter_context(self._acquire_route(account_id))
