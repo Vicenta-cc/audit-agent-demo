@@ -3,34 +3,28 @@
 Use the existing transactional draft/receipt relationship as the single source of
 membership. Reading an older draft never changes which round is current.
 """
-import json
 from .errors import ConfigurationValidationError, PrincipalAccessDeniedError
 
 TOOL_NAMES = frozenset({'copy_investigation_draft', 'list_investigation_rounds'})
 
 
 def draft_ids(connection, session_id, principal):
-    ids = {row[0] for row in connection.execute('''
-        SELECT d.id FROM draft_creation_operations o
-        JOIN investigation_drafts d ON d.id=o.draft_id
-        WHERE o.session_id=? AND o.principal=? AND o.state='CREATED'
-          AND d.owner_principal=? ORDER BY d.rowid
-    ''', (session_id, principal, principal))}
-    # Older sessions may predate creation operations. Only original successful
-    # creation receipts (revision 1), never read artifacts or model prose, can
-    # establish their membership. Leave historical receipts unchanged.
-    for row in connection.execute('''SELECT response_json FROM investigation_creation_tool_receipts
-        WHERE session_id=? AND principal=? AND status='SUCCEEDED'
-        AND tool_name IN ('create_investigation_draft','use_ruleset_proposal')''', (session_id, principal)):
-        try:
-            response = json.loads(row[0])
-            draft = response['data']['draft']
-            if response['status'] == 'ok' and draft['current_revision'] == 1:
-                ids.add(draft['id'])
-        except (ValueError, KeyError, TypeError):
-            continue
-    return [row[0] for row in connection.execute('''SELECT id FROM investigation_drafts
-        WHERE owner_principal=? ORDER BY rowid''', (principal,)) if row[0] in ids]
+    # Include legacy creations only when a successful receipt records revision one.
+    rows = connection.execute("""
+        SELECT d.id FROM investigation_drafts d WHERE d.owner_principal=? AND d.id IN (
+            SELECT draft_id FROM draft_creation_operations
+            WHERE session_id=? AND principal=? AND state='CREATED'
+            UNION
+            SELECT json_extract(response_json, '$.data.draft.id')
+            FROM investigation_creation_tool_receipts
+            WHERE session_id=? AND principal=? AND status='SUCCEEDED'
+              AND tool_name IN ('create_investigation_draft','use_ruleset_proposal')
+              AND CASE WHEN json_valid(response_json) THEN
+                  json_extract(response_json,'$.status')='ok' AND
+                  json_extract(response_json,'$.data.draft.current_revision')=1 END
+        ) ORDER BY d.rowid
+    """, (principal, session_id, principal, session_id, principal))
+    return [row[0] for row in rows]
 
 
 def require_member(connection, session_id, principal, draft_id):

@@ -1815,6 +1815,15 @@ class ReportStore:
             ).fetchone()
         return dict(row) if row else None
 
+    def latest_published_version_id_for_task(self, task_id: str) -> str:
+        with self._connect() as connection:
+            row = connection.execute("""
+                SELECT v.id FROM report_versions v JOIN reports r ON r.id=v.report_id
+                WHERE r.task_id=? AND v.status='published'
+                ORDER BY v.version_number DESC LIMIT 1
+            """, (task_id,)).fetchone()
+        return str(row[0]) if row else ""
+
     def list_published_versions_for_task(self, task_id: str) -> list[dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute(

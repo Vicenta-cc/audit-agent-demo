@@ -69,7 +69,7 @@ def test_storage_outage_is_not_disguised_as_partial_success(creation_stack, monk
     conversation.create_session(principal=principal)
     def unavailable(*args, **kwargs):
         raise failure
-    monkeypatch.setattr(conversation, 'get_workspace_state', unavailable)
+    monkeypatch.setattr(conversation, '_workspace_list_item', unavailable)
     with pytest.raises(type(failure)):
         conversation.list_workspaces(principal=principal)
 
@@ -79,12 +79,12 @@ def test_unexpected_projection_failure_is_isolated(creation_stack, monkeypatch):
     principal = creation_stack['principals']()
     bad = conversation.create_session(principal=principal)
     good = conversation.create_session(principal=principal)
-    original = conversation.get_workspace_state
+    original = conversation._workspace_list_item
     def read(session_id, **kwargs):
-        if session_id == bad.id:
+        if session_id.id == bad.id:
             raise RuntimeError('projection bug')
         return original(session_id, **kwargs)
-    monkeypatch.setattr(conversation, 'get_workspace_state', read)
+    monkeypatch.setattr(conversation, '_workspace_list_item', read)
     result = creation_stack['client'].get('/api/investigation-workspaces')
     assert result.status_code == 200
     by_id = {item['workspace_session_id']: item for item in result.json()['items']}
@@ -100,7 +100,7 @@ def test_missing_related_record_is_visible_but_deleted_session_is_not(creation_s
     session = conversation.create_session(principal=principal)
     def missing(*args, **kwargs):
         raise InvestigationSessionNotFoundError('missing related record')
-    monkeypatch.setattr(conversation, 'get_workspace_state', missing)
+    monkeypatch.setattr(conversation, '_workspace_list_item', missing)
     if deleted:
         monkeypatch.setattr(conversation, 'get_session', missing)
     items = conversation.list_workspaces(principal=principal)
@@ -110,3 +110,37 @@ def test_missing_related_record_is_visible_but_deleted_session_is_not(creation_s
         assert len(items) == 1
         assert items[0]['workspace_session_id'] == session.id
         assert items[0]['read_error'] == 'WORKSPACE_READ_FAILED'
+
+
+def test_sidebar_reads_only_metadata_for_published_workspace(creation_stack, monkeypatch):
+    stack = creation_stack
+    result = _create_completed_turn(stack)
+    published = _publish_fake_run(stack, result, idempotency_key="sidebar-metadata")
+    conversation = stack["conversation"]
+    report = conversation.store.find_session_by_anchor(f"m3-run:{published['run_id']}")
+    report_turn, _ = conversation.store.create_turn(
+        report.id, client_message_id="follow-up", user_input="report follow-up"
+    )
+    with sqlite3.connect(conversation.store.db_path) as conn:
+        conn.execute("UPDATE investigation_messages SET created_at=? WHERE turn_id=?",
+                     ("2099-01-01T00:00:00Z", report_turn.id))
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("sidebar read the workspace detail payload")
+
+    for obj, attr in (
+        (conversation, "get_workspace_state"),
+        (conversation.store, "conversation_snapshot"),
+        (conversation.store, "latest_completed_hermes_transcript"),
+        (stack["app_service"], "get_run"),
+        (stack["app_service"].run_projector.report_store, "list_published_versions_for_task"),
+    ):
+        monkeypatch.setattr(obj, attr, forbidden)
+    response = stack["client"].get("/api/investigation-workspaces")
+    assert response.status_code == 200
+    item, = response.json()["items"]
+    assert item["title"] == result["terminal"]["artifact"]["draft"]["title"]
+    assert item["run_id"] == published["run_id"]
+    assert item["run_status"] == "PUBLISHED"
+    assert item["updated_at"] == "2099-01-01T00:00:00Z"
+    assert not item["read_error"]

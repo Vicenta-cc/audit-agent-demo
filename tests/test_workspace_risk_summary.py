@@ -67,12 +67,14 @@ def test_workspace_list_returns_compact_risk_summaries_and_isolates_errors(
         sessions["empty"].id: _state(sessions["empty"], job_id="job-empty"),
     }
 
-    def get_state(session_id, **_):
-        if session_id == sessions["broken"].id:
+    original = conversation._workspace_list_item
+    def get_item(session, **kwargs):
+        if session.id == sessions["broken"].id:
             raise RuntimeError("broken projection")
-        return states[session_id]
+        item, _ = original(session, **kwargs)
+        return item, states[session.id].run.job_id
 
-    monkeypatch.setattr(conversation, "get_workspace_state", get_state)
+    monkeypatch.setattr(conversation, "_workspace_list_item", get_item)
     response = creation_stack["client"].get("/api/investigation-workspaces")
     assert response.status_code == 200
     by_id = {

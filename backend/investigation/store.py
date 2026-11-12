@@ -6,7 +6,7 @@ import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 from uuid import uuid4
 
 from pydantic import ValidationError
@@ -49,6 +49,11 @@ from backend.investigation.public_stream import (
     PUBLIC_STREAM_EVENT_TYPES,
     normalize_public_stream_payload,
 )
+
+
+class WorkspaceListSession(NamedTuple):
+    id: str
+    updated_at: str
 
 
 def utc_now() -> str:
@@ -725,19 +730,13 @@ class InvestigationStore:
                 )
         return self.get_session(session_id)
 
-    def list_creation_sessions(
-        self, *, principal: str, limit: int | None = 50, offset: int = 0
-    ) -> tuple[InvestigationSession, ...]:
+    def list_active_workspace_keys(self, principal: str) -> tuple[WorkspaceListSession, ...]:
         with self._connect() as connection:
-            query = """SELECT * FROM investigation_sessions
-                       WHERE scope_type='creation' AND owner_principal=? AND status='active'
-                       ORDER BY updated_at DESC, id DESC"""
-            parameters: tuple[object, ...] = (principal,)
-            if limit is not None:
-                query += " LIMIT ? OFFSET ?"
-                parameters = (principal, limit, offset)
-            rows = connection.execute(query, parameters).fetchall()
-        return tuple(self._session(row) for row in rows)
+            rows = connection.execute("""
+                SELECT id, updated_at FROM investigation_sessions
+                WHERE scope_type='creation' AND owner_principal=? AND status='active'
+            """, (principal,))
+            return tuple(WorkspaceListSession(*row) for row in rows)
 
     def get_session(self, session_id: str) -> InvestigationSession:
         with self._connect() as connection:
@@ -779,6 +778,42 @@ class InvestigationStore:
         if row is None:
             raise InvestigationSessionNotFoundError(session_id)
         return str(row["anchor_key"] or "")
+
+    def list_entry_activity(self, session_id: str) -> tuple[str, str, str]:
+        """Fetch sidebar text and activity dates without loading conversation history."""
+        with self._connect() as connection:
+            row = connection.execute("""
+                SELECT (SELECT substr(content, 1, 48) FROM investigation_messages
+                        WHERE session_id=? AND role='user' ORDER BY sequence LIMIT 1),
+                       (SELECT max(created_at) FROM investigation_messages
+                        WHERE session_id=? AND role IN ('user','assistant')),
+                       (SELECT completed_at FROM investigation_turns
+                        WHERE session_id=? ORDER BY created_at DESC, id DESC LIMIT 1)
+            """, (session_id, session_id, session_id)).fetchone()
+        return tuple(value or "" for value in row)
+
+    def list_entry_artifact(
+        self, session_id: str, adoption_turn_ids: tuple[str, ...]
+    ) -> sqlite3.Row | None:
+        with self._connect() as connection:
+            return connection.execute("""
+                WITH turns AS (
+                    SELECT id, created_at, status,
+                           CASE WHEN json_valid(public_artifact_json)
+                                THEN public_artifact_json ELSE '{}' END AS artifact
+                    FROM investigation_turns WHERE session_id=?
+                )
+                SELECT id, status, json_extract(artifact, '$.draft_id') AS draft_id,
+                       json_extract(artifact, '$.run_id') AS run_id,
+                       json_extract(artifact, '$.presentation_stage') AS stage
+                FROM turns
+                WHERE (status='completed' AND id IN (SELECT value FROM json_each(?)))
+                   OR (json_extract(artifact, '$.artifact_type')='investigation_draft'
+                       AND json_extract(artifact, '$.draft_id') != '')
+                   OR (json_extract(artifact, '$.artifact_type')='investigation_run'
+                       AND json_extract(artifact, '$.run_id') != '')
+                ORDER BY created_at DESC, id DESC LIMIT 1
+            """, (session_id, json.dumps(adoption_turn_ids))).fetchone()
 
     def conversation_snapshot(
         self, session_id: str, *, include_tool_messages: bool = False

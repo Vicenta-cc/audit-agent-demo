@@ -104,6 +104,10 @@ class FakeInvestigationRunProjector:
             report_version_id, anchor_key=f"m3-run:{run.id}"
         )
 
+    def project_list_status(self, run: InvestigationRun) -> tuple[str, str]:
+        projected = self.project(run)
+        return projected["status"], projected.get("report_version_id", "")
+
     def project(self, run: InvestigationRun) -> dict[str, Any]:
         report_version_id = self._report_version_id(run)
         elapsed = max(
@@ -156,10 +160,7 @@ class FakeInvestigationRunProjector:
         }
 
     def _report_version_id(self, run: InvestigationRun) -> str:
-        versions = self.report_store.list_published_versions_for_task(
-            self._task_id(run)
-        )
-        return str(versions[0]["id"]) if versions else ""
+        return self.report_store.latest_published_version_id_for_task(self._task_id(run))
 
     def _ensure_report(self, run: InvestigationRun) -> str:
         existing = self._report_version_id(run)

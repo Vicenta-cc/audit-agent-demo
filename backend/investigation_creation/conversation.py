@@ -735,33 +735,71 @@ class InvestigationCreationConversationService:
             anchor_key=str(workspace_key or "").strip(),
         )
 
+    def _workspace_list_item(self, session, *, principal: Principal):
+        from .frozen_preview import confirmed_run_preview
+        from .rounds import draft_ids
+
+        application = self.tool_service.application_service
+        adoption_ids = application.store.adoption_turn_ids(session.id, principal.id)
+        artifact = self.store.list_entry_artifact(session.id, adoption_ids)
+        draft_id = (artifact["draft_id"] or "") if artifact else ""
+        run_id = (artifact["run_id"] or "") if artifact else ""
+        stage = "confirmation" if artifact and artifact["stage"] == "confirmation" else "suggestion"
+        if artifact and artifact["status"] == "completed" and artifact["id"] in adoption_ids:
+            adopted = application.store.successful_adoption_results(
+                session_id=session.id, turn_id=artifact["id"], principal=principal.id,
+            )
+            if adopted:
+                draft_id, run_id, stage = adopted[-1]["draft"]["id"], "", "suggestion"
+        if settings.investigation_multi_round_enabled or not (draft_id or run_id):
+            with application.store._connect() as connection:
+                ids = draft_ids(connection, session.id, principal.id)
+            if ids:
+                if draft_id != ids[-1]:
+                    stage = "suggestion"
+                draft_id, run_id = ids[-1], ""
+        run = None
+        if run_id:
+            run = application.store.get_run(run_id, principal=principal.id)
+            draft_id, stage = run.draft_id, "confirmation"
+        draft = application.store.get_draft(draft_id, principal=principal.id) if draft_id else None
+        if draft and run is None:
+            run = application.store.find_run_for_draft(draft.id, principal=principal.id)
+        title, latest_message, _ = self.store.list_entry_activity(session.id)
+        dates = [session.updated_at, latest_message]
+        if draft:
+            dates.append(draft.updated_at)
+        if run:
+            # Preserve read-error isolation for invalid frozen execution contracts.
+            confirmed_run_preview(run)
+            dates.append(run.updated_at)
+            summary = getattr(application.run_projector, "project_list_status", None)
+            status, report_id = summary(run) if summary else (run.status, run.report_version_id)
+            if report_id:
+                report = self.store.find_session_by_anchor(f"m3-run:{run.id}")
+                if report:
+                    if report.scope_type != "report" or report.report_version_id != report_id:
+                        raise ReportScopeError("Run report Session anchor does not match its published report")
+                    _, message_date, turn_date = self.store.list_entry_activity(report.id)
+                    dates.extend((message_date, turn_date))
+        return ({
+            "workspace_session_id": session.id,
+            "run_id": run.id if run else "",
+            "title": (draft.title if draft else "") or title or "新调查需求",
+            "updated_at": max(dates),
+            "run_status": status if run else "",
+            "presentation_stage": stage if draft else "",
+        }, run.job_id if run else "")
+
     def list_workspaces(self, *, principal: Principal, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
         items = []
         item_job_ids: dict[str, str] = {}
-        for session in self.store.list_creation_sessions(principal=principal.id, limit=None):
+        for session in self.store.list_active_workspace_keys(principal.id):
             try:
-                state = self.get_workspace_state(session.id, principal=principal)
-                first_question = next((message.content for message in state.messages if message.role == "user"), "")
-                timestamp_candidates = [
-                    session.updated_at,
-                    state.run.updated_at if state.run else "",
-                    str((state.draft_artifact.get("draft") or {}).get("updated_at") or ""),
-                    state.latest_report_turn.completed_at if state.latest_report_turn else "",
-                    *(message.created_at for message in state.messages),
-                    *(message.created_at for message in state.report_messages),
-                ]
-                updated_at = max((value for value in timestamp_candidates if value), default=session.updated_at)
-                item = {
-                    "workspace_session_id": session.id,
-                    "run_id": state.run.run_id if state.run else "",
-                    "title": (state.draft_artifact.get("draft") or {}).get("title") or first_question[:48] or "新调查需求",
-                    "updated_at": updated_at,
-                    "run_status": state.run.status if state.run else "",
-                    "presentation_stage": state.draft_artifact.get("presentation_stage", ""),
-                }
+                item, job_id = self._workspace_list_item(session, principal=principal)
                 items.append(item)
-                if state.run and state.run.job_id:
-                    item_job_ids[session.id] = state.run.job_id
+                if job_id:
+                    item_job_ids[session.id] = job_id
             except (sqlite3.Error, OSError):
                 # A shared storage outage must remain a request failure.
                 raise

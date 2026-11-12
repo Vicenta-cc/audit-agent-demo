@@ -668,6 +668,20 @@ class InvestigationCreationStore:
         if bound["application_turn_id"] != turn_id:
             raise IdempotencyConflictError("Proposal receipt belongs to a different conversation turn")
 
+    def adoption_turn_ids(self, session_id: str, principal: str) -> tuple[str, ...]:
+        with self._connect() as connection:
+            rows = connection.execute("""
+                SELECT DISTINCT b.application_turn_id FROM ruleset_proposal_conversation_bindings b
+                JOIN investigation_creation_tool_receipts r ON r.receipt_id=b.receipt_id
+                LEFT JOIN draft_creation_attempts a ON a.receipt_id=r.receipt_id
+                LEFT JOIN draft_creation_operations o ON o.id=a.operation_id
+                WHERE r.session_id=? AND r.principal=? AND r.is_mutation=1
+                  AND r.tool_name IN ('use_ruleset_proposal','configure_investigation_draft')
+                  AND (r.status='SUCCEEDED' OR r.recovered_response_json<>''
+                       OR (o.state='CREATED' AND o.active_receipt_id=r.receipt_id AND o.result_json<>''))
+            """, (session_id, principal))
+            return tuple(row[0] for row in rows)
+
     def successful_adoption_results(self, *, session_id: str, turn_id: str,
                                     principal: str) -> list[dict[str, Any]]:
         """Read adoption outcomes from Application receipts, never runtime text."""
