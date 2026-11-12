@@ -1847,7 +1847,8 @@ class AuditPipeline:
             return
         job = job_store.get(self.job_id) or {}
         owner = str(job.get("owner_user_id") or "local-user")
-        bundle = acquire_route_execution(account_id, self.job_id, owner, account_store=crawler_account_store)
+        bundle = acquire_route_execution(account_id, self.job_id, owner, account_store=crawler_account_store,
+                                         investigation_collection=True)
         previous = getattr(self, "_collection_route_context", None)
         self._collection_route_context = bundle
         try:

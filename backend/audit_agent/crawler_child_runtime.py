@@ -150,6 +150,7 @@ def authority_for(bundle, **options):
         "max_calls": settings.crawler_proxy_probe_budget,
         "ttl": settings.crawler_proxy_probe_ttl,
         "trial_id": getattr(settings, "crawler_proxy_trial_id", ""),
+        "investigation_collection": getattr(bundle, "investigation_collection", False),
         "reuse_existing_policy": True,
         "account_policy": parent_account_policy(bundle),
         "initial_ack": (lambda: parent_authority_ticket(bundle))

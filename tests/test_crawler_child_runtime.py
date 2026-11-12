@@ -105,8 +105,13 @@ def test_authority_carries_current_profile_generation_only(monkeypatch):
     bundle = SimpleNamespace(snapshot=SimpleNamespace(managed=False), account_id="a", account_store=SimpleNamespace(get=lambda _: {"profile_engine": "camoufox", "profile_generation": "generation-a"}))
     assert runtime.authority_for(bundle, login_bootstrap=True) is handle
     assert handle.env == {"MEDIACRAWLER_CAMOUFOX_PROFILE_GENERATION": "generation-a"}
+    assert opened.call_args.kwargs["session_options"]["investigation_collection"] is False
     assert opened.call_args.kwargs["session_options"]["login_bootstrap"] is True
     assert opened.call_args.kwargs["session_options"]["account_policy"] == {"max_concurrency": 1}
+    bundle.investigation_collection = True
+    runtime.authority_for(bundle, maintenance_only=True)
+    assert opened.call_args.kwargs["session_options"]["investigation_collection"] is True
+    assert opened.call_args.kwargs["session_options"]["maintenance_only"] is True
     handle.close.assert_not_called()
 
 

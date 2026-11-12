@@ -394,7 +394,7 @@ def resolve_account_route(account_id, *, account_store=None, expected_binding_re
 
 def acquire_route_execution(account_id, execution_id, owner_id, *, account_store=None,
                             account_handle=None, snapshot=None, allow_probe=False, recovery_claim=None, human_login_operation_id=None,
-                            migration_id=None):
+                            migration_id=None, investigation_collection=False):
     from .crawler_child_runtime import require_browser_available
     require_browser_available(account_id, store=account_store, owner_id=owner_id,
         migration_id=migration_id, operation_id=execution_id)
@@ -405,6 +405,9 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
     if snapshot:
         authorize_route_owner(account_id, snapshot.proxy_id if snapshot.route_mode not in {'direct_degraded', 'legacy_direct'} else None, owner_id, account_store=account_store)
     bundle = ExecutionLeaseBundle(execution_id, owner_id, account_id, snapshot)
+    # The first exit check runs before a managed snapshot exists. All helpers
+    # for this collection inherit its accounting policy from the owner.
+    bundle.investigation_collection = investigation_collection
     bundle.proxy_store = store
     bundle.migration_id = migration_id
     if store is not None:
@@ -700,7 +703,8 @@ def authorize_source_route(provenance, owner_id, execution_id, *, route_context=
         with route_context.borrow(execution_id=execution_id, owner_id=owner_id, account_id=account_id):
             yield route_context
         return
-    bundle = acquire_route_execution(account_id, execution_id, owner_id, snapshot=snapshot, account_store=account_store)
+    bundle = acquire_route_execution(account_id, execution_id, owner_id, snapshot=snapshot, account_store=account_store,
+                                     investigation_collection=True)
     try:
         yield bundle
     finally:
@@ -1239,6 +1243,7 @@ class _BorrowedChildSession(_AssetLoopSession):
             budget_id=probe_env(self.bundle)['MEDIACRAWLER_PROXY_PROBE_BUDGET_ID'],
             ttl=getattr(settings, 'crawler_proxy_probe_ttl', 300),
             max_calls=getattr(settings, 'crawler_proxy_probe_budget', 96),
+            investigation_collection=getattr(self.bundle, 'investigation_collection', False),
             trial_id=getattr(settings, 'crawler_proxy_trial_id', ''), reuse_existing_policy=True,
             account_policy=parent_account_policy(self.bundle),
             ack=self.bundle.route_operation_store.ticket(self.bundle.snapshot.operation_id, owner_id=self.bundle.owner_id,

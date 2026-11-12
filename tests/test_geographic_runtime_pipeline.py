@@ -550,7 +550,8 @@ def test_proxy_flag_off_geographic_route_retains_actual_legacy_direct_bundle(tmp
     monkeypatch.setattr(module, 'crawler_account_store', accounts)
     monkeypatch.setattr(module, 'job_store', jobs)
     acquired = []
-    def acquire(account_id, execution_id, owner, *, account_store):
+    def acquire(account_id, execution_id, owner, *, account_store, investigation_collection):
+        assert investigation_collection is True
         # Keep the real account/template/FD lease path, replacing only external
         # exit probing and browser startup with a local execution bundle.
         snapshot = resolve_account_route(account_id, account_store=account_store)

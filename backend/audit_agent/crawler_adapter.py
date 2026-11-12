@@ -619,7 +619,8 @@ class MediaCrawlerAdapter:
                         bundle = route_context or get_current_route_context()
                         owns_bundle = bundle is None and platform == "dy" and bool(account_id)
                         if owns_bundle:
-                            bundle = acquire_route_execution(account_id, execution_id, owner, account_store=self.account_store)
+                            bundle = acquire_route_execution(account_id, execution_id, owner, account_store=self.account_store,
+                                                             investigation_collection=True)
                         try:
                             return self._run_command_locked(
                                 command, save_root, platform, max_notes, progress_callback,
