@@ -19,11 +19,16 @@ _projection_cache = OrderedDict()
 
 def _verified_projection(db_path, execution_id, plan_digest):
     from .geographic_execution_store import GeographicExecutionStore
+    from .geographic_storage import is_segmented
 
     uri = Path(db_path).resolve().as_uri() + '?mode=ro'
     with _projection_lock:
         with closing(sqlite3.connect(uri, uri=True)) as db:
             db.execute('BEGIN')
+            if is_segmented(db, execution_id):
+                return GeographicExecutionStore.read_connection(
+                    db, execution_id, plan_digest, _project_state
+                )
             row = db.execute('SELECT rowid FROM geographic_executions WHERE execution_id=?',
                              (execution_id,)).fetchone()
             if row is None:
@@ -43,8 +48,7 @@ def _verified_projection(db_path, execution_id, plan_digest):
         validator.expected_binding = plan['binding'] | plan['runtime_binding']
         validator.expected_plan_digest = plan_digest
         validator._validate_snapshot(state, execution_id, digest_function=validator._streamed_digest)
-        result = (plan['binding'], plan['runtime_binding'], snapshot_resume_blocker(state),
-                  _selection_rows(state))
+        result = _project_state(state)
         del state
         _projection_cache[key] = result
         if len(_projection_cache) > 4:
@@ -154,9 +158,20 @@ def selection_page(service, run_id, principal, *, offset=0, limit=50, tier=None)
             'items':[dict(item) for item in rows[offset:offset+limit]], 'total':len(rows), 'offset':offset,'limit':limit}
 
 
+def _project_state(state):
+    plan = state['plan']
+    return (plan['binding'], plan['runtime_binding'], snapshot_resume_blocker(state),
+            _selection_rows(state))
+
+
 def _selection_rows(state):
-    rows=[]
-    for query in state['queries'].values():
+    rows = []
+    queries = state['queries']
+    if hasattr(queries, 'summary'):
+        for query_id in queries:
+            rows.extend(queries.summary(query_id)['selection_rows'])
+        return rows
+    for query in queries.values():
         occurrences = query['occurrences']
         if query['status'] != 'evaluated' and query.get('capture'):
             occurrences = (o | query['evaluations'].get(o['occurrence_id'], {})

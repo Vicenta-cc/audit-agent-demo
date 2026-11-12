@@ -23,6 +23,25 @@ def verify_geographic_evidence(conn, task_id, content_id, path, payload):
         raise ValueError('geographic delivery evidence mismatch')
 
 
+def _delivery_evidence(snapshot, attempt_id):
+    attempt = snapshot['attempts'].get(attempt_id)
+    if not attempt or attempt['status'] != 'settled':
+        raise ValueError('settled approved attempt required')
+    review = snapshot['reviews'].get(attempt_id, {})
+    if not review.get('allowed'):
+        raise ValueError('settled approved attempt required')
+    receipt = snapshot['receipts'][attempt['receipt_id']]
+    occurrence = snapshot['reservations'][attempt['occurrence_id']]['occurrence']
+    score = occurrence['risk']['score']
+    return (
+        attempt,
+        {'content': receipt['content'], 'content_digest': receipt['content_digest']},
+        {'rank': occurrence['rank'], 'evidence_digest': occurrence['evidence_digest'],
+         'risk_band': score['band'], 'risk_score': score['score']},
+        review.get('after_tier', attempt['tier']),
+    )
+
+
 class GeographicDelivery:
     def __init__(self, ingestion, state_store, plan, raw_root, lease_fence=None):
         self.ingestion, self.state_store = ingestion, state_store
@@ -50,16 +69,13 @@ class GeographicDelivery:
             self.state_store._fence(state_db)
             if self.lease_fence is not None and self.lease_fence(db) is False:
                 raise ValueError('worker lease fence expired')
-            row = state_db.execute(f'SELECT snapshot FROM {self.state_store._table} WHERE execution_id=?',
-                                   (p['execution_id'],)).fetchone()
-            if not row:
-                raise ValueError('unknown execution')
-            snap = json.loads(row[0])
-            self.state_store._validate_snapshot(snap, p['execution_id'])
-            a = snap['attempts'].get(binding.get('attempt_id'))
-            if not a or a['status'] != 'settled' or not snap['reviews'].get(a['attempt_id'], {}).get('allowed'):
-                raise ValueError('settled approved attempt required')
-            capture = snap['receipts'][a['receipt_id']]
+            def read_delivery(snapshot):
+                self.state_store._validate_plan(snapshot['plan'])
+                return _delivery_evidence(snapshot, binding.get('attempt_id'))
+
+            a, capture, occurrence, geo_tier = self.state_store.read_connection(
+                state_db, p['execution_id'], p['plan_digest'], read_delivery
+            )
             expected = {k:a[k] for k in ('execution_id','plan_digest','query_id','platform','content_key','occurrence_id','attempt_id')}
             expected['content_digest'] = capture['content_digest']
             expected_key = digest({k:expected[k] for k in ('execution_id','plan_digest','attempt_id','content_digest')})
@@ -84,12 +100,10 @@ class GeographicDelivery:
                 raise ValueError('original detail identity mismatch')
             job_id = p['runtime_binding']['job_id']
             query = next(q for q in p['queries'] if q['query_id'] == a['query_id'])
-            occurrence = snap['reservations'][a['occurrence_id']]['occurrence']
-            review = snap['reviews'][a['attempt_id']]
             basis = dict(source_job_id=job_id, content_key=key, occurrence_id=a['occurrence_id'],
                          query_id=a['query_id'], source_keyword=query['query'], rank=occurrence['rank'],
-                         risk_band=occurrence['risk']['score']['band'], risk_score=occurrence['risk']['score']['score'],
-                         geo_tier=review.get('after_tier', a['tier']), initial_geo_tier=a['tier'],
+                         risk_band=occurrence['risk_band'], risk_score=occurrence['risk_score'],
+                         geo_tier=geo_tier, initial_geo_tier=a['tier'],
                          scope_digest=p['scope_digest'], policy_digest=p['policy_digest'],
                          plan_digest=p['plan_digest'], initial_evidence_digest=occurrence['evidence_digest'],
                          detail_evidence_digest=capture['content_digest'],

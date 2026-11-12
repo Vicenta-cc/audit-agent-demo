@@ -22,7 +22,13 @@ def snapshot_resume_blocker(snapshot):
     if any(q.get("closure") in {"closed_media_failure", "closed_auth_failure"}
            for q in snapshot["queries"].values()):
         return "geographic_collection_reconciliation_required"
-    if any(parts.get('geo', {}).get('result', {}).get('evaluation_status') == 'invalid_response'
-           for query in snapshot['queries'].values() for parts in query.get('evaluations', {}).values()):
+    if has_pending_evaluations(snapshot['queries']):
         return "geographic_evaluation_reconciliation_required"
     return ""
+
+
+def has_pending_evaluations(queries):
+    if hasattr(queries, 'summary'):
+        return any(queries.summary(qid)['pending_evaluations'] for qid in queries)
+    return any(parts.get('geo', {}).get('result', {}).get('evaluation_status') == 'invalid_response'
+               for query in queries.values() for parts in query.get('evaluations', {}).values())

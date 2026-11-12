@@ -235,6 +235,10 @@ def eligible_tier(plan, occurrence, *, risk_candidate=None):
     query = next((q for q in plan['queries'] if q['query_id'] == occurrence.get('query_id')), None)
     _require(query is not None, 'unknown_occurrence_query')
     _validate_occurrence(plan, query, occurrence, risk_candidate=risk_candidate)
+    return _validated_tier(plan, occurrence)
+
+
+def _validated_tier(plan, occurrence):
     score, risk = occurrence['risk']['score'], occurrence['risk']
     tier = occurrence['geo']['result']['geo_tier']
     if occurrence.get('already_audited', False) or score['score'] <= 0 or score['band'] not in ('strong', 'weak'):
@@ -248,6 +252,17 @@ def eligible_tier(plan, occurrence, *, risk_candidate=None):
     if tier == 'ip_only' and risk['model_valid'] and score['band'] == 'strong':
         return tier
     return None
+
+
+def selection_entry(plan, query, occurrence):
+    """Capture the exact selection decision without retaining model evidence."""
+    try:
+        _validate_occurrence(plan, query, occurrence)
+        return {'id': occurrence['occurrence_id'],
+                'entity': occurrence['platform'] + ':' + occurrence['content_key'],
+                'tier': _validated_tier(plan, occurrence)}
+    except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as exc:
+        return {'error': str(exc), 'tier': None}
 
 
 def _result(status, reasons, *, picks=None, query_id=None, tier=None):
@@ -275,14 +290,22 @@ def select_next_batch(plan, query_states, state):
                 evaluated_queries.append(query)
             else:
                 incomplete_seen = True
+        ranked = {}
         seen = set()
         for query in evaluated_queries:
-            occurrences = query_states[query['query_id']].get('occurrences')
-            _require(isinstance(occurrences, list), 'missing_occurrence_set')
-            for occurrence in occurrences:
-                _validate_occurrence(plan, query, occurrence)
-                _require(occurrence['occurrence_id'] not in seen, 'duplicate_occurrence_id')
-                seen.add(occurrence['occurrence_id'])
+            qid = query['query_id']
+            if hasattr(query_states, 'summary'):
+                entries = query_states.summary(qid)['ranked']
+            else:
+                occurrences = query_states[qid].get('occurrences')
+                _require(isinstance(occurrences, list), 'missing_occurrence_set')
+                entries = [selection_entry(plan, query, row) for row in occurrences]
+            for entry in entries:
+                if 'error' in entry:
+                    return _result('blocked', [entry['error']])
+                _require(entry['id'] not in seen, 'duplicate_occurrence_id')
+                seen.add(entry['id'])
+            ranked[qid] = entries
         _require(type(state.get('busy')) is bool, 'invalid_busy_state')
         for key in ('query_success', 'query_reserved', 'closed_queries'):
             _require(isinstance(state.get(key), dict) and set(state[key]) <= query_ids, 'invalid_' + key)
@@ -313,18 +336,14 @@ def select_next_batch(plan, query_states, state):
                 budget = min(remaining, query['max_notes'] - state['query_success'].get(qid, 0)
                              - state['query_reserved'].get(qid, 0))
                 picks, batch_entities = [], set()
-                for occurrence in query_states[qid]['occurrences']:
+                for position, entry in enumerate(ranked[qid]):
                     if len(picks) >= budget:
                         break
-                    risk, geo = occurrence['risk'], occurrence['geo']['result']
-                    entity = occurrence['platform'] + ':' + occurrence['content_key']
-                    if (entity in occupied or entity in batch_entities or occurrence['occurrence_id'] in excluded
-                            or occurrence.get('already_audited', False) or risk['score']['score'] <= 0 or risk['score']['band'] not in ('strong', 'weak')
-                            or geo['geo_tier'] != tier):
+                    entity = entry['entity']
+                    if (entry['tier'] != tier or entity in occupied or entity in batch_entities
+                            or entry['id'] in excluded):
                         continue
-                    if tier == 'ip_only' and not (risk['model_valid'] and risk['score']['band'] == 'strong'):
-                        continue
-                    picks.append(occurrence)
+                    picks.append(query_states[qid]['occurrences'][position])
                     batch_entities.add(entity)
                 if picks:
                     return _result('ready', ['original_query_and_ranked_order'], picks=picks, query_id=qid, tier=tier)

@@ -232,7 +232,7 @@ def test_published_projection_never_loads_resume_snapshot(
     assert result['task_stats']['collection_resumable'] is False
 
 
-def test_concurrent_snapshot_reads_share_validation_and_detect_tampering(
+def test_concurrent_legacy_snapshot_reads_share_validation_and_detect_tampering(
     confirmed, tmp_path, monkeypatch,
 ):
     import json
@@ -241,6 +241,7 @@ def test_concurrent_snapshot_reads_share_validation_and_detect_tampering(
     from backend.audit_agent.geographic_execution_store import GeographicExecutionStore
     from backend.audit_agent.geographic_status import geographic_resume_blocker
 
+    monkeypatch.setattr(GeographicExecutionStore, "open_execution", GeographicExecutionStore.create_legacy)
     runner, _, _ = runtime(confirmed, tmp_path)
     jobs = confirmed[0].job_store
     job_id = runner.bridge.plan['runtime_binding']['job_id']

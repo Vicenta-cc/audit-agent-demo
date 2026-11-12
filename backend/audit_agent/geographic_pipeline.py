@@ -53,14 +53,14 @@ class GeographicPipeline:
 
     def progress(self, stage, payload):
         if stage == 'after_settle':
-            review = self.execution.snapshot()['reviews'].get(payload['attempt_id'], {})
-            if not review.get('allowed') or self.stop():
+            allowed = self.execution.read_state(lambda s: s['reviews'].get(payload['attempt_id'], {}).get('allowed'))
+            if not allowed or self.stop():
                 self._detail_route.close()
         self.on_progress(self.execution.report() | {'stage': stage, 'progress': deepcopy(payload)})
 
     def fence(self):
         # A fresh transaction rejects a stale worker before each external action.
-        self.store.load(self.execution.execution_id, self.bridge.plan['plan_digest'])
+        self.execution.read_state(lambda s: None)
 
     def account(self, query):
         ids = list(self.accounts)

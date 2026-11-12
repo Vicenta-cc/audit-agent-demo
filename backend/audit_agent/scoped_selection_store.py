@@ -65,34 +65,37 @@ class Store:
                 db.execute('BEGIN IMMEDIATE')
                 try:
                     self._fence(db)
-                    row = db.execute(f'SELECT snapshot FROM {self._table} WHERE execution_id=?',
-                                     (execution_id,)).fetchone()
-                    if not row:
-                        raise ValueError('unknown execution')
-                    snap = json.loads(row[0])
-                    self._validate_snapshot(snap, execution_id)
-                    previous = snap['operations'].get(operation_id)
-                    fingerprint = digest(payload)
-                    if previous:
-                        if previous['digest'] != fingerprint:
-                            raise ValueError('operation ID payload conflict')
-                        db.rollback()
-                        return deepcopy(previous['result'])
-                    result = action(snap)
-                    self._refresh(snap)
-                    snap['revision'] += 1
-                    snap['events'].append({'revision': snap['revision'], 'operation_id': operation_id,
-                                           'payload': deepcopy(payload)})
-                    snap['operations'][operation_id] = {'digest': fingerprint, 'result': deepcopy(result)}
-                    snap['snapshot_digest'] = digest({k: v for k, v in snap.items() if k != 'snapshot_digest'})
-                    db.execute(f'UPDATE {self._table} SET snapshot=? WHERE execution_id=?',
-                               (json.dumps(snap, ensure_ascii=False), execution_id))
-                    self._fence(db)
-                    self._commit(db)
-                    return deepcopy(result)
+                    return self._legacy_transaction(db, execution_id, operation_id, payload, action)
                 except BaseException:
                     db.rollback()
                     raise
+
+    def _legacy_transaction(self, db, execution_id, operation_id, payload, action):
+        row = db.execute(f'SELECT snapshot FROM {self._table} WHERE execution_id=?',
+                         (execution_id,)).fetchone()
+        if not row:
+            raise ValueError('unknown execution')
+        snap = json.loads(row[0])
+        self._validate_snapshot(snap, execution_id)
+        previous = snap['operations'].get(operation_id)
+        fingerprint = digest(payload)
+        if previous:
+            if previous['digest'] != fingerprint:
+                raise ValueError('operation ID payload conflict')
+            db.rollback()
+            return deepcopy(previous['result'])
+        result = action(snap)
+        self._refresh(snap)
+        snap['revision'] += 1
+        snap['events'].append({'revision': snap['revision'], 'operation_id': operation_id,
+                               'payload': deepcopy(payload)})
+        snap['operations'][operation_id] = {'digest': fingerprint, 'result': deepcopy(result)}
+        snap['snapshot_digest'] = digest({k: v for k, v in snap.items() if k != 'snapshot_digest'})
+        db.execute(f'UPDATE {self._table} SET snapshot=? WHERE execution_id=?',
+                   (json.dumps(snap, ensure_ascii=False), execution_id))
+        self._fence(db)
+        self._commit(db)
+        return deepcopy(result)
 
     @staticmethod
     def _streamed_digest(fields):
@@ -169,7 +172,13 @@ class Store:
                           closed_queries={q: v['closure'] for q, v in s['queries'].items() if v['closure']},
                           excluded_occurrences=s['excluded_occurrences'])
 
-    def create(self, plan):
+    def open_execution(self, plan):
+        self.create(plan)
+
+    def read_state(self, execution_id, expected_plan_digest, reader):
+        return reader(self.load(execution_id, expected_plan_digest))
+
+    def _initial_snapshot(self, plan):
         self._validate_plan(plan)
         plan = deepcopy(plan)
         snap = dict(plan=plan, queries={q['query_id']: dict(status='pending', occurrences=[], closure=None,
@@ -179,6 +188,10 @@ class Store:
                     'payload': {'kind': 'create', 'plan_digest': plan['plan_digest']}}], excluded_occurrences=[])
         self._refresh(snap)
         snap['snapshot_digest'] = digest(snap)
+        return snap
+
+    def create(self, plan):
+        snap = self._initial_snapshot(plan)
         with self._state_guard():
             with closing(self._connection()) as db:
                 db.execute('BEGIN IMMEDIATE')
