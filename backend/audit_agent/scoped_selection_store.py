@@ -463,7 +463,7 @@ class Store:
 
     def fail_attempt(self, execution_id, attempt_id, kind, operation_id):
         def action(s):
-            if kind not in {'empty', 'media', 'auth', 'unknown', 'infrastructure'}:
+            if kind not in {'empty', 'media', 'auth', 'verification', 'unknown', 'infrastructure'}:
                 raise ValueError('unknown failure type')
             a = s['attempts'][attempt_id]
             if a['status'] != 'collecting':
@@ -471,6 +471,9 @@ class Store:
             a['status'] = kind
             q = s['queries'][a['query_id']]
             retry = False
+            if kind == 'verification':
+                s['fatal_error'] = dict(kind='crawler_account_verification_required', query_id=a['query_id'])
+                return dict(retry_allowed=False, status=kind)
             if kind in {'unknown', 'infrastructure'}:
                 return dict(retry_allowed=False, status=kind)
             s['reservations'][a['occurrence_id']]['status'] = 'released'

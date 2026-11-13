@@ -2025,7 +2025,11 @@ def delete_crawler_account(
     with account_lease(account["platform"], account_id) as acquired:
         if not acquired:
             raise HTTPException(409, detail="账号正在采集或登录，请等待结束后再删除。")
-        if not crawler_account_store.delete(account_id):
+        try:
+            deleted = crawler_account_store.delete(account_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if not deleted:
             raise HTTPException(status_code=404, detail="Crawler account not found")
         if _authz_enabled():
             auth_store.unregister_crawler_account(account_id)
@@ -2103,18 +2107,24 @@ async def start_crawler_account_login(
                     account_id, current, permission="manage"
                 )
 
-            session, created = crawler_login_v2_manager.start(
-                account,
-                user_id=principal.id,
-                app_session_id=principal.session_id or "local",
-                owner_token=request.headers.get("x-login-token", ""),
-                request_key=request.headers.get("idempotency-key", ""),
-                intent=body.get("intent", "check_or_login"),
-                source_operation_id=body.get("source_operation_id"),
-                browser_mode=body.get("browser_mode", "default"),
-                authorize=authorize,
-                **({"migration_id": migration_id} if migration_id else {}),
-            )
+            try:
+                session, created = crawler_login_v2_manager.start(
+                    account,
+                    user_id=principal.id,
+                    app_session_id=principal.session_id or "local",
+                    owner_token=request.headers.get("x-login-token", ""),
+                    request_key=request.headers.get("idempotency-key", ""),
+                    intent=body.get("intent", "check_or_login"),
+                    source_operation_id=body.get("source_operation_id"),
+                    browser_mode=body.get("browser_mode", "default"),
+                    authorize=authorize,
+                    **({"migration_id": migration_id} if migration_id else {}),
+                )
+            except CollectionRouteError as exc:
+                status = 409 if exc.code in {"PROXY_BUSY", "PROXY_REVISION_MISMATCH"} else 503
+                raise login_v2_http_error(LoginV2Error(exc.code, status=status)) from exc
+            except (RuntimeError, OSError) as exc:
+                raise login_v2_http_error(LoginV2Error("BROWSER_START_FAILED", status=503)) from exc
             response.status_code = 201 if created else 200
         else:
             if migration_id:
@@ -2143,8 +2153,6 @@ async def start_crawler_account_login(
             raise login_v2_http_error(exc) from exc
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except RuntimeError as exc:
-        if using_v2:
-            raise login_v2_http_error(LoginV2Error("BROWSER_START_FAILED", status=503)) from exc
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     response.headers["Cache-Control"] = "no-store"
     return {"item": session}
@@ -3316,10 +3324,11 @@ def control_job(
     actions = available_job_actions(job, stats)
     def check_geographic_recovery():
         if request.action == "resume_crawl":
+            from backend.audit_agent.geographic_recovery import geographic_resume_message
             from backend.audit_agent.geographic_status import geographic_resume_blocker
             blocker = geographic_resume_blocker(job, job_store.db_path)
             if blocker:
-                raise HTTPException(409, detail={"code": blocker, "message": "地域采集结果尚未确认，不能自动重复采集，请核对执行记录。"})
+                raise HTTPException(409, detail={"code": blocker, "message": geographic_resume_message(blocker)})
 
     if _authz_enabled():
         admission = investigation_creation_store.admission

@@ -74,16 +74,14 @@ class GeographicPipeline:
         self.fence()
         self._retire_account(account_id, error)
         error.triage_rotation_stop = True  # Never restart all queries via the outer legacy loop.
+        if isinstance(error, CrawlerVerificationError):
+            return None
         return self.account(query) if self.accounts else None
 
     def _retire_account(self, account_id, error):
         removed = self.accounts.pop(account_id, None)
         if removed:
             self.retire(removed, error)
-            if isinstance(error, CrawlerVerificationError) and removed.get('proxy_id'):
-                # A shared exit pause cannot be bypassed by its other accounts.
-                self.accounts = {key: account for key, account in self.accounts.items()
-                                 if account.get('proxy_id') != removed['proxy_id']}
 
     @staticmethod
     def original(item, key, keyword):

@@ -858,6 +858,21 @@ class MediaCrawlerAdapter:
                             append_stop_error(f"process group cleanup failed: {exc}")
                             cleanup_failed = True
 
+                def raise_platform_failure(log: str) -> None:
+                    # A challenge or rate limit must never be retried as an expired login,
+                    # including when the child catches the error and exits successfully.
+                    if "PLATFORM_RATE_LIMITED" in log:
+                        raise CrawlerRateLimitError("平台请求被限流，共享冷却已记录；保留已采集内容，冷却结束后再继续")
+                    if "REQUEST_SCHEDULER_WAIT_EXCEEDED" in log:
+                        raise CrawlerRateLimitError("等待共享请求额度或冷却超时；未启动后续请求，请稍后继续")
+                    recorded = bool(route_context and getattr(route_context, 'account_risk_recorded', False))
+                    if recorded or "ACCOUNT_VERIFY" in log:
+                        error = CrawlerVerificationError("采集账号需要平台验证")
+                        error.account_risk_recorded = recorded
+                        raise error
+                    if ACCOUNT_AUTH_INVALID_MARKER in log:
+                        raise CrawlerAuthenticationError("所选采集账号登录态已失效，请重新登录")
+
                 def raise_exit_failure(returncode: int | None) -> None:
                     stdout_file.flush()
                     stderr_file.flush()
@@ -872,16 +887,7 @@ class MediaCrawlerAdapter:
                         else ""
                     )
                     from .crawler_route import raise_route_log_error
-                    if "PLATFORM_RATE_LIMITED" in stdout or "PLATFORM_RATE_LIMITED" in stderr:
-                        raise CrawlerRateLimitError("平台请求被限流，共享冷却已记录；保留已采集内容，冷却结束后再继续")
-                    if "REQUEST_SCHEDULER_WAIT_EXCEEDED" in stdout or "REQUEST_SCHEDULER_WAIT_EXCEEDED" in stderr:
-                        raise CrawlerRateLimitError("等待共享请求额度或冷却超时；未启动后续请求，请稍后继续")
-                    if ACCOUNT_AUTH_INVALID_MARKER in stdout or ACCOUNT_AUTH_INVALID_MARKER in stderr:
-                        raise CrawlerAuthenticationError("所选采集账号登录态已失效，请重新登录")
-                    if "ACCOUNT_VERIFY" in stdout or "ACCOUNT_VERIFY" in stderr:
-                        error = CrawlerVerificationError("采集账号触发平台验证")
-                        error.account_risk_recorded = bool(route_context and getattr(route_context, 'account_risk_recorded', False))
-                        raise error
+                    raise_platform_failure(stdout + '\n' + stderr)
                     terminal_error = stderr.rstrip().rpartition("\n")[2]
                     if terminal_error == "tools.collection_route.CollectionRouteError: SCHEDULER_DATABASE_BUSY":
                         raise CrawlerCollectionIncompleteError(
@@ -967,18 +973,7 @@ class MediaCrawlerAdapter:
                     # A caught platform limit must never look like successful completion.
                     terminal_log = stderr_path.read_text(encoding='utf-8', errors='replace') + stdout_path.read_text(encoding='utf-8', errors='replace')
                     from .crawler_route import raise_route_log_error
-                    if 'PLATFORM_RATE_LIMITED' in terminal_log or 'REQUEST_SCHEDULER_WAIT_EXCEEDED' in terminal_log:
-                        raise CrawlerRateLimitError("平台请求额度或冷却限制已生效；保留已采集内容，请稍后继续")
-
-                    # MediaCrawler may catch a platform response and exit cleanly;
-                    # inspect its log marker even when the process return code is 0.
-                    if stderr_path.exists() and "ACCOUNT_VERIFY" in stderr_path.read_text(
-                        encoding="utf-8", errors="replace"
-                    ):
-                        error = CrawlerVerificationError("采集账号触发平台验证")
-                        error.account_risk_recorded = bool(route_context and getattr(route_context, 'account_risk_recorded', False))
-                        raise error
-
+                    raise_platform_failure(terminal_log)
                     raise_route_log_error(terminal_log)
                     if 'BROWSER_INITIALIZATION_FAILED:' in terminal_log:
                         raise CrawlerBrowserInitializationError()

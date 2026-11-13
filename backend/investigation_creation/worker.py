@@ -260,12 +260,13 @@ class InvestigationWorker:
 
     def _execute_local_resume(self, run, command):
         if command["action"] == "resume_crawl":
+            from backend.audit_agent.geographic_recovery import geographic_resume_message
             from backend.audit_agent.geographic_status import geographic_resume_blocker
             jobs = self.execution_adapter.job_store
             blocker = geographic_resume_blocker(jobs.get(run.job_id) or {}, jobs.db_path)
             if blocker:
                 return self.store.mark_interrupted(run.id, run.claim_token,
-                    error_code=blocker, error_message="地域采集结果尚未确认，不能自动重复采集。")
+                    error_code=blocker, error_message=geographic_resume_message(blocker))
         configuration = self._validated_configuration_or_fail(run,
             refresh_stale_routes=command["action"] == "resume_crawl",
             validate_dynamic=command["action"] == "resume_crawl")

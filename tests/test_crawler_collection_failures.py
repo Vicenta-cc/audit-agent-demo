@@ -212,3 +212,14 @@ except CollectionIncompleteError:
     assert {p['content_id']:p['status'] for p in statuses}=={'123':'complete','456':'failed'}
     assert (output/'douyin/images/123/000.jpeg').exists()
     assert not (output/'douyin/images/456/000.jpeg').exists()
+
+
+@pytest.mark.parametrize('exit_code', [0, 1])
+@pytest.mark.parametrize('markers,expected', [
+    ('ACCOUNT_AUTH_INVALID: expired', CrawlerAuthenticationError),
+    ('ACCOUNT_AUTH_INVALID: expired\nACCOUNT_VERIFY: verification', CrawlerVerificationError),
+])
+def test_child_account_marker_precedence(handoff, exit_code, markers, expected):
+    write_handoff_failure(handoff, markers, exit_code)
+    with pytest.raises(expected):
+        handoff.run()

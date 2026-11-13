@@ -888,6 +888,9 @@ class AuditPipeline:
                                     self._media_route_context.value = None
                                     if borrowed is not None:
                                         borrowed.__exit__(None, None, None)
+                    except CrawlerVerificationError as exc:
+                        analysis_errors.append(exc)
+                        job_store.update_control(self.job_id, crawl_stop_requested=True)
                     except CollectionRouteError as exc:
                         analysis_errors.append(exc)
                         job_store.update_control(self.job_id, analysis_stop_requested=True)
@@ -1287,6 +1290,10 @@ class AuditPipeline:
                                             crawler_account_id
                                         )
                                         exc.account_risk_recorded = True
+                                    if request.platform == "dy":
+                                        if getattr(self._stream_route_error, 'code', None) == 'PROXY_UNAVAILABLE':
+                                            raise
+                                        break
                                     remaining = len(candidates) - candidate_index - 1
                                     job_store.log(
                                         self.job_id,
@@ -1408,7 +1415,7 @@ class AuditPipeline:
                         stream_queue.put(None)
                         stream_analyzer.join()
                 for analysis_error in analysis_errors:
-                    if isinstance(analysis_error, CollectionRouteError):
+                    if isinstance(analysis_error, (CrawlerVerificationError, CollectionRouteError)):
                         raise analysis_error
                 if analysis_errors:
                     job_store.update_control(self.job_id, analysis_stop_requested=True)
@@ -1733,7 +1740,9 @@ class AuditPipeline:
         except Exception as exc:
             self._assert_geographic_lease()
             stream_route_error = getattr(self, "_stream_route_error", None)
-            if stream_route_error is not None:
+            secondary_route_error = (isinstance(exc, CrawlerVerificationError)
+                                     and getattr(stream_route_error, 'code', None) == 'PROXY_UNAVAILABLE')
+            if stream_route_error is not None and not secondary_route_error:
                 self._record_route_block(stream_route_error)
                 raise stream_route_error from None
             if getattr(request, "run_crawler", False) and not crawl_epoch_is_current():
@@ -1743,7 +1752,12 @@ class AuditPipeline:
                 if crawler_account_id and not getattr(exc, "account_risk_recorded", False):
                     AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down_after_risk(
                         crawler_account_id)
-                exc = RuntimeError("crawler_account_verification_required: 采集账号需要平台验证，请完成验证后再继续；登录态未判定失效。")
+                if self._geographic_entry:
+                    from .geographic_recovery import GEOGRAPHIC_VERIFICATION_MESSAGE
+                    message = GEOGRAPHIC_VERIFICATION_MESSAGE
+                else:
+                    message = "已收到平台验证信号，请在账号管理中核验后再继续采集。登录态未判定失效。"
+                exc = RuntimeError("crawler_account_verification_required: " + message)
             elif isinstance(exc, CrawlerAuthenticationError):
                 if crawler_account_id and not getattr(exc, "account_risk_recorded", False):
                     crawler_account_store.mark_expired(crawler_account_id, "登录态已失效")
@@ -1864,6 +1878,11 @@ class AuditPipeline:
                 bundle.close()
 
     def _handle_stream_route_error(self, exc: CollectionRouteError, entry, route_context=None) -> None:
+        if exc.code == 'PROXY_UNAVAILABLE' and getattr(route_context, 'account_risk_recorded', False):
+            # Revoking this account's admission also stops its in-flight media requests.
+            error = CrawlerVerificationError("采集账号触发平台验证")
+            error.account_risk_recorded = True
+            raise error from exc
         if exc.code in {"PROXY_BUSY", "SUPPLEMENT_DEFERRED"}:
             if not settings.crawler_safety_enabled:
                 job_store.update_control(self.job_id, analysis_stop_requested=True)
@@ -2886,13 +2905,14 @@ class AuditPipeline:
                     if keyword in keyword_failures:
                         del keyword_failures[keyword]
                         persist_keyword_failures()
-                # 触发验证或登录失效的账号退出本任务轮换，同一个词只换下一个账号重试一次；
-                # 重试也失败（一个高风险词最多连累两个账号）或轮换表空了，就按原来的方式整任务失败。
-                # 限流不能据此归因 IP，仍停止本轮而不轮换绕过。
+                # 登录态失效可换号重试一次；抖音验证需要人工核验。
                 except (CrawlerVerificationError, CrawlerAuthenticationError) as exc:
                     if not account["id"]:
                         raise
                     self._retire_rotation_account(account, exc)
+                    if platform == "dy" and isinstance(exc, CrawlerVerificationError):
+                        exc.triage_rotation_stop = True
+                        raise
                     rotation.pop(position)
                     # Shared egress verification is not bypassed by another bound account.
                     if isinstance(exc, CrawlerVerificationError) and account.get("proxy_id"):

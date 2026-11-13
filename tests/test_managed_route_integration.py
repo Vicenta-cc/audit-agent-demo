@@ -315,7 +315,7 @@ def test_real_proxy_deadline_bounds_long_running_ticket_and_draining_stops_renew
         store.renew('after-stop', route_operation_id=operation.operation_id, owner_id='owner', lease_version=7)
 
 
-def test_risk_receipt_pauses_shared_exit_before_live_child_drains(tmp_path,monkeypatch):
+def test_risk_receipt_revokes_account_admission_before_live_child_drains(tmp_path,monkeypatch):
     from backend.audit_agent.crawler_account_store import CrawlerAccountStore
     monkeypatch.setattr(app.settings,'crawler_safety_enabled',True)
     accounts=CrawlerAccountStore(tmp_path/'accounts.db');account=accounts.create(platform='dy',display_name='risk')
@@ -343,8 +343,8 @@ def test_risk_receipt_pauses_shared_exit_before_live_child_drains(tmp_path,monke
         assert accounts.get(account['id'])['route_state']=='challenge_paused'
         assert bundle.account_risk_recorded is True
         with accounts._connect() as conn:
-            assert conn.execute('SELECT pause_reason FROM crawler_shared_exits WHERE exit_key=?',(snap.observed_exit_ip,)).fetchone()[0]=='ACCOUNT_CHALLENGE'
-            assert conn.execute('SELECT state FROM crawler_route_admissions WHERE operation_id=?',(snap.operation_id,)).fetchone()[0]=='active'
+            assert conn.execute('SELECT pause_reason FROM crawler_shared_exits WHERE exit_key=?',(snap.observed_exit_ip,)).fetchone()[0]==''
+            assert conn.execute('SELECT state FROM crawler_route_admissions WHERE operation_id=?',(snap.operation_id,)).fetchone()[0]=='ended'
     finally:
         if child.poll() is None:child.terminate();child.wait(timeout=5)
         config.close();receipts.close()
@@ -468,7 +468,7 @@ runpy.run_path(os.environ['FIXTURE_HELPER'],run_name='__main__')
                 assert current['route_state']==('active' if outcome=='success' else 'manual_required') and current['risk_count']==1
                 with accounts._connect() as conn:
                     pause=conn.execute('SELECT pause_reason FROM crawler_shared_exits WHERE exit_key=?',(fixture.exit_ip,)).fetchone()[0]
-                    assert bool(pause)==(outcome!='success')
+                    assert not pause
                 if outcome=='success':
                     # A new real browser and HTTP pair can resume on the same Profile after recovery.
                     accounts.release_route_admission(snap.operation_id)

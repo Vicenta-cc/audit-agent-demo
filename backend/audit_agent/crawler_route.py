@@ -394,7 +394,7 @@ def resolve_account_route(account_id, *, account_store=None, expected_binding_re
 
 def acquire_route_execution(account_id, execution_id, owner_id, *, account_store=None,
                             account_handle=None, snapshot=None, allow_probe=False, recovery_claim=None, human_login_operation_id=None,
-                            migration_id=None, investigation_collection=False):
+                            migration_id=None, investigation_collection=False, interactive_intent=False):
     from .crawler_child_runtime import require_browser_available
     require_browser_available(account_id, store=account_store, owner_id=owner_id,
         migration_id=migration_id, operation_id=execution_id)
@@ -404,7 +404,18 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
     resource = store.get_public(snapshot.proxy_id) if snapshot and snapshot.route_mode not in {'direct_degraded', 'legacy_direct'} else None
     if snapshot:
         authorize_route_owner(account_id, snapshot.proxy_id if snapshot.route_mode not in {'direct_degraded', 'legacy_direct'} else None, owner_id, account_store=account_store)
-    bundle = ExecutionLeaseBundle(execution_id, owner_id, account_id, snapshot)
+    # The login manager holds the host login lease and the account profile. Only
+    # its login helper may share a healthy direct route with a crawl.
+    interactive_login = bool(
+        interactive_intent and human_login_operation_id == execution_id and account_handle is not None
+        and not (migration_id or investigation_collection or settings.crawler_proxy_trial_id)
+        and snapshot and snapshot.route_mode == 'legacy_direct'
+        and account_store is not None
+        and account_store.can_share_direct_login(account_id, owner_id, execution_id, recovery_claim,
+            snapshot.observed_exit_ip, snapshot.exit_generation)
+        and not account_store.direct_exit_paused()
+    )
+    bundle = ExecutionLeaseBundle(execution_id, owner_id, account_id, snapshot, interactive_login=interactive_login)
     # The first exit check runs before a managed snapshot exists. All helpers
     # for this collection inherit its accounting policy from the owner.
     bundle.investigation_collection = investigation_collection
@@ -425,10 +436,14 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
             expected_config_revision=snapshot.config_revision if snapshot else None, allow_probe=allow_probe)
         if (fresh is None) != (snapshot is None):
             raise CollectionRouteError('PROXY_REVISION_MISMATCH')
+        if interactive_login and (account_store.direct_exit_paused()
+                or fresh.observed_exit_ip != snapshot.observed_exit_ip or fresh.exit_generation != snapshot.exit_generation):
+            raise CollectionRouteError('PROXY_REVISION_MISMATCH')
     except Exception:
         bundle.close()
         raise
     if snapshot is not None and (getattr(settings, 'crawler_safety_enabled', False) or snapshot.route_mode == 'legacy_direct'):
+        acquired_claim = None
         try:
             from dataclasses import replace
             contract = route_contract()
@@ -448,6 +463,8 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
                 snapshot = replace(snapshot, observed_exit_ip=observed.ip, observed_exit_at=observed.observed_at,
                     scope_ids=(tuple(sorted(['dy','dy:account:'+account_id,'dy:service_exit:'+observed.ip,'dy:exit:'+observed.ip])) if snapshot.route_mode in {'direct_degraded','legacy_direct'} else contract.derive_scope_ids('dy', account_id, snapshot.proxy_id, observed.ip)))
                 bundle.snapshot = snapshot
+            if interactive_login and account_store.direct_exit_paused():
+                raise CollectionRouteError('PROXY_UNAVAILABLE')
             observation = bundle.account_store.consume_cached_exit(snapshot.observed_exit_ip, observed_at=snapshot.observed_exit_at, service_exit=snapshot.route_mode in {'direct_degraded', 'legacy_direct'})
             if not bundle.acquire_exit_capacity(snapshot.observed_exit_ip):
                 bundle.close()
@@ -455,13 +472,17 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
             if human_login_operation_id and not recovery_claim:
                 recovery_claim=bundle.account_store.begin_manual_recovery(account_id,human_login_operation_id,owner_id=owner_id,allow_active=True,observed_exit=snapshot.observed_exit_ip,generation=observation['shared_exit_generation'])
                 if not recovery_claim:raise CollectionRouteError('PROXY_BUSY')
+                acquired_claim = recovery_claim
             bundle.manual_recovery_claim=recovery_claim if human_login_operation_id else None
             bundle.login_operation_id=human_login_operation_id
             mode = 'legacy_direct' if snapshot.route_mode == 'legacy_direct' else bundle.account_store.get(account_id).get('route_mode', 'proxy_required')
             managed = replace(snapshot, route_mode=mode, operation_id=secrets.token_hex(16), lease_id=secrets.token_hex(16),
                 lease_version=1, owner_id=owner_id, context_id=secrets.token_hex(16),
                 exit_generation=observation['shared_exit_generation'],
-                safety_db_path=str(bundle.account_store.db_path.resolve()), recovery_claim=recovery_claim or '',
+                safety_db_path=str(bundle.account_store.db_path.resolve()),
+                # Ordinary login keeps its settlement claim in the parent. Its
+                # child gets no recovery privilege if the exit is paused later.
+                recovery_claim='' if interactive_login else recovery_claim or '',
                 login_bootstrap=bool(human_login_operation_id or allow_probe and not recovery_claim))
             managed = replace(managed, snapshot_digest=contract.snapshot_digest(managed))
             operation = RouteOperation(operation_id=managed.operation_id, lease_id=managed.lease_id,
@@ -472,7 +493,8 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
                 scope_ids=managed.scope_ids, snapshot_digest=managed.snapshot_digest, proxy_expires_at=managed.expires_at or 0)
             bundle.route_operation_store = RouteOperationStore(str(settings.request_scheduler_db.resolve()))
             try:
-                token = bundle.account_store.admit_route(account_id, managed.observed_exit_ip, managed.exit_generation, managed.operation_id, recovery_claim=recovery_claim, login_bootstrap=managed.login_bootstrap)
+                token = bundle.account_store.admit_route(account_id, managed.observed_exit_ip, managed.exit_generation, managed.operation_id, recovery_claim=recovery_claim, login_bootstrap=managed.login_bootstrap,
+                    require_healthy_exit=interactive_login)
                 bundle.add_closer(lambda: bundle.account_store.release_route_admission(token))
                 bundle.route_operation_store.issue(operation)
                 bundle.add_closer(lambda: end_route_operation(bundle))
@@ -482,6 +504,9 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
             bundle.snapshot = managed
         except Exception as exc:
             bundle.close()
+            if acquired_claim:
+                bundle.account_store.finish_manual_recovery(account_id, human_login_operation_id,
+                    acquired_claim, 'uncertain', owner_id=owner_id)
             raise _safe_error(exc) from None
     return bundle
 
@@ -516,10 +541,13 @@ def require_route_renewal(bundle):
     accounts = bundle.account_store
     authorize_route_owner(snapshot.account_id, None if snapshot.route_mode in DIRECT_ROUTE_MODES else snapshot.proxy_id,
         bundle.owner_id, account_store=accounts)
+    interactive_login = getattr(bundle, 'interactive_login', False)
+    if interactive_login and accounts.direct_exit_paused():
+        raise CollectionRouteError('PROXY_UNAVAILABLE')
     _require_same_route(snapshot, accounts, allow_probe=bool(snapshot.login_bootstrap or snapshot.recovery_claim))
     accounts.admit_route(snapshot.account_id, snapshot.observed_exit_ip, snapshot.exit_generation,
-        snapshot.operation_id, recovery_claim=snapshot.recovery_claim, login_bootstrap=snapshot.login_bootstrap,
-        require_existing=True)
+        snapshot.operation_id, recovery_claim=bundle.manual_recovery_claim if interactive_login else snapshot.recovery_claim,
+        login_bootstrap=snapshot.login_bootstrap, require_existing=True, require_healthy_exit=interactive_login)
 
 
 def parent_renew_ticket(bundle, prior):
@@ -887,7 +915,7 @@ def record_login_challenge(bundle):
             return
         accounts=bundle.account_store
         account_id=bundle.snapshot.account_id
-        claim=getattr(bundle.snapshot,'recovery_claim','')
+        claim=getattr(bundle,'manual_recovery_claim',None) or getattr(bundle.snapshot,'recovery_claim','')
         with accounts._connect() as db:
             prior=db.execute("SELECT risk_recorded FROM crawler_manual_recovery_operations WHERE account_id=? AND claim=? AND state='claimed'",(account_id,claim)).fetchone() if claim else None
         if not prior or not prior[0]:

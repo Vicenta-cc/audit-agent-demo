@@ -47,7 +47,7 @@ def test_initial_human_login_can_retry_cancelled_claim_and_freeze_trusted_identi
 
 def admit_worker(path, account_id, barrier, queue):
     store=CrawlerAccountStore(path)
-    barrier.wait()
+    barrier.wait(timeout=15)
     try:
         store.admit_route(account_id,'203.0.113.10',1,'concurrent-'+str(multiprocessing.current_process().pid))
         queue.put('admitted')
@@ -57,14 +57,14 @@ def admit_worker(path, account_id, barrier, queue):
 
 def pause_worker(path, account_id, barrier, queue):
     store=CrawlerAccountStore(path)
-    barrier.wait()
+    barrier.wait(timeout=15)
     store.pause_account_exit(account_id,until=time.time()+60)
     queue.put('paused')
 
 
 def recovery_worker(path, account_id, barrier, queue):
     store=CrawlerAccountStore(path)
-    barrier.wait()
+    barrier.wait(timeout=15)
     queue.put(bool(store.claim_recovery(account_id)))
 
 
@@ -85,9 +85,9 @@ def test_actual_process_pause_admission_fence(safety):
     store,a,b=safety
     ctx=multiprocessing.get_context('spawn')
     barrier,queue=ctx.Barrier(3),ctx.Queue()
-    processes=[ctx.Process(target=admit_worker,args=(store.db_path,b['id'],barrier,queue)),ctx.Process(target=pause_worker,args=(store.db_path,a['id'],barrier,queue))]
+    processes=[ctx.Process(target=admit_worker,args=(store.db_path,a['id'],barrier,queue)),ctx.Process(target=pause_worker,args=(store.db_path,a['id'],barrier,queue))]
     for process in processes: process.start()
-    barrier.wait()
+    barrier.wait(timeout=15)
     for process in processes:
         process.join(15)
         assert process.exitcode==0
@@ -99,8 +99,9 @@ def test_actual_process_pause_admission_fence(safety):
         assert all(row[0]<=pause_at for row in admissions)
     # A reservation may serialize before the pause, never after it.
     with pytest.raises(ValueError,match='ACCOUNT_CHALLENGE'):
-        store.admit_route(b['id'],'203.0.113.10',1,'after-committed-pause')
-    assert store.available_accounts('dy')==[]
+        store.admit_route(a['id'],'203.0.113.10',1,'after-committed-pause')
+    assert store.admit_route(b['id'],'203.0.113.10',1,'unaffected-account')
+    assert [item['id'] for item in store.available_accounts('dy')] == [b['id']]
     observed=store.observe_shared_exit('203.0.113.11')
     c=account(store,'independent')
     store.set_route_state(c['id'],state='active',route_mode='direct_degraded',shared_exit_key='203.0.113.11',generation=observed['shared_exit_generation'])
@@ -158,7 +159,7 @@ def test_recovery_actual_process_claim_is_single(safety):
     barrier,queue=ctx.Barrier(3),ctx.Queue()
     processes=[ctx.Process(target=recovery_worker,args=(store.db_path,a['id'],barrier,queue)) for _ in range(2)]
     for process in processes: process.start()
-    barrier.wait()
+    barrier.wait(timeout=15)
     for process in processes:
         process.join(15)
         assert process.exitcode==0
@@ -184,7 +185,8 @@ def test_recovery_one_bounded_operation_retains_risk(safety,result,expected):
         assert store.admit_route(b['id'],'203.0.113.10',1,'after-success')
     else:
         assert store.get(a['id'])['route_state']=='manual_required'
-        with pytest.raises(ValueError): store.admit_route(b['id'],'203.0.113.10',1,'after-failed')
+        with pytest.raises(ValueError): store.admit_route(a['id'],'203.0.113.10',1,'after-failed')
+        assert store.admit_route(b['id'],'203.0.113.10',1,'unaffected-by-recovery')
 
 
 def test_secret_event_codes_never_persist(safety):
@@ -270,7 +272,7 @@ def test_initial_login_admission_explicit_bootstrap_only(tmp_path):
 
 def fairness_worker(path, selected, eligible, barrier, queue):
     store=CrawlerAccountStore(path)
-    barrier.wait()
+    barrier.wait(timeout=15)
     store.record_fair_selection(selected,eligible)
     queue.put(True)
 
@@ -281,7 +283,7 @@ def test_fair_skip_updates_are_committed_across_processes(safety):
     barrier,queue=ctx.Barrier(4),ctx.Queue()
     processes=[ctx.Process(target=fairness_worker,args=(store.db_path,a['id'],[a['id'],b['id']],barrier,queue)) for _ in range(3)]
     for process in processes: process.start()
-    barrier.wait()
+    barrier.wait(timeout=15)
     for process in processes:
         process.join(15)
         assert process.exitcode==0
@@ -517,3 +519,76 @@ def test_legacy_confirmed_proxy_observation_warms_canonical_after_additive_upgra
     AccountRotationManager(accounts).refresh_authorized('dy','owner',{value['id']})
     assert calls==[value['id']]
     assert accounts.available_accounts('dy')[0]['id']==value['id']
+
+
+def test_one_account_challenge_revokes_its_live_admission_only(safety):
+    store, a, b = safety
+    ip = '203.0.113.10'
+    store.admit_route(a['id'], ip, 1, 'collect-a')
+    store.admit_route(b['id'], ip, 1, 'collect-b')
+    AccountRotationManager(store).cool_down_after_risk(a['id'])
+    assert store.get(a['id'])['route_state'] == 'challenge_paused'
+    with store._connect() as db:
+        assert dict(db.execute('SELECT operation_id,state FROM crawler_route_admissions')) == {
+            'collect-a': 'ended', 'collect-b': 'active'}
+        assert db.execute('SELECT pause_reason FROM crawler_shared_exits WHERE exit_key=?', (ip,)).fetchone()[0] == ''
+    with pytest.raises(ValueError):
+        store.admit_route(a['id'], ip, 1, 'collect-a-again')
+    assert store.admit_route(b['id'], ip, 1, 'collect-b', require_existing=True)
+    assert store.available_accounts('dy') == [store.get(b['id'])]
+
+
+@pytest.mark.parametrize('pause_reason', ['PLATFORM_429', 'PROXY_TRANSPORT_FAILED', 'ACCOUNT_CHALLENGE'])
+def test_recovering_one_account_does_not_clear_an_unrelated_exit_pause(safety, pause_reason):
+    store, a, b = safety
+    AccountRotationManager(store).cool_down_after_risk(a['id'])
+    with store._connect() as db:
+        db.execute("UPDATE crawler_accounts SET paused_until=?,cooldown_until=NULL WHERE id=?", (time.time()-1, a['id']))
+    claim = store.claim_recovery(a['id'])
+    assert claim
+    with store._connect() as db:
+        db.execute('UPDATE crawler_shared_exits SET pause_reason=?,paused_until=?', (pause_reason, time.time()+600))
+    store.finish_recovery(a['id'], claim, 'success')
+    with pytest.raises(ValueError):
+        store.admit_route(b['id'], '203.0.113.10', 1, 'blocked-by-independent-pause')
+
+
+def test_upgrade_preserves_a_legacy_exit_pause_until_last_original_account_recovers(safety):
+    store, a, b = safety
+    ip = '203.0.113.10'
+    for item in (a, b):
+        expired_incident(store, item)
+    with store._connect() as db:
+        db.execute('DROP TABLE crawler_legacy_exit_pauses')
+        db.execute("UPDATE crawler_shared_exits SET pause_reason='ACCOUNT_CHALLENGE', paused_until=?", (time.time()-1,))
+    upgraded = CrawlerAccountStore(store.db_path)
+    assert upgraded.available_accounts('dy') == []
+    with pytest.raises(ValueError, match='旧线路暂停'):
+        upgraded.delete(a['id'])
+    for item in (a, b):
+        claim = upgraded.claim_recovery(item['id'])
+        op = 'recover-' + item['id']
+        assert upgraded.admit_route(item['id'], ip, 1, op, recovery_claim=claim)
+        upgraded.release_route_admission(op)
+        upgraded.finish_recovery(item['id'], claim, 'success')
+        with upgraded._connect() as db:
+            pause = db.execute('SELECT pause_reason FROM crawler_shared_exits WHERE exit_key=?', (ip,)).fetchone()[0]
+            assert pause == ('ACCOUNT_CHALLENGE' if item == a else '')
+    assert len(upgraded.available_accounts('dy')) == 2
+
+
+def test_new_shared_pause_revokes_inflight_recovery_on_that_exit(safety):
+    store, a, b = safety
+    ip = '203.0.113.10'
+    expired_incident(store, a)
+    claim = store.claim_recovery(a['id'])
+    store.admit_route(a['id'], ip, 1, 'original-recovery', recovery_claim=claim)
+    store.admit_route(b['id'], ip, 1, 'other-collection')
+    proxies = CrawlerProxyStore(store, cipher=AuthStateCipher(encryption_key='fixture'))
+    resource = proxies.create(display_name='confirmed route', endpoint='http://proxy.example:8080', expires_at=time.time()+600)
+    proxies.observe_exit(resource['id'], ip)
+    proxies.pause_shared_exit(resource['id'], reason='PLATFORM_429')
+    with store._connect() as db:
+        assert {r[0] for r in db.execute('SELECT state FROM crawler_route_admissions')} == {'ended'}
+    with pytest.raises(ValueError):
+        store.admit_route(a['id'], ip, 1, 'subsequent-recovery', recovery_claim=claim)

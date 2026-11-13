@@ -5,7 +5,7 @@ import pytest
 
 from audit_agent.scoped_execution import ScopedExecution
 from audit_agent.scoped_selection_store import Store
-from audit_agent.crawler_adapter import (CrawlerMediaDownloadError, CrawlerVerificationError,
+from audit_agent.crawler_adapter import (CrawlerMediaDownloadError, CrawlerAuthenticationError, CrawlerVerificationError,
                                        CrawlerRateLimitError)
 from experiments.geographic_selection.fixtures import fixture_plan, fixture_occurrence
 from experiments.geographic_selection.bridge import validate_geo_record
@@ -202,7 +202,7 @@ def test_rate_limit_propagates_and_preserves_unknown_reservation(tmp_path):
 
 def test_one_auth_rotation_without_rescoring(tmp_path):
     h = Harness(tmp_path, rows={'A': [('x', '克拉玛依欠薪'), ('z', '克拉玛依欠薪')], 'B': []}, max_notes=1)
-    h.failure['x'] = CrawlerVerificationError('verification')
+    h.failure['x'] = CrawlerAuthenticationError('expired')
     assert h.runner().run()['collected'] == 1
     assert [c for c in h.calls if c[0] == 'detail'] == [('detail', 'x'), ('detail', 'z')]
     assert len([c for c in h.calls if c[0] == 'risk']) == 2
@@ -301,12 +301,23 @@ def test_delivery_failure_retries_same_key_and_never_recollects(tmp_path):
     assert len([c for c in h.calls if c[0] == 'detail']) == 1
 
 
+def test_detail_verification_stops_without_reserving_another_account_on_resume(tmp_path):
+    h = Harness(tmp_path)
+    h.failure['x'] = CrawlerVerificationError('verification')
+    with pytest.raises(CrawlerVerificationError):
+        h.runner().run()
+    report = h.runner().run()
+    assert 'crawler_account_verification_required' in report['reasons']
+    assert report['resume_blocked_reason'] == 'geographic_account_verification_required'
+    assert [c for c in h.calls if c[0] in {'detail', 'rotate'}] == [('detail', 'x')]
+
+
 def test_auth_missing_or_interrupted_rotation_is_not_silently_resumed(tmp_path):
     h = Harness(tmp_path, rows={'A': [('x', '克拉玛依欠薪'), ('z', '克拉玛依欠薪')], 'B': []})
-    h.failure['x'] = CrawlerVerificationError('verification')
+    h.failure['x'] = CrawlerAuthenticationError('expired')
     runner = h.runner()
     runner.rotate = lambda query, account, error: None
-    with pytest.raises(CrawlerVerificationError):
+    with pytest.raises(CrawlerAuthenticationError):
         runner.run()
     assert 'auth_no_replacement' in h.runner().run()['reasons']
     assert [c for c in h.calls if c[0] == 'detail'] == [('detail', 'x')]

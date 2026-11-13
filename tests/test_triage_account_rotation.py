@@ -221,13 +221,14 @@ def test_keywords_rotate_serially_across_accounts_for_search_and_detail(env, mon
     assert all(kw["skip_profile_verify_regex"] == "官方|局$" for kw in crawler.search_kwargs)
 
 
-def test_verification_retires_account_and_retries_same_keyword_on_next(env, monkeypatch):
+def test_verification_stops_at_affected_account_and_preserves_prior_results(env, monkeypatch):
     a, b, c = (env.add(name) for name in "ABC")
     crawler = RotationCrawler(fail={(b["id"], "词2"): CrawlerVerificationError("verify")})
-    output = _sweep(env, monkeypatch, crawler, _as_rotation([a, b, c]))
-    assert crawler.search_accounts == [("词1", a["id"]), ("词2", c["id"]), ("词3", a["id"]), ("词4", c["id"])]
-    assert crawler.detail_accounts == crawler.search_accounts
-    assert len(output.contents) == 4
+    with pytest.raises(CrawlerVerificationError):
+        _sweep(env, monkeypatch, crawler, _as_rotation([a, b, c]))
+    assert [kw["account_id"] for kw in crawler.search_kwargs] == [a["id"], b["id"]]
+    assert crawler.detail_accounts == [("词1", a["id"])]
+    assert env.store.get(c["id"])["risk_count"] == 0
     cooled = env.store.get(b["id"])
     assert cooled["risk_count"] == 1 and cooled["failure_kind"] == "verify"
     assert 1790 < (datetime.fromisoformat(cooled["cooldown_until"]) - datetime.now()).total_seconds() <= 1800
@@ -251,36 +252,25 @@ def test_authentication_error_expires_account_and_rotation_continues(env, monkey
     assert env.store.get(a["id"])["status"] == "expired"
 
 
-def test_all_accounts_failing_raises_and_marks_risk_as_recorded(env, monkeypatch):
-    a, b = env.add("A"), env.add("B")
-    crawler = RotationCrawler(fail={(a["id"], "词1"): CrawlerVerificationError("verify"),
-                                    (b["id"], "词1"): CrawlerVerificationError("verify")})
-    with pytest.raises(CrawlerVerificationError) as raised:
-        _sweep(env, monkeypatch, crawler, _as_rotation([a, b]))
-    assert raised.value.account_risk_recorded is True
-    assert env.store.get(a["id"])["risk_count"] == 1
-    assert env.store.get(b["id"])["risk_count"] == 1
-
-
-def test_keyword_failing_on_two_accounts_stops_without_touching_the_third(env, monkeypatch):
+def test_auth_failure_on_two_accounts_stops_without_touching_the_third(env, monkeypatch):
     a, b, c = (env.add(name) for name in "ABC")
-    crawler = RotationCrawler(fail={(a["id"], "词1"): CrawlerVerificationError("verify"),
-                                    (b["id"], "词1"): CrawlerVerificationError("verify")})
-    with pytest.raises(CrawlerVerificationError) as raised:
+    crawler = RotationCrawler(fail={(a["id"], "词1"): CrawlerAuthenticationError("auth"),
+                                    (b["id"], "词1"): CrawlerAuthenticationError("auth")})
+    with pytest.raises(CrawlerAuthenticationError) as raised:
         _sweep(env, monkeypatch, crawler, _as_rotation([a, b, c]))
     assert raised.value.account_risk_recorded is True
     assert [kw["account_id"] for kw in crawler.search_kwargs] == [a["id"], b["id"]]
     assert crawler.search_accounts == [] and crawler.detail_accounts == []
-    assert env.store.get(a["id"])["risk_count"] == 1
-    assert env.store.get(b["id"])["risk_count"] == 1
+    assert env.store.get(a["id"])["status"] == "expired"
+    assert env.store.get(b["id"])["status"] == "expired"
     untouched = env.store.get(c["id"])
     assert untouched["risk_count"] == 0 and not untouched["cooldown_until"]
 
 
 def test_single_retry_is_per_keyword(env, monkeypatch):
     a, b, c, d = (env.add(name) for name in "ABCD")
-    crawler = RotationCrawler(fail={(a["id"], "词1"): CrawlerVerificationError("verify"),
-                                    (c["id"], "词2"): CrawlerVerificationError("verify")})
+    crawler = RotationCrawler(fail={(a["id"], "词1"): CrawlerAuthenticationError("auth"),
+                                    (c["id"], "词2"): CrawlerAuthenticationError("auth")})
     _sweep(env, monkeypatch, crawler, _as_rotation([a, b, c, d]), keywords="词1,词2,词3")
     assert crawler.search_accounts == [("词1", b["id"]), ("词2", d["id"]), ("词3", b["id"])]
 
@@ -397,7 +387,7 @@ def test_already_audited_suspicious_content_ends_normally_with_truthful_wording(
 
 
 class VerifyOnFirstAccountDetailCrawler(RotationCrawler):
-    """The only suspicious pick hits verification on account A; the retry on B has no alternative."""
+    """The selected detail receives a verification challenge."""
     def __init__(self, first_account_id):
         super().__init__()
         self.first_account_id = first_account_id
@@ -431,15 +421,11 @@ def test_pick_lost_to_verification_is_not_reported_as_no_suspicious_content(env,
     job = _run_pipeline(env, monkeypatch, crawler, a, engine=ScoreOnlyWord1(), max_total_notes=2,
                         settings_auto_analyze=True, **snapshot)
     messages = [log["message"] for log in job["logs"]]
-    assert any("改用账号" in m for m in messages)
+    assert not any("改用账号" in m for m in messages)
     assert crawler.detail_accounts == []
-    assert job["control"]["no_suspicious_content"] is False
+    assert job["status"] == "failed"
+    assert job["error"].startswith("crawler_account_verification_required:")
     assert not any(m.startswith("未发现") for m in messages)
-    if "_confirmed_analyze_limit" in snapshot:
-        assert job["status"] == "failed"
-        assert job["error"].startswith("no_valid_content_selected:")
-    else:
-        assert job["status"] == "completed"
 
 
 @_PATHS
@@ -477,21 +463,8 @@ def test_partial_selection_keeps_the_flag_off(env, monkeypatch):
     assert job["control"]["no_suspicious_content"] is False
 
 
-def test_pipeline_run_counts_each_account_risk_once_when_rotation_is_exhausted(env, monkeypatch):
-    a, b = env.add("A"), env.add("B")
-    crawler = RotationCrawler(fail={(a["id"], "词1"): CrawlerVerificationError("verify"),
-                                    (b["id"], "词1"): CrawlerVerificationError("verify")})
-    job = _run_pipeline(env, monkeypatch, crawler, a)
-    assert job["status"] == "failed"
-    assert job["error"].startswith("crawler_account_verification_required:")
-    assert env.store.get(a["id"])["risk_count"] == 1
-    assert env.store.get(b["id"])["risk_count"] == 1
-    assert crawler.search_accounts == []
-
-
 @pytest.mark.parametrize("per_task", [2, 3])
-def test_pipeline_run_stops_after_two_accounts_fail_one_keyword(env, monkeypatch, per_task):
-    # 外层账号循环不得换上第三个账号重跑同一个词：一个高风险词最多连累两个账号
+def test_pipeline_run_stops_after_first_verification(env, monkeypatch, per_task):
     monkeypatch.setattr(pipeline_module.settings, "triage_accounts_per_task", per_task)
     a, b, c, d = (env.add(name) for name in "ABCD")
     crawler = RotationCrawler(fail={(acc["id"], "词1"): CrawlerVerificationError("verify") for acc in (a, b, c, d)})
@@ -499,7 +472,7 @@ def test_pipeline_run_stops_after_two_accounts_fail_one_keyword(env, monkeypatch
     assert job["status"] == "failed"
     assert job["error"].startswith("crawler_account_verification_required:")
     tried = [kw["account_id"] for kw in crawler.search_kwargs]
-    assert len(tried) == 2 and tried[0] == a["id"] and len(set(tried)) == 2
+    assert tried == [a["id"]]
     for account in (a, b, c, d):
         stored = env.store.get(account["id"])
         if account["id"] in tried:
@@ -577,7 +550,7 @@ def test_cancelled_waiting_task_reserves_no_account(env):
 
 def test_each_keyword_logs_the_account_it_uses(env, monkeypatch):
     a, b, c = (env.add(name) for name in "ABC")
-    crawler = RotationCrawler(fail={(b["id"], "词2"): CrawlerVerificationError("verify")})
+    crawler = RotationCrawler(fail={(b["id"], "词2"): CrawlerAuthenticationError("auth")})
     _sweep(env, monkeypatch, crawler, _as_rotation([a, b, c]), keywords="词1,词2,词3")
     assert [line for line in env.logs if "使用账号" in line] == [
         "词「词1」使用账号 A", "词「词2」使用账号 B", "词「词2」使用账号 C", "词「词3」使用账号 A"]
@@ -602,7 +575,7 @@ def test_media_failure_preserves_successful_search_account_risk_handling(env, mo
 
 
 class TwoCandidateCrawler(RotationCrawler):
-    """词1 has two suspicious candidates; precise collection of p1 on account A hits verification."""
+    """词1 has two suspicious candidates; precise collection of p1 on account A finds expired auth."""
 
     def __init__(self, failing_account):
         super().__init__()
@@ -618,7 +591,7 @@ class TwoCandidateCrawler(RotationCrawler):
 
     def run_detail(self, platform, content_id, *, source_keyword, save_root=None, account_id="", **kwargs):
         if account_id == self.failing_account and content_id == "p1":
-            raise CrawlerVerificationError("verify during detail")
+            raise CrawlerAuthenticationError("auth expired during detail")
         self.details.append((content_id, account_id))
         self.detail_accounts.append((source_keyword, account_id))
         item = {"aweme_id": content_id, "desc": "full", "source_keyword": source_keyword}
@@ -634,7 +607,7 @@ class RankedEngine(ScoreAll):
         return CandidateScore(content_key, rank, 400 - rank, "rule", "", [], None, 0)
 
 
-def test_detail_verification_retries_with_the_next_candidate(env, monkeypatch):
+def test_expired_auth_retries_detail_with_the_next_candidate(env, monkeypatch):
     import json
     a, b = env.add("A"), env.add("B")
     crawler = TwoCandidateCrawler(failing_account=a["id"])
@@ -663,7 +636,7 @@ def test_detail_verification_retries_with_the_next_candidate(env, monkeypatch):
     [candidates_file] = save_root.glob("candidates/*/candidates.json")
     saved = json.loads(candidates_file.read_text(encoding="utf-8"))
     assert "p1" not in json.dumps(saved.get("collected_keys", []))
-    assert env.store.get(a["id"])["risk_count"] == 1
+    assert env.store.get(a["id"])["status"] == "expired"
 
 
 @pytest.mark.parametrize('code', ['PROXY_BUSY', 'PROXY_EXIT_CHANGED', 'PROXY_REVISION_MISMATCH'])
@@ -679,14 +652,15 @@ def test_route_error_stops_keyword_sweep_without_rotation_or_account_risk(env, m
     assert not any('跳过该词' in line for line in env.logs)
 
 
-def test_verification_does_not_retry_another_account_on_same_proxy(env, monkeypatch):
+def test_verification_does_not_retry_any_other_route(env, monkeypatch):
     a, b, c = (env.add(name) for name in 'ABC')
     rotation = _as_rotation([a, b, c])
     rotation[0]['proxy_id'] = rotation[1]['proxy_id'] = 'shared'
     rotation[2]['proxy_id'] = 'independent'
     crawler = RotationCrawler(fail={(a['id'], '词1'): CrawlerVerificationError('verify')})
-    _sweep(env, monkeypatch, crawler, rotation, keywords='词1')
-    assert [call['account_id'] for call in crawler.search_kwargs] == [a['id'], c['id']]
+    with pytest.raises(CrawlerVerificationError):
+        _sweep(env, monkeypatch, crawler, rotation, keywords='词1')
+    assert [call['account_id'] for call in crawler.search_kwargs] == [a['id']]
     assert env.store.get(b['id'])['risk_count'] == 0
 
 
@@ -742,6 +716,20 @@ def test_fatal_stream_route_error_stops_inflight_crawler_before_next_probe(env, 
     assert job['control']['collection_route_error']=='PROXY_EXIT_CHANGED'
     assert job['status']!='completed' and job['error']=='PROXY_EXIT_CHANGED'
     assert env.store.get(account['id'])['risk_count']==0
+
+
+def test_stream_does_not_mark_revoked_challenged_route_unavailable(env, monkeypatch):
+    from backend.audit_agent import crawler_route
+    pipeline = _pipeline(env)
+    updates = []
+    monkeypatch.setattr(pipeline_module.job_store, 'update_control', lambda *a, **kw: updates.append(kw))
+    monkeypatch.setattr(crawler_route, 'stop_source_route', lambda *a, **kw: pytest.fail('marked shared route unavailable'))
+    route = SimpleNamespace(account_risk_recorded=True)
+    with pytest.raises(CrawlerVerificationError) as challenge:
+        pipeline._handle_stream_route_error(pipeline_module.CollectionRouteError('PROXY_UNAVAILABLE'),
+            {'item': {'collection_route_provenance': {}}}, route)
+    assert challenge.value.account_risk_recorded
+    assert updates == [] and not getattr(pipeline, '_stream_route_error', None)
 
 
 @pytest.mark.parametrize('code',['PROXY_BUSY','SUPPLEMENT_DEFERRED'])

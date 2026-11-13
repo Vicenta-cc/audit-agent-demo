@@ -7,7 +7,7 @@ from test_investigation_creation_conversation import creation_stack
 from test_ruleset_proposal_presentation import content
 from test_geographic_draft_configuration import no_effects
 from experiments.geographic_joint_integration.scenarios import make_real_bundle, JointHarness, row
-from backend.audit_agent.crawler_adapter import CrawlerVerificationError, CrawlerMediaDownloadError, CrawlerRateLimitError
+from backend.audit_agent.crawler_adapter import CrawlerAuthenticationError, CrawlerMediaDownloadError, CrawlerRateLimitError
 
 
 def harness(stack, content, tmp_path, case, rows, **options):
@@ -181,7 +181,7 @@ def test_failure_types_keep_original_budget_semantics(creation_stack, content, t
     h, _ = harness(creation_stack, content, tmp_path, case,
                    {0: [row('x', rank=2), row('z', rank=1)]})
     h.failure['x'] = {'empty': None, 'media': CrawlerMediaDownloadError('fixture media'),
-        'authentication': CrawlerVerificationError('fixture verification'),
+        'authentication': CrawlerAuthenticationError('fixture expired auth'),
         'rate_limit': CrawlerRateLimitError('fixture rate limit')}[failure]
     if failure == 'rate_limit':
         with pytest.raises(CrawlerRateLimitError):

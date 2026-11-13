@@ -184,10 +184,11 @@ class ExecutionLeaseBundle:
     Closing the owner forbids new borrowers. Existing borrowers keep owned FDs
     alive. An outer account descriptor is duplicated, never unlocked or closed.
     """
-    def __init__(self, execution_id, owner_id, account_id, snapshot=None):
+    def __init__(self, execution_id, owner_id, account_id, snapshot=None, *, interactive_login=False):
         import threading
         self.execution_id, self.owner_id, self.account_id = execution_id, owner_id, account_id
         self.snapshot = snapshot
+        self.interactive_login = interactive_login
         self._lock = threading.RLock()
         self._handles = []
         self._borrowers = 0
@@ -216,8 +217,10 @@ class ExecutionLeaseBundle:
             shared = _open_lock(proxy_lock_path(self.snapshot.proxy_id), fcntl.LOCK_SH)
             if shared is not None:
                 self._handles.append(shared)
-                for slot in range(max(1, int(max_active_accounts))):
-                    active = _open_lock(lock_root() / 'proxy' / (digest(self.snapshot.proxy_id) + f'-active-{slot}.lock'))
+                slot_kind = "login" if self.interactive_login else "active"
+                limit = 1 if self.interactive_login else max(1, int(max_active_accounts))
+                for slot in range(limit):
+                    active = _open_lock(lock_root() / 'proxy' / (digest(self.snapshot.proxy_id) + f'-{slot_kind}-{slot}.lock'))
                     if active is not None:
                         self._handles.append(active)
                         return True
@@ -242,8 +245,10 @@ class ExecutionLeaseBundle:
                 return True
             if getattr(self,'_exit_capacity_key',None) is not None:
                 raise ResourceBusy('PROXY_EXIT_CHANGED')
-            for slot in range(settings.crawler_shared_exit_active_limit):
-                handle=_open_lock(lock_root()/'exit'/(digest(key)+f'-active-{slot}.lock'))
+            slot_kind = 'login' if self.interactive_login else 'active'
+            limit = 1 if self.interactive_login else settings.crawler_shared_exit_active_limit
+            for slot in range(limit):
+                handle=_open_lock(lock_root()/'exit'/(digest(key)+f'-{slot_kind}-{slot}.lock'))
                 if handle is not None:
                     self._handles.append(handle)
                     self._exit_capacity_key=key
@@ -253,7 +258,7 @@ class ExecutionLeaseBundle:
     @contextmanager
     def borrow(self, *, execution_id=None, owner_id=None, account_id=None):
         with self._lock:
-            if self._closing or not self._handles or any(value is not None and value != actual for value, actual in ((execution_id, self.execution_id), (owner_id, self.owner_id), (account_id, self.account_id))):
+            if self.interactive_login or self._closing or not self._handles or any(value is not None and value != actual for value, actual in ((execution_id, self.execution_id), (owner_id, self.owner_id), (account_id, self.account_id))):
                 raise ResourceBusy('PROXY_BUSY')
             self._borrowers += 1
         token = BorrowedRouteContext(self)

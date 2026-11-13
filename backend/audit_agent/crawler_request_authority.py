@@ -34,6 +34,16 @@ _OWNER_OPERATIONS = frozenset({
 })
 
 
+_ECHO_OPERATIONS = frozenset({
+    "initialize", "check_stop", "fail", "browser_validate",
+    "probe_reserve", "probe_confirm", "probe_snapshot",
+})
+_LOGIN_OPERATIONS = _ECHO_OPERATIONS | {
+    "make_gate", "reserve", "consume", "release", "renew_request",
+}
+_LOGIN_REQUEST_KINDS = frozenset({"login_action", "login_navigation"})
+
+
 def _log_owner_failure(operation, error):
     """Owner-only diagnostics: fixed fields, never exception text or payload."""
     operation = (
@@ -167,6 +177,11 @@ class RequestAuthority:
         from tools.authority_ledger import initialize
 
         self.options = dict(session_options or {})
+        # Fixed by the parent before the child inherits this channel. A child
+        # cannot choose a different purpose in initialize or reserve payloads.
+        self.allowed_operations = None
+        if self.options.pop("interactive_channel", False):
+            self.allowed_operations = _ECHO_OPERATIONS if self.options.get("maintenance_only") else _LOGIN_OPERATIONS
         self.initial_ack = self.options.pop("initial_ack", None)
         if snapshot.managed and not (
             callable(self.initial_ack) or isinstance(self.initial_ack, dict)
@@ -353,6 +368,11 @@ class RequestAuthority:
             raise RuntimeError("PROXY_REVISION_MISMATCH")
         self.sequence = frame["sequence"]
         operation, payload = frame["operation"], frame["payload"]
+        if self.allowed_operations is not None and (
+            operation not in self.allowed_operations
+            or operation == "reserve" and payload.get("operation") not in _LOGIN_REQUEST_KINDS
+        ):
+            raise RuntimeError("PROXY_UNAVAILABLE")
         digest = hashlib.sha256(
             json.dumps([operation, payload], sort_keys=True, allow_nan=False).encode()
         ).hexdigest()

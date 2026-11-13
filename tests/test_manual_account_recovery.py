@@ -63,7 +63,8 @@ def test_manual_wrong_identity_failure_and_cancel_stay_paused_without_auto_retry
     assert after['platform_account_id']=='123456789'
     assert store.claim_recovery(a['id']) is None
     assert begin(store,a) is None
-    with pytest.raises(ValueError): store.admit_route(b['id'],'203.0.113.10',1,'after-failed-manual')
+    with pytest.raises(ValueError): store.admit_route(a['id'],'203.0.113.10',1,'after-failed-manual')
+    assert store.admit_route(b['id'],'203.0.113.10',1,'independent-account')
 
 
 def test_manual_claim_operation_and_owner_fence(safety):
@@ -87,7 +88,8 @@ def test_human_login_before_cooldown_does_not_erase_frozen_deadline(safety,monke
     # Explicit user login is allowed; generic collection remains blocked.
     assert store.admit_route(a['id'],'203.0.113.10',1,'human-during-cooldown',recovery_claim=claim,login_bootstrap=True)
     store.release_route_admission('human-during-cooldown')
-    with pytest.raises(ValueError): store.admit_route(b['id'],'203.0.113.10',1,'normal-during-cooldown')
+    with pytest.raises(ValueError): store.admit_route(a['id'],'203.0.113.10',1,'normal-during-cooldown')
+    assert store.admit_route(b['id'],'203.0.113.10',1,'independent-account')
     with store._connect() as db:
         db.execute('BEGIN IMMEDIATE')
         store.save_douyin_auth_state(a['id'],'fixture-new-auth','123456789',connection=db)
@@ -101,7 +103,7 @@ def test_human_login_before_cooldown_does_not_erase_frozen_deadline(safety,monke
     assert store.admit_route(b['id'],'203.0.113.10',1,'after-frozen-cooldown')
 
 
-def test_manual_success_keeps_other_unresolved_account_exit_pause(safety):
+def test_manual_success_only_releases_the_recovered_account(safety):
     store,a,b=safety
     manual_required(store,a)
     store.save_auth_state(b['id'],'fixture-other-auth',platform_account_id='987654321')
@@ -109,7 +111,8 @@ def test_manual_success_keeps_other_unresolved_account_exit_pause(safety):
     claim=begin(store,a)
     assert store.finish_manual_recovery(a['id'],'manual-operation',claim,'success',owner_id='owner',verified_identity='123456789')
     assert store.get(a['id'])['route_state']=='active'
-    with pytest.raises(ValueError): store.admit_route(a['id'],'203.0.113.10',1,'other-incident-still-paused')
+    assert store.admit_route(a['id'],'203.0.113.10',1,'recovered-account')
+    with pytest.raises(ValueError): store.admit_route(b['id'],'203.0.113.10',1,'other-incident-still-paused')
     assert store.get(b['id'])['route_state']=='challenge_paused'
 
 
@@ -141,7 +144,8 @@ def test_explicit_stopped_coordinator_settles_orphan_claim_without_unpausing(saf
     assert store.get(a['id'])['recovery_state']=='uncertain'
     assert store.claim_recovery(a['id']) is None
     assert begin(store,a,'new-login')
-    with pytest.raises(ValueError): store.admit_route(b['id'],'203.0.113.10',1,'orphan-no-unpause')
+    with pytest.raises(ValueError): store.admit_route(a['id'],'203.0.113.10',1,'orphan-no-unpause')
+    assert store.admit_route(b['id'],'203.0.113.10',1,'independent-account')
 
 
 def test_manual_claim_cannot_migrate_to_another_actual_exit(safety):

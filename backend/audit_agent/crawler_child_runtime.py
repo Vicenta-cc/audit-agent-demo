@@ -136,6 +136,8 @@ def require_browser_available(
 def authority_for(bundle, **options):
     if bundle is None or bundle.snapshot is None:
         raise RuntimeError("CRAWLER_AUTHORITY_ROUTE_REQUIRED")
+    if getattr(bundle, "interactive_login", False) and not (options.get("login_bootstrap") or options.get("maintenance_only")):
+        raise RuntimeError("CRAWLER_AUTHORITY_LOGIN_ONLY")
     from .crawler_request_authority import (
         open_authority,
         parent_authority_renew_ticket,
@@ -160,6 +162,7 @@ def authority_for(bundle, **options):
         if bundle.snapshot.managed
         else None,
         **options,
+        "interactive_channel": getattr(bundle, "interactive_login", False),
     }
     handle = open_authority(
         bundle.snapshot,

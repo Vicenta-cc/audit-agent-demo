@@ -277,6 +277,10 @@ class ScopedExecution:
                                              'defer:' + attempt['attempt_id'], exc.code)
                     raise
                 except (CrawlerAuthenticationError, CrawlerVerificationError) as exc:
+                    if isinstance(exc, CrawlerVerificationError) and self.plan['platform'] == 'dy':
+                        self.store.fail_attempt(self.execution_id, attempt['attempt_id'], 'verification',
+                                                'fail:' + attempt['attempt_id'])
+                        raise
                     result = self.store.fail_attempt(self.execution_id, attempt['attempt_id'], 'auth',
                                                      'fail:' + attempt['attempt_id'])
                     if not result['retry_allowed']:
@@ -357,7 +361,7 @@ class ScopedExecution:
             reasons.append('geographic_evaluation_pending')
         if not unfinished and not ranked:
             reasons.append('no_candidates')
-        if any(a['status'] in {'empty', 'media', 'auth', 'infrastructure', 'unknown'} for a in saved['attempts'].values()):
+        if any(a['status'] in {'empty', 'media', 'auth', 'verification', 'infrastructure', 'unknown'} for a in saved['attempts'].values()):
             reasons.append('collection_failed')
         if collected > handed_off:
             reasons.append('collected_not_delivered')

@@ -9,7 +9,7 @@ from backend.audit_agent.account_rotation import AccountRotationManager
 from backend.audit_agent.auth_state_cipher import AuthStateCipher
 from backend.audit_agent.config import settings
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
-from backend.audit_agent.crawler_adapter import CrawlerVerificationError
+from backend.audit_agent.crawler_adapter import CrawlerAuthenticationError
 from backend.audit_agent.crawler_browser_migration import profile_key
 
 
@@ -67,7 +67,7 @@ def test_rotation_selects_committed_account_instead_of_pending_or_old_generation
     called=[]
     def runner(account_id,state):
         called.append(account_id)
-        if account_id==initial['id']:raise CrawlerVerificationError('verify')
+        if account_id==initial['id']:raise CrawlerAuthenticationError('expired')
         return account_id
     manager=AccountRotationManager(fixture.store,cipher)
     assert manager.run_with_rotation('dy',initial['id'],{},runner)==healthy['id']

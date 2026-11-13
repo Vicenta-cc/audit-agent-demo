@@ -28,7 +28,7 @@ def test_public_account_failure_logs_do_not_become_success_messages():
 
 
 @pytest.mark.parametrize('authoritative', [False, True])
-@pytest.mark.parametrize('scenario', ['auth', 'rate_limit', 'browser_init', 'empty', 'stop_then_verify', 'empty_then_verify'])
+@pytest.mark.parametrize('scenario', ['auth', 'rate_limit', 'browser_init', 'empty', 'stop_then_verify', 'empty_then_verify', 'stream_unavailable_then_verify'])
 def test_collection_failure_policy_is_not_selected_by_entry(tmp_path, monkeypatch, authoritative, scenario):
     jobs = JobStore(tmp_path / 'jobs.sqlite3')
     accounts = CrawlerAccountStore(tmp_path / 'accounts.sqlite3')
@@ -38,6 +38,8 @@ def test_collection_failure_policy_is_not_selected_by_entry(tmp_path, monkeypatc
         account = accounts.create(platform='dy', display_name=name)
         accounts.save_auth_state(account['id'], cipher.encrypt({'name': name}))
         ids.append(account['id'])
+    with accounts._connect() as db:
+        db.execute('UPDATE crawler_accounts SET auth_source_generation=profile_generation')
     config = dict(platform='dy', keyword='维汉夫妻', crawl_mode='search', max_notes=2,
         max_comments=0, max_concurrency=1, max_items_per_minute=1, start_page=1,
         get_sub_comment=False, analyze_limit=0, auto_analyze=False, run_crawler=True,
@@ -64,6 +66,9 @@ def test_collection_failure_policy_is_not_selected_by_entry(tmp_path, monkeypatc
             if scenario == 'stop_then_verify':
                 jobs.update_control(job['id'], crawl_stop_requested=True)
                 raise CrawlerVerificationError('synthetic verify')
+            if scenario == 'stream_unavailable_then_verify':
+                pipeline._handle_stream_route_error(module.CollectionRouteError('PROXY_UNAVAILABLE'), {'item': {}})
+                raise CrawlerVerificationError('synthetic verify')
             if scenario == 'empty_then_verify' and len(calls) >= 2:
                 raise CrawlerVerificationError('synthetic verify')
             return CrawlOutput('dy', [], [], Path(kwargs['save_root']))
@@ -80,7 +85,8 @@ def test_collection_failure_policy_is_not_selected_by_entry(tmp_path, monkeypatc
         'browser_init': 1,
         'empty': 2,
         'stop_then_verify': 1,
-        'empty_then_verify': 3,
+        'empty_then_verify': 2,
+        'stream_unavailable_then_verify': 1,
     }
     assert len(calls) == expected_calls[scenario]
     if scenario == 'auth':

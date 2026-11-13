@@ -6,7 +6,7 @@ import time
 from .auth_state_cipher import AuthStateCipher, auth_state_cipher
 from .config import settings
 from .crawler_account_store import CrawlerAccountStore, crawler_account_store
-from .crawler_adapter import CrawlerVerificationError
+from .crawler_adapter import CrawlerAuthenticationError, CrawlerVerificationError
 
 
 def risk_cooldown_seconds(risk_count: int) -> float:
@@ -38,6 +38,9 @@ class AccountRotationManager:
         return seconds
 
     def rotate(self, platform: str, current_account_id: str, *, reason: str, cooldown_seconds: float = 300.0) -> tuple[dict, dict] | None:
+        if platform == "dy" and reason == "verify":
+            self.cool_down_after_risk(current_account_id)
+            return None
         self.cool_down(current_account_id, reason=reason, cooldown_seconds=cooldown_seconds)
         account = self.store.next_available(platform, exclude_id=current_account_id)
         if not account:
@@ -46,11 +49,7 @@ class AccountRotationManager:
         return account, auth
 
     def run_with_rotation(self, platform: str, account_id: str, auth_state: dict, runner, *, max_switches: int | None = None):
-        """Try each currently eligible account at most once on verification.
-
-        ``max_switches`` remains available for narrow callers, while the normal
-        path consumes the whole eligible pool without ever looping an account.
-        """
+        """Try eligible accounts once after auth expiry. Douyin challenges stop the run."""
         current_id, current_auth = account_id, auth_state
         attempted: set[str] = set()
         switches = 0
@@ -58,10 +57,17 @@ class AccountRotationManager:
             attempted.add(current_id)
             try:
                 return runner(current_id, current_auth)
-            except CrawlerVerificationError as exc:
-                if not getattr(exc, 'account_risk_recorded', False):
-                    self.cool_down_after_risk(current_id, reason="verify")
-                    exc.account_risk_recorded = True
+            except (CrawlerVerificationError, CrawlerAuthenticationError) as exc:
+                if isinstance(exc, CrawlerVerificationError):
+                    if not getattr(exc, 'account_risk_recorded', False):
+                        self.cool_down_after_risk(current_id, reason="verify")
+                        exc.account_risk_recorded = True
+                    if platform == "dy":
+                        raise
+                elif platform == "dy":
+                    self.store.mark_expired(current_id, str(exc))
+                else:
+                    raise
                 if max_switches is not None and switches >= max(0, int(max_switches)):
                     raise
                 accounts = self.store.available_accounts(platform, exclude_ids=attempted)

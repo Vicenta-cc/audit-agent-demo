@@ -475,3 +475,47 @@ def test_claim_absent_active_session_reports_specific_not_found(api):
     response=client.post(f"/api/crawler-accounts/{s['account_id']}/login-session-claims",json={})
     assert response.status_code==404
     assert response.json()['detail']['code']=='ACTIVE_LOGIN_NOT_FOUND'
+
+
+@pytest.mark.parametrize(
+    ("failure", "status", "code", "message"),
+    [
+        ("busy", 409, "PROXY_BUSY", "当前登录线路正在使用，请稍后重试。"),
+        ("unavailable", 503, "PROXY_UNAVAILABLE", "当前登录线路不可用，请稍后再试。"),
+        ("process", 503, "BROWSER_START_FAILED", "登录浏览器未能启动，请检查运行环境后重试。"),
+        ("missing_executable", 503, "BROWSER_START_FAILED", "登录浏览器未能启动，请检查运行环境后重试。"),
+    ],
+    ids=["busy-route", "unavailable-route", "browser-process", "missing-executable"],
+)
+def test_start_reports_busy_route_and_browser_failure_separately(
+    monkeypatch, failure, status, code, message
+):
+    from types import SimpleNamespace
+
+    from backend import main
+    from backend.audit_agent.crawler_route import CollectionRouteError
+
+    def fail_start(*args, **kwargs):
+        if failure in {"busy", "unavailable"}:
+            raise CollectionRouteError(code)
+        if failure == "missing_executable":
+            raise FileNotFoundError("/private/test/login-secret")
+        raise RuntimeError("browser executable failed: /private/test/login-secret")
+
+    monkeypatch.setattr(main.settings, "crawler_login_v2_enabled", True)
+    monkeypatch.setattr(
+        main, "_require_crawler_account", lambda *args, **kwargs: {"platform": "dy"}
+    )
+    monkeypatch.setattr(main.crawler_login_v2_manager, "start", fail_start)
+    app = FastAPI()
+    app.dependency_overrides[main.principal_provider] = lambda: SimpleNamespace(
+        id="owner", session_id="session"
+    )
+    path = "/api/crawler-accounts/{account_id}/login-sessions"
+    app.add_api_route(path, main.start_crawler_account_login, methods=["POST"])
+    with TestClient(app) as client:
+        response = client.post(
+            path.format(account_id="a"), json={"supported_protocols": [2]}
+        )
+    assert response.status_code == status
+    assert response.json() == {"detail": {"code": code, "message": message}}

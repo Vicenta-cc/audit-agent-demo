@@ -458,6 +458,8 @@ class CrawlerProxyStore:
             row = conn.execute('SELECT * FROM proxy_resources WHERE id=?', (proxy_id,)).fetchone()
             if row is None: raise ValueError('PROXY_NOT_FOUND')
             if not row['shared_exit_key']: raise ValueError('PROXY_INVALID_EXIT')
+            self.accounts.end_active_admissions(conn, exit_key=row['shared_exit_key'])
+            conn.execute('DELETE FROM crawler_legacy_exit_pauses WHERE exit_key=?', (row['shared_exit_key'],))
             conn.execute('UPDATE crawler_shared_exits SET paused_until=MAX(COALESCE(paused_until,0),?),pause_reason=? WHERE exit_key=?',(until,reason,row['shared_exit_key']))
             conn.execute('UPDATE proxy_resources SET paused_until=?,pause_reason=?,updated_at=? WHERE shared_exit_key=?',(until,reason,time.time(),row['shared_exit_key']))
             return self._public(conn,conn.execute('SELECT * FROM proxy_resources WHERE id=?',(proxy_id,)).fetchone())

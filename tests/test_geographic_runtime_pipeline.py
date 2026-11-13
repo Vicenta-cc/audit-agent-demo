@@ -399,7 +399,7 @@ def test_route_failure_never_rotates_or_delivers(confirmed, tmp_path, code):
     assert attempts == ['test-account'] and retired == [] and events == []
 
 
-def test_verification_cannot_rotate_to_shared_proxy(confirmed, tmp_path):
+def test_verification_stops_geographic_capture_before_another_account(confirmed, tmp_path):
     from backend.audit_agent.crawler_adapter import CrawlerVerificationError
     events = []
     class Challenge(Crawler):
@@ -415,9 +415,12 @@ def test_verification_cannot_rotate_to_shared_proxy(confirmed, tmp_path):
     runner.accounts['independent'] = dict(id='independent', auth_state={}, proxy_id='other')
     retired = []
     runner.retire = lambda account, error: retired.append(account['id'])
-    assert runner.run()[0]['handed_off'] == 1
+    with pytest.raises(CrawlerVerificationError):
+        runner.run()
     assert retired == ['test-account']
-    assert set(runner.accounts) == {'independent'}
+    assert runner.execution.report()['resume_blocked_reason'] == 'geographic_account_verification_required'
+    assert set(runner.accounts) == {'independent', 'same-exit'}
+    assert [kw['account_id'] for kind, kw in events if kind == 'challenge'] == ['test-account']
 
 
 @pytest.mark.parametrize('leased,allowed,eligible,error', [

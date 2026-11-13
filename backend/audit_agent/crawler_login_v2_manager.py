@@ -134,11 +134,14 @@ ERROR_MESSAGES = {
 
 
 ERROR_MESSAGES.update({
-    "PROXY_BUSY": "代理正在使用，请稍后重试。",
+    "PROXY_BUSY": "当前登录线路正在使用，请稍后重试。",
     "SUPPLEMENT_DEFERRED": "代理资源暂不可用。",
     "PROXY_REVISION_MISMATCH": "账号代理配置已变化，请重新开始登录。",
     "PROXY_EXIT_CHANGED": "代理出口已变化，登录已停止。",
-    "PROXY_UNAVAILABLE": "代理不可用，登录已停止。",
+    "PROXY_UNAVAILABLE": "当前登录线路不可用，请稍后再试。",
+    "PROXY_EXPIRED": "账号配置的代理已过期，请更新后重试。",
+    "PROXY_CONNECTION_REFUSED": "当前登录线路拒绝连接，请检查连接后重试。",
+    "PROXY_TRANSPORT_FAILED": "当前登录线路连接失败，请稍后重试。",
     "PROXY_AUTH_FAILED": "代理鉴权失败，登录已停止。",
     "PROXY_CONFIG_INVALID": "代理配置无效，登录已停止。",
     "PROBE_BUDGET_EXHAUSTED": "出口检测额度已耗尽，登录已停止。",
@@ -463,7 +466,8 @@ class CrawlerLoginV2Manager:
                 if (snapshot.proxy_id if snapshot and snapshot.route_mode not in {'direct_degraded', 'legacy_direct'} else account.get('proxy_id') if snapshot else None) != op.get("proxy_id"):
                     from .crawler_route import CollectionRouteError
                     raise CollectionRouteError("PROXY_REVISION_MISMATCH")
-                route_bundle = acquire_route_execution(account["id"], op["id"], user_id, account_handle=handles[-1], account_store=self.store, snapshot=snapshot, allow_probe=True, recovery_claim=manual_claim,human_login_operation_id=None if migration_id else op["id"], migration_id=migration_id)
+                route_bundle = acquire_route_execution(account["id"], op["id"], user_id, account_handle=handles[-1], account_store=self.store, snapshot=snapshot, allow_probe=True, recovery_claim=manual_claim,human_login_operation_id=None if migration_id else op["id"], migration_id=migration_id,
+                    interactive_intent=intent in {"check_or_login", "reauth"} or bool(manual_claim))
             except Exception as exc:
                 if manual_claim:
                     self.store.finish_manual_recovery(account['id'],op['id'],manual_claim,'uncertain',owner_id=user_id)
