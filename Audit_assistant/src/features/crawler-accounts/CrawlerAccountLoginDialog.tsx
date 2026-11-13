@@ -307,6 +307,7 @@ export function CrawlerAccountLoginDialog({
 
   const sessionErrorCode = typeof session?.v2?.error === "object" ? session.v2.error?.code : "";
   const routeBusyBeforeStart = !session?.id && (startErrorCode === "PROXY_BUSY" || sessionErrorCode === "PROXY_BUSY");
+  const retrySource = [sessionErrorCode, startErrorCode].includes("IDENTITY_ALREADY_BOUND") ? undefined : recoverySource.current;
   const savingUncertain = session?.status === "failed" && ["SAVE_FAILED", "SAVE_RESULT_UNKNOWN"].includes(sessionErrorCode || "");
   useEffect(() => {
     if (!account || !session?.v2 || !savingUncertain) { setSaveRecovery("none"); return; }
@@ -355,7 +356,7 @@ export function CrawlerAccountLoginDialog({
       }
       window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
       requestedAccountRef.current = "";
-      await beginLogin(routeBusyBeforeStart, recoverySource.current, busy);
+      await beginLogin(routeBusyBeforeStart, retrySource, busy);
     } catch (error) { setStartError(readApiError(error)); }
     finally { setClosing(false); }
   };
@@ -546,7 +547,7 @@ export function CrawlerAccountLoginDialog({
                   </span>
                   <Button type="button" variant="primary" onClick={retry}>
                     <RefreshCw size={16} />
-                    {recoverySource.current ? "继续完成登录" : routeBusyBeforeStart ? "重试登录" : "重新获取二维码"}
+                    {retrySource ? "继续完成登录" : routeBusyBeforeStart ? "重试登录" : "重新获取二维码"}
                   </Button>
                 </div>
               ) : null}
