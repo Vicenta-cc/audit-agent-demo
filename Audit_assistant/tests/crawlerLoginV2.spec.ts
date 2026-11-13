@@ -2310,3 +2310,23 @@ test("isolated native Firefox caret projects on the existing React canvas eviden
   await expect(page.locator(".crawler-login-confirmed-focus")).toHaveCount(0);
   await page.screenshot({ path: "/Users/hose/project/zhanyun/.omx/qa/camoufox-caret-react-fixture-20261016.png" });
 });
+
+for (const replay of [false, true]) {
+  test(`retry after route contention checks existing login state (${replay ? "replay" : "HTTP"})`, async ({ page }) => {
+    const intents: string[] = [];
+    const error = { code: "PROXY_BUSY", message: "当前登录线路正在使用，请稍后重试。" };
+    await page.route("**/api/crawler-accounts/account-fixture/login-session-claims", route =>
+      route.fulfill({ status: 404, json: { detail: { code: "ACTIVE_LOGIN_NOT_FOUND" } } }));
+    await page.route("**/api/crawler-accounts/account-fixture/login-sessions", route => {
+      intents.push(route.request().postDataJSON().intent);
+      if (intents.length === 1 && replay) {
+        return route.fulfill({ json: { item: { ...snapshot("failed"), id: "", status: "failed", qr: null, error, cleanup_state: "complete" } } });
+      }
+      return route.fulfill({ status: 409, json: { detail: error } });
+    });
+    await page.goto("/tests/crawlerLoginV2.html");
+    await expect(page.getByText(error.message, { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "重试登录", exact: true }).click();
+    await expect.poll(() => intents).toEqual(["check_or_login", "check_or_login"]);
+  });
+}

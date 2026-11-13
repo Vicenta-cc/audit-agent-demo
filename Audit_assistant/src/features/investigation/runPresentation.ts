@@ -22,6 +22,9 @@ export function buildRunProgressItems(run: InvestigationRunProjection) {
 
 export function formatRunFailureMessage(run: InvestigationRunProjection) {
   if (run.error_code === "cancelled") return "任务已结束，已扣次数不返还；可在新对话发起调查。";
+  if (run.recovery_blocker === "geographic_account_verification_required" || run.error_code === "geographic_account_verification_required") {
+    return "本次地域调查已因平台验证停止，已完成的审核结果会保留。请在采集账号管理中完成核验后，新建调查。";
+  }
   if (run.recovery_blocker?.startsWith("geographic_")) return "部分地域采集记录需要核对，暂不能自动继续；已完成的审核结果会保留。";
   if (run.error_code === "geographic_preflight_deferred") return "后续采集暂未开始，正在等待采集线路或执行条件恢复；已完成的审核结果会保留。";
   const signal = `${run.error_code} ${run.error_message}`.toLowerCase();

@@ -306,6 +306,7 @@ export function CrawlerAccountLoginDialog({
   }, [onSuccess, session?.id, session?.status]);
 
   const sessionErrorCode = typeof session?.v2?.error === "object" ? session.v2.error?.code : "";
+  const routeBusyBeforeStart = !session?.id && (startErrorCode === "PROXY_BUSY" || sessionErrorCode === "PROXY_BUSY");
   const savingUncertain = session?.status === "failed" && ["SAVE_FAILED", "SAVE_RESULT_UNKNOWN"].includes(sessionErrorCode || "");
   useEffect(() => {
     if (!account || !session?.v2 || !savingUncertain) { setSaveRecovery("none"); return; }
@@ -354,7 +355,7 @@ export function CrawlerAccountLoginDialog({
       }
       window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
       requestedAccountRef.current = "";
-      await beginLogin(false, recoverySource.current, busy);
+      await beginLogin(routeBusyBeforeStart, recoverySource.current, busy);
     } catch (error) { setStartError(readApiError(error)); }
     finally { setClosing(false); }
   };
@@ -545,7 +546,7 @@ export function CrawlerAccountLoginDialog({
                   </span>
                   <Button type="button" variant="primary" onClick={retry}>
                     <RefreshCw size={16} />
-                    {recoverySource.current ? "继续完成登录" : "重新获取二维码"}
+                    {recoverySource.current ? "继续完成登录" : routeBusyBeforeStart ? "重试登录" : "重新获取二维码"}
                   </Button>
                 </div>
               ) : null}
@@ -561,7 +562,12 @@ export function CrawlerAccountLoginDialog({
           ) : null}
           {session?.v2 &&
           !ownerLost && ["failed", "expired", "cancelled"].includes(session.status) && !savingUncertain ? (
-            <div className="crawler-login-v2-retry"><p>重新开始需要再次扫码。</p><Button type="button" disabled={closing || starting} onClick={() => void retry()}>重新扫码</Button></div>
+            <div className="crawler-login-v2-retry">
+              {!routeBusyBeforeStart && <p>重新开始需要再次扫码。</p>}
+              <Button type="button" disabled={closing || starting} onClick={() => void retry()}>
+                {routeBusyBeforeStart ? "重试登录" : "重新扫码"}
+              </Button>
+            </div>
           ) : null}
           {session?.v2 && savingUncertain && !ownerLost ? <div className="crawler-login-v2-retry"><p>{saveRecovery === "checking" ? "正在检查已完成的登录，请勿重复扫码。" : "先确认已有登录信息，避免丢失已完成的登录。"}</p>{saveRecovery === "ready" ? <Button type="button" variant="primary" disabled={closing || starting} onClick={() => void continueSavedLogin()}>继续完成登录</Button> : null}</div> : null}
           {closing ? <p role="status">正在结束本次登录…</p> : null}
