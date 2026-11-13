@@ -26,7 +26,7 @@ from uuid import uuid4
 
 from .auth_state_cipher import auth_state_cipher
 from .config import settings
-from .crawler_account_store import account_is_cooling_down, crawler_account_store
+from .crawler_account_store import PlatformIdentityAlreadyBound, account_is_cooling_down, crawler_account_store
 from .crawler_browser import account_browser_env, scheduler_env
 from .crawler_login_operation_store import CrawlerLoginOperationStore
 from .crawler_login_protocol import (
@@ -68,6 +68,7 @@ ERROR_MESSAGES = {
     "SESSION_REPLACED": "应用登录状态已变化，请重新登录应用。",
     "APPLICATION_AUTH_REVOKED": "应用登录或账号管理权限已失效，本次登录已停止。",
     "AUTH_REVISION_CONFLICT": "账号登录信息已被更新，请重新检查账号状态。",
+    "IDENTITY_ALREADY_BOUND": "这个抖音账号已绑定到另一个采集账号。请先在手机抖音切换到尚未绑定的账号，再重新扫码。",
     "IDENTITY_MISMATCH": "登录的抖音账号与绑定账号不一致，请使用正确账号重新扫码。",
     "IDENTITY_UNCONFIRMED": "尚未确认抖音账号身份，请查看当前登录步骤后重试。",
     "BROWSER_LOGIN_FAILED": "登录页面未能完成加载，请重新尝试。",
@@ -1609,6 +1610,9 @@ class CrawlerLoginV2Manager:
                     s, {"type": "save_committed", "operation_id": s.operation_id}
                 )
                 self._set_terminal(s, "done", None)
+            except PlatformIdentityAlreadyBound:
+                self.operations.fail_duplicate_identity(s.operation_id)
+                self._finish(s, "failed", "IDENTITY_ALREADY_BOUND")
             except Exception as exc:
                 self.operations.mark_stage(
                     s.operation_id,

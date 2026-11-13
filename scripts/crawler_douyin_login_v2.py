@@ -1257,7 +1257,20 @@ class DouyinLoginV2:
             self.display.close()
 
 
+def _isolate_camoufox_diagnostics():
+    from camoufox import utils
+
+    # The pinned SDK prints configuration notices (sometimes including values)
+    # from utils.validate_config. This dedicated helper owns stdout as an IPC
+    # stream, shared with route telemetry. Leave both protocol writers alone.
+    def sdk_notice(*_args, **_kwargs):
+        print("Camoufox configuration diagnostic", file=sys.stderr, flush=True)
+
+    utils.print = sdk_notice
+
+
 async def run_login_v2(args):
+    _isolate_camoufox_diagnostics()
     if sys.platform == "linux":
         from scripts.crawler_interactive_login import virtual_display
 

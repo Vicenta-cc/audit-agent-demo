@@ -44,6 +44,11 @@ def account_in_slow_mode(account: dict, *, now: datetime | None = None) -> bool:
     return (now or datetime.now()) - logged_in < timedelta(days=settings.crawler_new_account_days)
 
 
+class PlatformIdentityAlreadyBound(ValueError):
+    def __init__(self):
+        super().__init__("该平台账号已存在")
+
+
 class CrawlerAccountStore:
     def __init__(self, db_path: Path | None = None):
         self.db_path = db_path or (settings.data_dir / "audit_index.sqlite3")
@@ -733,7 +738,7 @@ class CrawlerAccountStore:
             (platform, platform_account_id, exclude_id),
         ).fetchone()
         if row:
-            raise ValueError("该平台账号已存在")
+            raise PlatformIdentityAlreadyBound()
 
     def _validate_platform(self, platform: str) -> str:
         normalized = str(platform or "").strip().lower()

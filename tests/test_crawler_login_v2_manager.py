@@ -355,6 +355,48 @@ def test_save_failure_recoverable_without_payload_leak(manager, monkeypatch):
     assert "cookies" not in json.dumps(m.sessions[s["id"]].snapshot)
 
 
+@pytest.mark.parametrize("recover_old_failure", [False, True])
+def test_duplicate_identity_requires_fresh_login_and_preserves_original(manager, recover_old_failure):
+    m, account = manager
+    original = m.store.create(platform="dy", display_name="existing")
+    original_backup = m.cipher.encrypt({"original": True})
+    original = m.store.save_douyin_auth_state(original["id"], original_backup, "IDENTITY")
+    prior = []
+    start_options = dict(user_id="user", app_session_id="app", owner_token="x" * 32)
+    if recover_old_failure:
+        source = None
+        for key in ("old-login", "old-recovery"):
+            op = m.operations.begin(
+                account_id=account["id"], owner_user_id="user", application_session_id="app",
+                owner_token_hash=digest("x" * 32), request_key_hash=key, request_fingerprint=key,
+                intent="recover" if source else "check_or_login", source_operation_id=source,
+            )
+            source = op["id"]
+            prior.append(source)
+            m.operations.mark_stage(source, "recovery_required", error_code="SAVE_FAILED",
+                                    profile_authority_established=1)
+        start_options.update(intent="recover", source_operation_id=source)
+    snapshot, _ = m.start(account, request_key="duplicate", **start_options)
+    session = m.sessions[snapshot["id"]]
+    wait_until(lambda: session.snapshot["phase"] == "sms_required")
+    epoch = attach(m, snapshot)
+    m.command(snapshot["id"], command(m, snapshot, epoch, "submit_sms"),
+              user_id="user", app_session_id="app", owner_token="x" * 32)
+    wait_until(lambda: session.cleanup_done.is_set())
+    assert session.snapshot["error"]["code"] == "IDENTITY_ALREADY_BOUND"
+    assert "重新扫码" in session.snapshot["error"]["message"]
+    for operation_id in [snapshot["operation_id"], *prior]:
+        op = m.operations.get(operation_id)
+        assert (op["stage"], op["error_code"]) == ("failed", "IDENTITY_ALREADY_BOUND")
+    assert m.store.get_auth_state_ciphertext(original["id"]) == original_backup
+    assert m.store.get(original["id"]) == original
+    assert not m.store.get_auth_state_ciphertext(account["id"])
+    fresh, created = m.start(account, request_key="fresh", intent="reauth", user_id="user",
+                             app_session_id="app", owner_token="x" * 32)
+    assert created and fresh["operation_id"] != snapshot["operation_id"]
+    m.cancel(fresh["id"], internal=True)
+
+
 def test_eof_and_timeout_cleanup(manager):
     m, a = manager
     s = start(m, a)

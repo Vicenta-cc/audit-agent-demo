@@ -203,6 +203,26 @@ class CrawlerLoginOperationStore:
             conn.execute("UPDATE crawler_login_operations SET " + ",".join(f"{key}=?" for key in values) + " WHERE id=?", (*values.values(),operation_id))
             return self._get(conn, operation_id)
 
+    def fail_duplicate_identity(self, operation_id):
+        # A recovery reads the same browser profile as its source. Once that
+        # identity is known to belong elsewhere, replaying the chain cannot help.
+        now = _now()
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("""
+                WITH RECURSIVE lineage(id) AS (
+                    SELECT id FROM crawler_login_operations WHERE id=? AND stage='profile_ready'
+                    UNION
+                    SELECT parent.id FROM crawler_login_operations child
+                    JOIN lineage ON child.id=lineage.id
+                    JOIN crawler_login_operations parent ON parent.id=child.source_operation_id
+                    WHERE parent.stage='recovery_required'
+                )
+                UPDATE crawler_login_operations
+                SET stage='failed', error_code='IDENTITY_ALREADY_BOUND', updated_at=?, completed_at=?
+                WHERE id IN (SELECT id FROM lineage)
+            """, (operation_id, now, now))
+
     def authorize_reset(self, operation_id):
         return self.prepare_profile(operation_id, reset=True)
 
