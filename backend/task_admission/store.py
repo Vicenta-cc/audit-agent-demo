@@ -13,6 +13,9 @@ from backend.audit_agent.config import settings
 from backend.investigation_creation.errors import InvestigationCreationError
 
 
+DAILY_TASK_LIMIT = 6
+
+
 class AdmissionError(InvestigationCreationError):
     code = "TASK_ADMISSION_REJECTED"
 
@@ -307,8 +310,8 @@ class AdmissionStore:
             + self.charge_predicate(),
             (owner, day),
         ).fetchone()[0]
-        if not unlimited and count >= 3:
-            raise AdmissionError("今日三次任务额度已用完。", code="DAILY_REPORT_LIMIT")
+        if not unlimited and count >= DAILY_TASK_LIMIT:
+            raise AdmissionError("今日任务额度已用完。", code="DAILY_REPORT_LIMIT")
         ident, now = uuid4().hex, self.now()
         db.execute(
             """INSERT INTO task_admissions
@@ -394,7 +397,7 @@ class AdmissionStore:
             day=day,
             timezone="Asia/Shanghai",
             unlimited=unlimited,
-            limit=None if unlimited else 3,
+            limit=None if unlimited else DAILY_TASK_LIMIT,
             completed=used,
             reserved=reserved,
             used=charged,
@@ -402,7 +405,7 @@ class AdmissionStore:
             refunded=refunded,
             quota_policy="accepted_v2",
             legacy_record_count=legacy,
-            remaining=None if unlimited else max(0, 3 - charged),
+            remaining=None if unlimited else max(0, DAILY_TASK_LIMIT - charged),
             reset_at=reset.isoformat(),
             active_task=dict(active) if active else None,
         )

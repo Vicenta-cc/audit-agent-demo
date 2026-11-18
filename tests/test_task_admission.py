@@ -125,27 +125,29 @@ def test_duplicate_requests_and_payload_conflict(stack):
         assert len(set(pool.map(submit, range(5)))) == 1
     with pytest.raises(AdmissionError, match="不同内容"):
         enqueue(store, a, payload={"changed": True})
-    assert store.summary(a)["remaining"] == 2
+    assert store.summary(a)["remaining"] == 5
 
 
-def test_three_successes_delete_independent_and_cross_day(stack):
+def test_six_successes_delete_independent_and_cross_day(stack):
     creation, _, (a, _) = stack
     store = creation.admission
     now = datetime(2026, 9, 20, 15, 59, tzinfo=timezone.utc)
     store.clock = lambda: now
-    for i in range(3):
+    assert store.summary(a)["limit"] == 6
+    for i in range(6):
+        assert store.summary(a)["remaining"] == 6 - i
         row = enqueue(store, a, str(i))
         store.settle(row["task_id"], report_id="report:" + str(i))
         store.settle(row["task_id"], report_id="report:" + str(i))
-    assert store.summary(a)["completed"] == 3
+    assert store.summary(a)["completed"] == 6
     with pytest.raises(AdmissionError) as error:
-        enqueue(store, a, "fourth")
+        enqueue(store, a, "seventh")
     assert error.value.code == "DAILY_REPORT_LIMIT"
     now += timedelta(minutes=2)
-    assert store.summary(a)["remaining"] == 3
+    assert store.summary(a)["remaining"] == 6
     row = enqueue(store, a, "tomorrow")
     now += timedelta(days=1)
-    assert store.summary(a)["remaining"] == 3
+    assert store.summary(a)["remaining"] == 6
     assert store.summary(a)["active_task"]["day"] == "2026-09-21"
     with pytest.raises(AdmissionError):
         enqueue(store, a, "blocked-by-yesterday")
@@ -156,7 +158,7 @@ def test_three_successes_delete_independent_and_cross_day(stack):
             db.execute(
                 "SELECT count(*) FROM task_admissions WHERE state='SUCCEEDED'"
             ).fetchone()[0]
-            == 4
+            == 7
         )
 
 
@@ -174,7 +176,7 @@ def test_cancel_pause_do_not_release_until_execution_stopped(stack):
         store.settle(row["task_id"])
     store.settle(row["task_id"], stopped=True)
     store.settle(row["task_id"], stopped=True)
-    assert store.summary(a)["remaining"] == 2
+    assert store.summary(a)["remaining"] == 5
     with pytest.raises(AdmissionError):
         with store.publication("job:one", "late-report", "old-worker"):
             pytest.fail("cancelled publisher ran")
@@ -238,7 +240,7 @@ def test_run_and_quota_commit_or_rollback_together(stack, monkeypatch):
         make_run(creation, a, "rollback")
     assert creation.admission.summary(a)["reserved"] == 0
     assert creation.admission.summary(a)["used"] == 0
-    assert creation.admission.summary(a)["remaining"] == 3
+    assert creation.admission.summary(a)["remaining"] == 6
     with creation._connect() as db:
         assert db.execute("SELECT count(*) FROM investigation_runs").fetchone()[0] == 0
         assert db.execute("SELECT count(*) FROM task_admissions").fetchone()[0] == 0
@@ -261,7 +263,7 @@ def test_worker_success_failure_pause_and_queued_cancel(stack):
         creation, FakeExecutionAdapter({"status": "failed", "error": "failure"})
     )
     assert worker.run_once().status == RunStatus.FAILED
-    assert creation.admission.summary(a)["remaining"] == 1
+    assert creation.admission.summary(a)["remaining"] == 4
     run = make_run(creation, a, "paused")
     worker = worker_for(creation, FakeExecutionAdapter({"status": "crawl_paused"}))
     assert worker.run_once().status == RunStatus.INTERRUPTED
@@ -273,16 +275,14 @@ def test_worker_success_failure_pause_and_queued_cancel(stack):
     )
     worker.run_once()
     assert creation.admission.summary(a)["reserved"] == 0
-    assert creation.admission.summary(a)["remaining"] == 0
-    with pytest.raises(AdmissionError):
-        make_run(creation, a, "fourth")
+    assert creation.admission.summary(a)["remaining"] == 3
     b = stack[2][1]
     run = make_run(creation, b, "queued-cancel")
     creation.admission.cancel(run.id, b)
     worker = worker_for(creation)
     assert worker.run_once() is None
     assert worker.execution_adapter.pipeline_calls == 0
-    assert creation.admission.summary(b)["remaining"] == 2
+    assert creation.admission.summary(b)["remaining"] == 5
 
 
 def test_resume_retains_charge_and_terminal_task_cannot_reopen(stack):
@@ -673,7 +673,7 @@ def test_real_report_publish_intent_recovery_completes_or_releases(stack):
         assert locked
         reconcile(worker)
     assert creation.admission.summary(a)["completed"] == 1
-    assert creation.admission.summary(a)["remaining"] == 1
+    assert creation.admission.summary(a)["remaining"] == 4
 
 
 def test_recovery_release_cannot_overwrite_a_resume(stack):
@@ -738,7 +738,7 @@ def test_cancellation_projects_stop_before_releasing_transaction(stack):
     assert observations == [("RESERVED", "OPEN")]
     assert result["decision"] == "CANCELLED"
     assert result["state"] == "RESERVED"
-    assert admission.summary(a)["remaining"] == 2
+    assert admission.summary(a)["remaining"] == 5
 
 
 @pytest.mark.parametrize(
@@ -816,7 +816,7 @@ def test_cross_day_refund_belongs_to_original_charge_date(stack):
     store.system_fault(row["task_id"], "worker", "job_creation_failed")
     now += timedelta(minutes=2)
     store.settle(row["task_id"], stopped=True)
-    assert store.summary(a)["remaining"] == 3
+    assert store.summary(a)["remaining"] == 6
     assert store.summary(a)["refunded"] == 0
     refunded = store.for_task(row["task_id"])
     assert refunded["day"] == "2026-09-20"
@@ -885,7 +885,7 @@ def test_quota_migration_keeps_old_records_explicitly_versioned(stack):
         "LEGACY",
         "UNKNOWN",
     )
-    assert upgraded.summary(a)["remaining"] == 3
+    assert upgraded.summary(a)["remaining"] == 6
     assert upgraded.summary(a)["legacy_record_count"] == 1
     new = enqueue(upgraded, b, "new-policy")
     assert (new["quota_policy"], new["charge_state"]) == ("accepted_v2", "CHARGED")
@@ -978,12 +978,12 @@ def test_crawler_preparation_io_fault_refunds_only_before_any_spawn(stack, tmp_p
 def test_last_daily_charge_cannot_be_reused_by_racing_failed_tasks(stack):
     creation, _, (owner, _) = stack
     store = creation.admission
-    for i in range(2):
+    for i in range(5):
         row = enqueue(store, owner, f"earlier-{i}")
         store.start(row["task_id"], f"worker-{i}")
         store.collection_launch(row["task_id"], f"worker-{i}")
         store.settle(row["task_id"], stopped=True, reason="failed")
-    assert store.summary(owner)["used"] == 2
+    assert store.summary(owner)["used"] == 5
     barrier = Barrier(8)
 
     def accept_then_fail(i):
@@ -1003,11 +1003,11 @@ def test_last_daily_charge_cannot_be_reused_by_racing_failed_tasks(stack):
         outcomes = list(pool.map(accept_then_fail, range(8)))
     assert outcomes.count("accepted") == 1
     assert set(outcomes) <= {"accepted", "DAILY_REPORT_LIMIT", "USER_TASK_LIMIT"}
-    assert store.summary(owner)["used"] == 3
+    assert store.summary(owner)["used"] == 6
     assert store.summary(owner)["remaining"] == 0
     assert store.summary(owner)["active_task"] is None
     with pytest.raises(AdmissionError) as exc:
-        enqueue(store, owner, "fourth-after-all-failed")
+        enqueue(store, owner, "seventh-after-all-failed")
     assert exc.value.code == "DAILY_REPORT_LIMIT"
 
 
@@ -1052,7 +1052,7 @@ def test_admin_unlimited_quota_preserves_active_slot_and_role_changes(stack):
     creation, auth, (owner, _) = stack
     store = creation.admission
     auth.update_user(owner, actor_user_id="test", role="admin")
-    for i in range(5):
+    for i in range(7):
         row = enqueue(store, owner, f"admin-{i}")
         with pytest.raises(AdmissionError) as error:
             enqueue(store, owner, f"overlap-{i}")
@@ -1061,7 +1061,7 @@ def test_admin_unlimited_quota_preserves_active_slot_and_role_changes(stack):
     summary = store.summary(owner)
     assert summary["unlimited"] is True
     assert summary["limit"] is None and summary["remaining"] is None
-    assert summary["used"] == 5
+    assert summary["used"] == 7
     auth.update_user(owner, actor_user_id="test", role="user")
     assert store.summary(owner)["unlimited"] is False
     assert store.summary(owner)["remaining"] == 0
