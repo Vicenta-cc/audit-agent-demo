@@ -712,7 +712,7 @@ class MediaCrawlerAdapter:
                 "w", encoding="utf-8", errors="replace"
             ) as stderr_file:
                 from backend.task_admission.execution import crawler_fds, launch_crawler
-                from .crawler_route import RouteConfigPipe, RouteReceiptPipe, prepare_collection_child
+                from .crawler_route import CollectionRouteError, RouteConfigPipe, RouteReceiptPipe, prepare_collection_child
                 if route_context:
                     from backend.task_admission.resources import BorrowedRouteContext
                     prepare_collection_child(route_context,allowed_borrowers=2 if isinstance(route_context,BorrowedRouteContext) else 1)
@@ -794,7 +794,6 @@ class MediaCrawlerAdapter:
                         completed.wait(timeout=5)
                     if route_context:
                         route_context.child_active = False
-                    from .crawler_route import CollectionRouteError
                     if authority:
                         authority.close()
                     raise route_pipe.error or CollectionRouteError("PROXY_CONFIG_INVALID")
