@@ -15,11 +15,12 @@ import subprocess
 import sys
 import time
 
-SECRET_KEYS = {"DASHSCOPE_API_KEY", "RESOURCE_GENERATION_API_KEY", "CONVERSATION_API_KEY", "REMOTE_INFERENCE_API_KEY", "CRAWLER_AUTH_ENCRYPTION_KEY"}
+XFYUN_SECRET_KEYS = {"XFYUN_APP_ID", "XFYUN_API_KEY", "XFYUN_API_SECRET"}
+SECRET_KEYS = XFYUN_SECRET_KEYS | {"DASHSCOPE_API_KEY", "RESOURCE_GENERATION_API_KEY", "CONVERSATION_API_KEY", "REMOTE_INFERENCE_API_KEY", "CRAWLER_AUTH_ENCRYPTION_KEY"}
 SETTING_KEYS = {
     "CRAWLER_PROXY_ENABLED", "CRAWLER_SAFETY_ENABLED", "CRAWLER_DIRECT_DEGRADE_ENABLED", "CRAWLER_PROXY_ECHO_URL",
     "QWEN_TEXT_MODEL", "RESOURCE_GENERATION_MODEL", "QWEN_VL_MODEL", "QWEN_IMAGE_AUDIT_MODEL",
-    "QWEN_CONTACT_SHEET_MODEL", "ASR_TRANSLATE_MODEL", "ASR_LANGUAGE", "DOLPHIN_LANG_SYM",
+    "QWEN_CONTACT_SHEET_MODEL", "ASR_ENGINE", "ASR_TRANSLATE_MODEL", "ASR_LANGUAGE", "DOLPHIN_LANG_SYM",
     "DOLPHIN_REGION_SYM", "INVESTIGATION_MAX_POSTS", "APP_AUTH_COOKIE_SECURE",
     "TASK_WORKER_PROCESSES", "TASK_EXECUTION_CAPACITY", "TASK_ANALYSIS_CAPACITY",
     "CRAWLER_LOGIN_HEADED", "CORS_ALLOW_ORIGINS",
@@ -40,6 +41,13 @@ LOGIN_V2_SETTING_KEYS = {
     "CRAWLER_LOGIN_V2_OPERATION_RETENTION_DAYS",
 }
 SETTING_KEYS |= LOGIN_V2_SETTING_KEYS
+
+
+def asr_engine(config):
+    engine = config["settings"].get("ASR_ENGINE", "dolphin")
+    if engine not in ("dolphin", "xfyun"):
+        raise ValueError("Unsupported ASR_ENGINE; expected dolphin or xfyun")
+    return engine
 
 
 def login_v1_rollback_config(config, *, target_setting_keys, repository, commit):
@@ -136,6 +144,7 @@ def load_config(path):
         raise ValueError("Unknown/protected setting; runtime paths belong to the manifest")
     if any(not isinstance(v, str) for v in config["settings"].values()):
         raise ValueError("Settings values must be strings")
+    asr_engine(config)
     from urllib.parse import urlsplit
     url = urlsplit(config["dolphin_url"])
     if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password or url.query or url.fragment:
@@ -263,7 +272,9 @@ def environment(config, *, frontend=False):
     secrets = dotenv_values(secret_file, interpolate=False)
     if set(secrets) - SECRET_KEYS:
         raise ValueError("secrets.env contains unknown keys; settings belong in runtime.json")
-    required = SECRET_KEYS - {"CRAWLER_AUTH_ENCRYPTION_KEY", "CONVERSATION_API_KEY"}
+    engine = asr_engine(config)
+    required = {"DASHSCOPE_API_KEY", "RESOURCE_GENERATION_API_KEY"}
+    required |= XFYUN_SECRET_KEYS if engine == "xfyun" else {"REMOTE_INFERENCE_API_KEY"}
     if any(k.startswith("CONVERSATION_") for k in config["settings"]):
         required.add("CONVERSATION_API_KEY")
     for key in required:
@@ -283,10 +294,13 @@ def environment(config, *, frontend=False):
                MEDIACRAWLER_DIR=config["crawler_repository"], CRAWLER_LOGIN_PYTHON=config["crawler_python"],
                APP_AUTH_MODE="required", DASHSCOPE_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1",
                RESOURCE_GENERATION_BASE_URL="https://www.dmxapi.cn/v1", FFMPEG_PATH=config["ffmpeg"],
-               ASR_ENGINE="dolphin", USE_REMOTE_ASR="true", REMOTE_ASR_BASE_URL=config["dolphin_url"],
+               ASR_ENGINE=engine, USE_REMOTE_ASR="true" if engine == "dolphin" else "false",
+               REMOTE_ASR_BASE_URL=config["dolphin_url"],
                ASR_TRANSLATE_ENABLE_THINKING="false", USE_REMOTE_VLM="false", USE_REMOTE_LLM="false")
     validate_camoufox(config)
     env.update(config["settings"])
+    if engine == "xfyun":
+        env.update(USE_REMOTE_ASR="false", USE_REMOTE_WHISPER="false")
     if "camoufox" in config:
         browser = config["camoufox"]
         state = root / "camoufox-state"
@@ -385,6 +399,22 @@ _installed_executable(__import__("os").environ["MEDIACRAWLER_CAMOUFOX_BROWSER_VE
                    env=env, check=True, capture_output=True, timeout=60)
 
 
+def probe_audio(config, audio):
+    """Exercise the business ASR path and return only non-sensitive provider evidence."""
+    global PROBE_STAGE
+    engine = asr_engine(config)
+    PROBE_STAGE = engine + "_real_transcription"
+    from backend.audit_agent.pipeline import AuditPipeline
+    from backend.audit_agent.video_processor import DemoAudioProcessor
+    transcript = AuditPipeline._validated_authoritative_transcript(DemoAudioProcessor().transcribe(audio))
+    if engine == "xfyun":
+        if transcript.get("asr_engine") != "xfyun" or transcript.get("provider") != "xfyun_spark_mul_cn_iat":
+            raise ValueError("Transcription did not use configured XFYUN provider")
+    elif (transcript.get("asr_engine") or transcript.get("provider")) != "dolphin":
+        raise ValueError("Transcription did not use Dolphin")
+    return {"asr_engine": engine, engine + "_real_audio": "passed"}
+
+
 def probe(config):
     """Executed only in the fixed Python with the same clean environment as services."""
     global PROBE_STAGE
@@ -397,9 +427,7 @@ def probe(config):
     import hermes_cli
     from backend.hermes_runtime import turn_worker  # noqa: F401
     import real_report_repository  # noqa: F401
-    from backend.audit_agent.pipeline import AuditPipeline
     from backend.audit_agent.qwen_client import QwenClient
-    from backend.audit_agent.video_processor import DemoAudioProcessor
     import requests
     if hermes_cli.__version__ != "0.20.4":
         raise ValueError("Unexpected Hermes version")
@@ -418,11 +446,7 @@ def probe(config):
     PROBE_STAGE = "ffmpeg_real_extraction"
     subprocess.run([config["ffmpeg"], "-hide_banner", "-loglevel", "error", "-i", config["probe_video"],
                     "-t", "3", "-vn", "-ar", "16000", "-ac", "1", "-y", str(audio)], check=True, capture_output=True)
-    PROBE_STAGE = "dolphin_real_transcription"
-    processor = DemoAudioProcessor()
-    transcript = AuditPipeline._validated_authoritative_transcript(processor.transcribe(audio))
-    if (transcript.get("asr_engine") or transcript.get("provider")) != "dolphin":
-        raise ValueError("Transcription did not use Dolphin")
+    asr_receipt = probe_audio(config, audio)
     PROBE_STAGE = "audit_provider"
     if QwenClient().audit_text('Return only JSON: {"ok":true}', max_tokens=128, enable_thinking=False).get("ok") is not True:
         raise ValueError("Audit provider JSON probe failed")
@@ -457,7 +481,7 @@ def probe(config):
     return {"status": "passed", "manifest_sha256": fingerprint(config), "commit": config["commit"],
             "crawler_commit": config["crawler_commit"], "node": node_version,
             "python": sys.version.split()[0], "hermes": hermes_cli.__version__, "cv2": cv2.__version__,
-            "pydantic_core": pydantic_core.__version__, "dolphin_real_audio": "passed",
+            "pydantic_core": pydantic_core.__version__, **asr_receipt,
             "audit_provider": "passed", "resource_provider": "passed",
             "conversation_provider": "passed" if conversation_checked else "not_configured", "checked_at": time.time()}
 

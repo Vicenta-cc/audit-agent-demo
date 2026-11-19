@@ -359,3 +359,83 @@ def test_login_v2_keys_accepted_by_manifest(config):
     path = Path(config["runtime_root"]) / "runtime.json"
     path.write_text(json.dumps(config))
     assert runtime.load_config(path) == config
+
+
+@pytest.fixture
+def xfyun_config(config):
+    config["settings"]["ASR_ENGINE"] = "xfyun"
+    Path(config["secrets_file"]).write_text(
+        "DASHSCOPE_API_KEY=test-audit\nRESOURCE_GENERATION_API_KEY=test-resource\n"
+        "XFYUN_APP_ID=test-app\nXFYUN_API_KEY=test-key\nXFYUN_API_SECRET=test-secret\n"
+        "CONVERSATION_API_KEY=test-conversation\n"
+    )
+    return config
+
+
+def test_xfyun_environment_uses_only_selected_asr_credentials(xfyun_config, monkeypatch):
+    monkeypatch.setenv("USE_REMOTE_ASR", "true")
+    monkeypatch.setenv("USE_REMOTE_WHISPER", "true")
+    path = Path(xfyun_config["runtime_root"]) / "runtime.json"
+    path.write_text(json.dumps(xfyun_config))
+    config = runtime.load_config(path)
+    env = runtime.environment(config)
+    assert env["ASR_ENGINE"] == "xfyun"
+    assert env["USE_REMOTE_ASR"] == env["USE_REMOTE_WHISPER"] == "false"
+    assert env["XFYUN_API_SECRET"] == "test-secret"
+    assert "REMOTE_INFERENCE_API_KEY" not in env
+    assert not runtime.SECRET_KEYS.intersection(runtime.environment(config, frontend=True))
+
+
+@pytest.mark.parametrize("key", sorted(runtime.XFYUN_SECRET_KEYS | {"DASHSCOPE_API_KEY", "RESOURCE_GENERATION_API_KEY"}))
+def test_xfyun_requires_asr_and_model_credentials(xfyun_config, key):
+    path = Path(xfyun_config["secrets_file"])
+    path.write_text("\n".join(line for line in path.read_text().splitlines() if not line.startswith(key + "=")))
+    with pytest.raises(ValueError, match=key):
+        runtime.environment(xfyun_config)
+
+
+def test_xfyun_preserves_conversation_credential_requirement(xfyun_config):
+    xfyun_config["settings"]["CONVERSATION_MODEL"] = "configured-model"
+    path = Path(xfyun_config["secrets_file"])
+    path.write_text("\n".join(line for line in path.read_text().splitlines() if not line.startswith("CONVERSATION_API_KEY=")))
+    with pytest.raises(ValueError, match="CONVERSATION_API_KEY"):
+        runtime.environment(xfyun_config)
+
+
+@pytest.mark.parametrize("engine", ["", "whisper", "XFYUN"])
+def test_unsupported_asr_engine_rejected(config, engine):
+    config["settings"]["ASR_ENGINE"] = engine
+    path = Path(config["runtime_root"]) / "runtime.json"
+    path.write_text(json.dumps(config))
+    with pytest.raises(ValueError, match="Unsupported ASR_ENGINE"):
+        runtime.load_config(path)
+    with pytest.raises(ValueError, match="Unsupported ASR_ENGINE"):
+        runtime.environment(config)
+
+
+@pytest.mark.parametrize("engine,provider,accepted", [
+    ("xfyun", "xfyun_spark_mul_cn_iat", True),
+    ("dolphin", "dolphin", False),
+    ("xfyun", "dolphin", False),
+    ("dolphin", "xfyun_spark_mul_cn_iat", False),
+])
+def test_xfyun_real_audio_probe_verifies_identity_and_redacts(xfyun_config, monkeypatch, engine, provider, accepted):
+    from backend.audit_agent import video_processor
+    audio = Path("probe.wav")
+    transcribe = Mock(return_value={"asr_engine": engine, "provider": provider,
+                                   "text": "private transcript", "segments": [], "raw": {"secret": "private"}})
+    monkeypatch.setattr(video_processor, "DemoAudioProcessor", lambda: SimpleNamespace(transcribe=transcribe))
+    if accepted:
+        assert runtime.probe_audio(xfyun_config, audio) == {"asr_engine": "xfyun", "xfyun_real_audio": "passed"}
+    else:
+        with pytest.raises(ValueError, match="configured XFYUN provider"):
+            runtime.probe_audio(xfyun_config, audio)
+    transcribe.assert_called_once_with(audio)
+    assert runtime.PROBE_STAGE == "xfyun_real_transcription"
+
+
+def test_legacy_dolphin_probe_still_accepts_provider_only(config, monkeypatch):
+    from backend.audit_agent import video_processor
+    monkeypatch.setattr(video_processor, "DemoAudioProcessor", lambda: SimpleNamespace(
+        transcribe=lambda audio: {"provider": "dolphin", "text": "speech", "segments": []}))
+    assert runtime.probe_audio(config, Path("probe.wav")) == {"asr_engine": "dolphin", "dolphin_real_audio": "passed"}
