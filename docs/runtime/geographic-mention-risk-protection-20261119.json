@@ -1,0 +1,54 @@
+{
+  "baseline": "6f68c31a57d8afefa744d7e169c0f53e9bb39c83",
+  "checks": [
+    {
+      "path": "backend/audit_agent/triage.py",
+      "unchanged": true,
+      "sha256": "3a6cb0906064b458ef99ba0bb97fb1c3b57c0f4fb0ee69dfd25efb0160b7e2a3"
+    },
+    {
+      "path": "backend/audit_agent/triage_matcher.py",
+      "unchanged": true,
+      "sha256": "aa8c3d2bbfa46caea7220a34baa13b9db7a6dd132d06130a60af4fd28a265724"
+    },
+    {
+      "path": "backend/audit_agent/frozen_risk.py",
+      "unchanged": true,
+      "sha256": "745d3aa7aa83adde71ffda9aee0941b3cab8b911318cd20fbff7834098cc7098"
+    },
+    {
+      "path": "backend/audit_agent/pipeline.py",
+      "unchanged": true,
+      "sha256": "e66aee69eee2ff6484b12e2aac7a94aa87795ac498fc0417df0a92d576a58aa4"
+    },
+    {
+      "path": "backend/reporting/sqlite_snapshot.py",
+      "unchanged": true,
+      "sha256": "46b36a23430880a9f4eb50dd5150d4ead0a33ec088ae5cffcac97319cd44ed89"
+    },
+    {
+      "path": "backend/audit_agent/geographic_bridge.py",
+      "symbol": "risk_config",
+      "unchanged": true,
+      "sha256": "3fe05f086531bae4d97cf4d9e95bb440ee19293d5038985c4b7010aa89e8ee06"
+    },
+    {
+      "path": "backend/audit_agent/geographic_bridge.py",
+      "symbol": "_RecordingClient",
+      "unchanged": true,
+      "sha256": "530eca435a07e46ad4a31622d0ed02bf0ac5cb0a353ca8664f0e6c03bb843417"
+    },
+    {
+      "path": "backend/audit_agent/geographic_bridge.py",
+      "symbol": "risk",
+      "unchanged": true,
+      "sha256": "e1ddeb6602b986ddc3bfff63e908302c0f86ce19b94bb7c9bf9bbeafb11defe4"
+    },
+    {
+      "path": "backend/audit_agent/scoped_selection.py",
+      "symbol": "validate_risk_record",
+      "unchanged": true,
+      "sha256": "28b96e226c2d50c23557b40597b2b67ffee7fc5fe1878c1ea81764cbf8739694"
+    }
+  ]
+}

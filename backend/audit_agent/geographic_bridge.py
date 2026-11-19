@@ -72,6 +72,10 @@ def project_plan(plan, *, execution_id, run_id, job_id, config_hash):
         raise ValueError('invalid_external_config_hash')
     if plan.collection.triage_mode != 'select':
         raise ValueError('unsupported_triage_mode')
+    if plan.inputs.p3_inputs.get('schema_version') == 'geographic-mention-profile-v1':
+        from . import geographic_mentions as mentions
+        return mentions.project_plan(plan, execution_id=execution_id, run_id=run_id, job_id=job_id,
+            config_hash=config_hash, risk_config=risk_config(plan.inputs.risk_inputs))
     profile = plan.inputs.p3_inputs
     state = plan.inputs.configuration.relevance_scope_state.model_dump(mode='json')
     context = p3.derive_scope_context(state, profile)
@@ -174,6 +178,9 @@ class GeographicBridge:
         return record
 
     def _evaluate_geo(self, candidate, *, attempt_state=None, on_attempt=None):
+        from . import geographic_mentions as mentions
+        if mentions.is_mention_plan(self._plan):
+            return mentions.evaluate(self._plan, candidate)
         state = self._p2.inputs.configuration.relevance_scope_state.model_dump(mode='json')
         profile = self._p2.inputs.p3_inputs
         request = p3.prepare(state, profile, candidate)
@@ -252,6 +259,11 @@ class GeographicBridge:
     def validate_geo(self, plan, candidate, geo):
         self._check(plan)
         validate_plan(plan)
+        from . import geographic_mentions as mentions
+        if mentions.is_mention_plan(plan):
+            if geo != mentions.evaluate(plan, candidate):
+                raise ValueError('mention geographic evidence mismatch')
+            return
         if candidate != self.normalize(candidate):
             raise ValueError('runtime_candidate_normalization_mismatch')
         state = self._p2.inputs.configuration.relevance_scope_state.model_dump(mode='json')

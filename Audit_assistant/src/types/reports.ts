@@ -1,3 +1,5 @@
+import type { GeographicQueryProgress } from './investigationCreation';
+
 export interface ReportVersionSummary {
   report_version_id: string;
   report_id: string;
@@ -134,6 +136,8 @@ export interface ReportPostPresentation {
   audit_finding_ref: string;
   decision: string;
   risk_level: string;
+  pending_manual_review?: boolean;
+  audit_gap_stages?: string[];
   audit_summary: string;
   published_at?: string;
   source_url?: string;
@@ -206,6 +210,9 @@ export interface ReportPresentationProjection {
     geographic_coverage?: GeographicCoverage[];
     selection_basis?: GeographicSelectionBasis[];
     canonical_posts: number;
+    collected_posts?: number;
+    risk_assessed_posts?: number;
+    pending_manual_review_posts?: number;
     investigation_finding_count: number;
     independently_reviewed_comments: number | null;
     comment_own_risk: number | null;
@@ -351,6 +358,8 @@ export interface ReportAppendixPage {
 }
 
 export interface GeographicCoverage {
+  queries?: GeographicQueryProgress[];
+  geographic_strategy?: string;
   source_job_id: string;
   candidate_occurrences: number;
   excluded_occurrences: number;
@@ -364,6 +373,8 @@ export interface GeographicCoverage {
   reasons: string[];
 }
 export interface GeographicSelectionBasis {
+  geographic_strategy?: string;
+  round_index?: number;
   target_name?: string;
   province_name?: string;
   source_job_id: string;

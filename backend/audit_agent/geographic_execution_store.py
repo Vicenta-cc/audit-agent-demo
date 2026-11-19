@@ -12,6 +12,23 @@ from .scoped_selection_store import Store
 class GeographicExecutionStore(Store):
     _table = 'geographic_executions'
 
+    def skip_mention_batch(self, execution_id, query_id, reason):
+        """Atomically close an unused round; no external capture was started."""
+        from .geographic_mentions import is_mention_plan
+        def action(s):
+            if not is_mention_plan(s['plan']) or reason not in {'selected', 'source_exhausted', 'task_limit', 'max_rounds'}:
+                raise ValueError('invalid mention skip')
+            query = s['queries'][query_id]
+            if query['status'] != 'pending':
+                raise ValueError('cannot skip a started batch')
+            definition = next(q for q in s['plan']['queries'] if q['query_id'] == query_id)
+            query.update(status='evaluated', capture_account='not-collected',
+                capture={'occurrences': [], 'account_id': 'not-collected', 'skipped': True,
+                         'end_reason': reason, 'capture_parameters': definition['capture_parameters']})
+            return {'query_id': query_id, 'end_reason': reason}
+        return self._transaction(execution_id, 'skip:' + query_id,
+                                 dict(kind='skip_mention_batch', query_id=query_id, reason=reason), action)
+
     def __init__(self, path, expected_binding, expected_plan_digest, lease_fence, *, state_lock=None):
         if not callable(lease_fence):
             raise ValueError('lease fence required')

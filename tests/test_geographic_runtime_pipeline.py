@@ -12,6 +12,19 @@ from test_unified_draft_configuration import P
 
 @pytest.fixture
 def confirmed(creation_stack, content, monkeypatch, tmp_path):
+    # These historical contract tests intentionally freeze the legacy AI strategy.
+    # New confirmations/rounds have a separate unpatched fixture and test suite.
+    from backend.investigation_creation import geographic_runtime
+    from backend.audit_agent.geographic_p3_runtime import freeze_p3_inputs, derive_scope_context
+    capture = geographic_runtime.capture_confirmed_authority
+    def legacy_capture(*args, **kwargs):
+        authority = capture(*args, **kwargs)
+        profile = freeze_p3_inputs(model=settings.triage_model,
+            model_config_source={'origin': 'confirmed_run', 'reference': 'legacy regression fixture'})
+        authority['p3_inputs'] = profile
+        authority['scope_context'] = derive_scope_context(authority['configuration']['relevance_scope_state'], profile)
+        return authority
+    monkeypatch.setattr(geographic_runtime, 'capture_confirmed_authority', legacy_capture)
     from backend.audit_agent.config import settings
     from backend.investigation_creation.geographic_runtime import IsolatedGeographicCapability
     monkeypatch.setattr(settings, 'triage_mode', 'select')

@@ -23,6 +23,7 @@ import type {
   ReportPresentationProjection
 } from "../../types/reports";
 import { resolvePublishedReportVersion } from "./reportRoute";
+import { ReportRiskTag, ReportAuditConclusion } from "./ReportAuditConclusion";
 import { ReportPostSourceDetails } from "./ReportPostSourceDetails";
 
 type AppendixView = "posts" | "standalone" | "evidence";
@@ -54,23 +55,12 @@ const decisionLabels: Record<string, string> = {
   reject: "拒绝"
 };
 
-const riskLabels: Record<string, string> = {
-  high: "高风险",
-  medium: "中风险",
-  low: "低风险",
-  none: "无风险"
-};
-
 function isAppendixView(value: string | null): value is AppendixView {
   return value === "posts" || value === "standalone" || value === "evidence";
 }
 
 function displayNumber(value: number | null | undefined) {
   return value == null ? "暂不可用" : value.toLocaleString("zh-CN");
-}
-
-function RiskTag({ risk }: { risk: string }) {
-  return <span className={`r31-risk-tag is-${risk || "none"}`}>{riskLabels[risk] || "未分级"}</span>;
 }
 
 function DrawerShell({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -136,15 +126,11 @@ function AppendixPostDrawer({ reportVersionId, postRef, onClose }: { reportVersi
         <>
           <div className="r31-post-detail-head">
             <div><h3>{detail.title}</h3>{detail.author_display_name ? <span>作者：{detail.author_display_name}</span> : null}</div>
-            <RiskTag risk={detail.risk_level} />
+            <ReportRiskTag post={detail} />
           </div>
           <ReportPostSourceDetails detail={detail} reportVersionId={reportVersionId} />
           {detail.content_summary ? <section className="r31-drawer-section"><h3>内容摘要</h3><p>{detail.content_summary}</p></section> : null}
-          <section className="r31-drawer-section">
-            <h3>审核结论</h3>
-            <p>{decisionLabels[detail.decision] || "审核决定未提供"} · {riskLabels[detail.risk_level] || "未分级"}</p>
-            <p>{detail.audit_summary || "原审核结果未提供文字说明。"}</p>
-          </section>
+          <ReportAuditConclusion post={detail} decisionLabel={decisionLabels[detail.decision]} />
           {detail.direct_evidence.length ? (
             <section className="r31-drawer-section"><h3>直接研判依据</h3><EvidenceRows items={detail.direct_evidence} /></section>
           ) : null}
@@ -159,7 +145,7 @@ function PostRows({ items, onOpen }: { items: ReportPostPresentation[]; onOpen: 
     <article className="r31-appendix-row" key={item.post_ref}>
       <div className="r31-appendix-row-head">
         <div><strong>{item.title}</strong>{item.author_display_name ? <small>作者：{item.author_display_name}</small> : null}</div>
-        <RiskTag risk={item.risk_level} />
+        <ReportRiskTag post={item} />
       </div>
       <p>{item.content_summary || item.audit_summary || "当前发布报告未提供内容摘要。"}</p>
       <footer>

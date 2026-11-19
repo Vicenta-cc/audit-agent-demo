@@ -244,8 +244,10 @@ class ConfirmedPlanInputs(PlanInputs):
 
 
 class ConfirmedGeographicPolicy(GeographicPolicy):
-    version: Literal['geo-select-confirmed-v1']
+    version: Literal['geo-select-confirmed-v1', 'geographic-mention-v1']
     selection_strategy: Literal['p4-geographic-selection']
+    ip_min_suspicion: Literal['strong', 'weak']
+    status_policy: Literal['successful-no-location-only-for-ip-v1', 'author-ip-fallback-v1']
 
 
 class ConfirmedScopeSearchPlan(ScopeSearchPlan):
@@ -362,7 +364,11 @@ def _integer(value, minimum, label):
 def _validate_profiles(inputs):
     if isinstance(inputs, ConfirmedPlanInputs):
         from backend.audit_agent.geographic_p3_runtime import validate_frozen_p3_inputs
-        validate_frozen_p3_inputs(inputs.p3_inputs)
+        if inputs.p3_inputs.get('schema_version') == 'geographic-mention-profile-v1':
+            from backend.audit_agent.geographic_mentions import validate_profile
+            validate_profile(inputs.p3_inputs)
+        else:
+            validate_frozen_p3_inputs(inputs.p3_inputs)
     else:
         p3=inputs.p3_inputs
         _keys(p3, {'schema_version','validation_origin','code_version','p3_schema_version','prompt_version',
@@ -465,16 +471,21 @@ def _derive(inputs):
     require(scope.selection_policy==state.selection_policy, 'scope/state policy mismatch')
     # Execution level is supplied by the pinned P3 adapter, not inferred from names.
     context=inputs.scope_context
-    _keys(context, {'schema_version','scope_origin','target_level','administrative_target','scope','policy','model','invocation_mode'}, 'P3 context')
-    require(context['schema_version']=='post-only-v2' and context['scope_origin']==('confirmed_run' if isinstance(inputs, ConfirmedPlanInputs) else 'fixture')
-        and context['model']==inputs.p3_inputs['model']['identifier'] and context['invocation_mode']=='single',
-        'P3 context protocol/model mismatch')
-    require(context['scope']=={'target':{'name':target['name'],'aliases':sorted(target['aliases'])},
-        'province':{'name':province['name'],'aliases':sorted(province['aliases'])},
-        'topic':None,'content_unit':'parent_post_event','selection_policy':scope.selection_policy},
-        'P3 context scope differs from frozen administrative identity/policy')
-    require(canonical(context['policy'])==canonical({'version':'post-only-v2',
-        'ip':inputs.p3_inputs['ip_policy']['thresholds']}), 'P3 context IP policy mismatch')
+    mention = inputs.p3_inputs.get('schema_version') == 'geographic-mention-profile-v1'
+    if mention:
+        from backend.audit_agent.geographic_mentions import derive_context
+        require(context == derive_context(state.model_dump(mode='json'), inputs.p3_inputs), 'mention context mismatch')
+    else:
+        _keys(context, {'schema_version','scope_origin','target_level','administrative_target','scope','policy','model','invocation_mode'}, 'P3 context')
+        require(context['schema_version']=='post-only-v2' and context['scope_origin']==('confirmed_run' if isinstance(inputs, ConfirmedPlanInputs) else 'fixture')
+            and context['model']==inputs.p3_inputs['model']['identifier'] and context['invocation_mode']=='single',
+            'P3 context protocol/model mismatch')
+        require(context['scope']=={'target':{'name':target['name'],'aliases':sorted(target['aliases'])},
+            'province':{'name':province['name'],'aliases':sorted(province['aliases'])},
+            'topic':None,'content_unit':'parent_post_event','selection_policy':scope.selection_policy},
+            'P3 context scope differs from frozen administrative identity/policy')
+        require(canonical(context['policy'])==canonical({'version':'post-only-v2',
+            'ip':inputs.p3_inputs['ip_policy']['thresholds']}), 'P3 context IP policy mismatch')
     target_context=context.get('scope',{}).get('target',{})
     require(target_context.get('name')==target['name'] and context.get('target_level') in {'city','province'},
             'P3 administrative context mismatch')
@@ -534,6 +545,8 @@ def _derive(inputs):
     policy=(ConfirmedGeographicPolicy if formal else GeographicPolicy)(version='geo-select-confirmed-v1' if formal else 'geo-select-fixture-v1',selection_policy=scope.selection_policy,tier_order=tiers,
         ip_min_suspicion='strong',status_policy='successful-no-location-only-for-ip-v1',
         selection_strategy='p4-geographic-selection' if formal else 'p4-future-geographic-selection',quota_settlement='actual-selected-query-after-detail-success')
+    if mention:
+        policy = policy.model_copy(update={'version':'geographic-mention-v1', 'tier_order':['local','province_unknown','ip_only'], 'ip_min_suspicion':'weak', 'status_policy':'author-ip-fallback-v1'})
     return queries,collection,policy
 
 

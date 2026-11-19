@@ -451,7 +451,11 @@ class InvestigationResourceService:
         blockers.extend(InvestigationBlocker(**item) for item in scope_blockers(effective_configuration, capability=getattr(self, 'geographic_capability', None)))
         planned_content_count = planned_contents(parameters, mode, resolved_terms)
         blockers = self._dedupe_blockers(blockers)
+        from backend.audit_agent.geographic_mentions import VERSION
+        has_geography = effective_configuration.relevance_scope is not None
         return ConfirmationPreview(
+            geographic_strategy=VERSION if has_geography else None,
+            geographic_max_rounds=settings.geographic_max_rounds if has_geography else None,
             relevance_scope=effective_configuration.relevance_scope,
             relevance_scope_state=project_state(effective_configuration.relevance_scope_state),
             max_post_limit=settings.investigation_max_posts,

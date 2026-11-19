@@ -18,7 +18,7 @@ async function server(context: BrowserContext, initial: ReturnType<typeof accoun
     if (path === "/api/auth/me") return route.fulfill({json:{user:state.current}});
     if (path === "/api/auth/csrf") return route.fulfill({json:{csrf_token:"test-csrf"}});
     if (path === "/api/auth/logout") { state.current = null; return route.fulfill({status:204}); }
-    if (path === "/api/me/task-quota") return route.fulfill({json:{enabled:true,used:1,remaining:state.current.role === "admin" ? null : 2,limit:state.current.role === "admin" ? null : 3,unlimited:state.current.role === "admin",legacy_record_count:0,active_task:state.active}});
+    if (path === "/api/me/task-quota") return route.fulfill({json:{enabled:true,used:1,remaining:state.current.role === "admin" ? null : 5,limit:state.current.role === "admin" ? null : 6,unlimited:state.current.role === "admin",legacy_record_count:0,active_task:state.active}});
     if (path === "/api/investigation-workspaces") return route.fulfill({json:{items:[{workspace_session_id:"workspace-a",run_id:"run-a",title:"测试调查",updated_at:new Date().toISOString(),run_status:"QUEUED",presentation_stage:"confirmation"}],has_more:false}});
     if (path === "/api/historical-report-workspaces") return route.fulfill({json:{items:[]}});
     if (path === "/api/crawler-accounts") return route.fulfill({json:{items:[{id:"crawler-a",display_name:"测试采集账号",platform:"dy",status:"active"}]}});
@@ -192,7 +192,7 @@ test("production app gates all workspace reads until login and keeps the existin
   expect(reads).toEqual([]);
   await signIn(page);
   await expect(page.getByLabel("应用登录账号")).toContainText("alice");
-  await expect(page.getByLabel("今日任务额度")).toContainText("剩余 2 次");
+  await expect(page.getByLabel("今日任务额度")).toContainText("剩余 5 次");
   await expect(page.getByText("维汉民族关系专项调查",{exact:true})).toHaveCount(0);
   await expect(page.getByText("世界杯博彩专项调查",{exact:true})).toHaveCount(0);
   expect(errors).toEqual([]);

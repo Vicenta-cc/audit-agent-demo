@@ -41,6 +41,9 @@ class ScopedExecution:
     def _query(self, query_id):
         return next(q for q in self.plan['queries'] if q['query_id'] == query_id)
 
+    def _evaluation_plan(self):
+        return deepcopy(self.plan)
+
     def _capture_query(self, query):
         qid = query['query_id']
         status, has_capture = self.read_state(
@@ -98,7 +101,7 @@ class ScopedExecution:
                                 lambda s: s['queries'][qid].get('geo_attempts', {}).get(oid, [])),
                                 'on_attempt': lambda attempts, oid=oid: self.store.record_geo_attempts(
                                     self.execution_id, qid, oid, attempts, 'geo-attempt:' + uuid4().hex)}
-                        value = evaluate(deepcopy(self.plan), deepcopy(query), deepcopy(occurrence), **kwargs)
+                        value = evaluate(self._evaluation_plan(), deepcopy(query), deepcopy(occurrence), **kwargs)
                         if part == 'geo':
                             self.validate_geo(self.plan, occurrence['candidate'], value)
                         self.store.record_evaluation(self.execution_id, qid, oid, part, value,

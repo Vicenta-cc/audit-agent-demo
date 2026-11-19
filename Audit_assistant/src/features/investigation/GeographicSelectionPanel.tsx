@@ -1,11 +1,7 @@
 import { createElement as h, useEffect, useState } from 'react';
 import { getGeographicSelection } from '../../services/investigationCreation';
 import type { GeographicSelectionPage, GeographicTier } from '../../types/investigationCreation';
-
-const tiers: Record<GeographicTier, string> = {
-  local: '本地', province_unknown: '省级信息（城市未明）', ip_only: 'IP 补充（待核实）',
-  other_region: '其他地域', unresolved: '地域待核实', conflict: '地域信息冲突'
-};
+import { geographicEndReason, geographicTierLabel, geographicTierLabels, MENTION_STRATEGY } from './geographicPresentation';
 const reasons: Record<string, string> = {
   geographic_receipt_pending: '采集结果待对账', awaiting_reconciliation: '采集结果待对账',
   geographic_delivery_pending: '精采后的审核交付尚未完成', geographic_queries_unfinished: '仍有搜索词未完成候选评估',
@@ -26,12 +22,17 @@ export function GeographicSelectionView({ page }: { page: GeographicSelectionPag
   return h('section', { 'aria-label': '地域筛选记录', style: { fontSize: 13, lineHeight: 1.75, overflowWrap: 'anywhere' } },
     h('h3', { style: { fontSize: 14 } }, status),
     page.summary && h('p', null, `候选记录 ${page.summary.candidate_occurrences} · 精采成功 ${page.summary.collected} · 已交付审核 ${page.summary.handed_off} · 精采后未交付 ${page.summary.collected_not_delivered}`),
+    page.geographic_strategy === MENTION_STRATEGY && !!page.summary?.queries?.length && h('ul', { 'aria-label': '逐词补筛进度' },
+      page.summary.queries.map(query => h('li', { key: query.logical_query_id },
+        `搜索词：${query.query} · 第 ${query.round_index} / ${query.max_rounds} 轮`,
+        geographicEndReason(query.end_reason) ? ` · ${geographicEndReason(query.end_reason)}` : ''
+      ))),
     !!page.summary?.geographic_evaluation_pending && h('p', null, `地域预筛待判定 ${page.summary.geographic_evaluation_pending} 条`),
     detailReasons.length > 0 && h('p', null, detailReasons.join('；')),
     h('p', null, '以下为候选的地域与初筛依据；正式风险结论以审核结果为准。'),
     h('ul', null, page.items.map(item => h('li', { key: item.occurrence_id },
-      h('strong', null, item.pending_reason === 'geographic_response_invalid' ? '地域预筛待判定' : item.geo_tier ? tiers[item.geo_tier] : '地域待核实'),
-      h('div', null, `搜索词：${item.source_keyword} · 原始序位：${item.rank}`),
+      h('strong', null, item.pending_reason === 'geographic_response_invalid' ? '地域预筛待判定' : geographicTierLabel(item.geo_tier, page.geographic_strategy)),
+      h('div', null, `搜索词：${item.source_keyword}${page.geographic_strategy === MENTION_STRATEGY && item.round_index ? ` · 第 ${item.round_index} 轮` : ''} · 原始序位：${item.rank}`),
       h('div', null, `内容：${item.content_key} · 初筛：${item.risk_band == null ? '待初筛' : item.risk_band === 'strong' ? '强疑似' : item.risk_band === 'weak' ? '弱疑似' : '未入选'}`)
     ))),
     page.total > 0 && h('p', null, `候选依据 ${page.offset + 1}–${Math.min(page.offset + page.items.length, page.total)} / ${page.total}`)
@@ -57,7 +58,7 @@ export function GeographicSelectionPanel({ runId }: { runId: string }) {
     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
       <label>地域档位 <select aria-label="筛选地域档位" value={tier} onChange={event => { setOffset(0); setTier(event.target.value as GeographicTier | ''); }}>
         <option value="">全部</option>
-        {Object.entries(tiers).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        {Object.entries(geographicTierLabels(page?.geographic_strategy)).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select></label>
       <button type="button" onClick={() => setRefresh(value => value + 1)}>刷新筛选记录</button>
     </div>

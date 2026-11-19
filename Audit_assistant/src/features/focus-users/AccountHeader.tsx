@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   ClipboardCopy,
   Clock3,
+  ExternalLink,
   Loader2,
   MoreHorizontal,
   RefreshCw,
@@ -17,7 +18,7 @@ import { AccountAvatar } from "./AccountAvatar";
 interface AccountHeaderProps {
   account: MonitoredAccount;
   isRefetching: boolean;
-  onCopyId: () => void;
+  onCopyId: (succeeded: boolean) => void;
   onRefetch: () => void;
   onCancelWatch: () => void;
   onTaskView: () => void;
@@ -34,14 +35,20 @@ export function AccountHeader({
 }: AccountHeaderProps) {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const isDouyin = account.platform === "抖音";
+  const profileUrl = isDouyin ? account.profileUrl : "";
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(account.platformAccountId);
-    } catch {
-      // Fallback in demo mode
+    if (!account.publicDouyinId || !navigator.clipboard?.writeText) {
+      onCopyId(false);
+      return;
     }
-    onCopyId();
+    try {
+      await navigator.clipboard.writeText(account.publicDouyinId);
+      onCopyId(true);
+    } catch {
+      onCopyId(false);
+    }
   };
 
   const handleConfirmCancel = () => {
@@ -56,14 +63,27 @@ export function AccountHeader({
           <AccountAvatar name={account.name} src={account.avatarUrl} variant="detail" />
           <div className="account-header-titles">
             <div className="account-name-row">
-              <h2>{account.name}</h2>
+              <h2>
+                {profileUrl ? (
+                  <a className="account-profile-link" href={profileUrl} target="_blank" rel="noopener noreferrer">
+                    {account.name}
+                    <ExternalLink size={14} aria-hidden="true" />
+                  </a>
+                ) : account.name}
+              </h2>
               <PlatformIcon platform={account.platform} size={15} />
-              <div className="account-id-row">
-                <span>ID: {account.platformAccountId}</span>
-                <button className="copy-button" type="button" onClick={handleCopy} title="复制账号 ID">
-                  <ClipboardCopy size={13} />
-                </button>
-              </div>
+              {isDouyin ? <div className="account-id-row">
+                {profileUrl ? (
+                  <a href={profileUrl} target="_blank" rel="noopener noreferrer">
+                    抖音号：{account.publicDouyinId || "未提供"}
+                  </a>
+                ) : <span>抖音号：{account.publicDouyinId || "未提供"}</span>}
+                {account.publicDouyinId ? (
+                  <button className="copy-button" type="button" onClick={handleCopy} title="复制抖音号" aria-label="复制抖音号">
+                    <ClipboardCopy size={13} />
+                  </button>
+                ) : null}
+              </div> : null}
             </div>
           </div>
         </div>

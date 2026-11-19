@@ -61,6 +61,17 @@ def make_query_summary(plan, qid, query):
             _public_candidate(o, query['evaluations'].get(o['occurrence_id'], {}))
             for o in captured
         ]
+    extra = {}
+    from .geographic_mentions import is_mention_plan
+    if is_mention_plan(plan):
+        # A completed mention scan with no hit is a normal exclusion, not an
+        # unresolved AI response or a geographic conflict requiring recovery.
+        conflict_count = 0
+        capture = query.get('capture') or {}
+        extra = {'skipped': capture.get('skipped', False), 'end_reason': capture.get('end_reason'),
+                 'source_exhausted': capture.get('continuation', {}).get('exhausted', False)}
+        for row in public:
+            row['round_index'] = definition['round_index']
     return {
         'status': query['status'],
         'candidate_count': len(captured),
@@ -69,4 +80,5 @@ def make_query_summary(plan, qid, query):
         'conflict_count': conflict_count,
         'pending_evaluations': pending,
         'selection_rows': public,
+        **extra,
     }

@@ -1231,6 +1231,29 @@ test("save failure checks recoverable operation and continues without reauth or 
   expect(cancels).toBe(1);
 });
 
+test("a recovered identity already bound elsewhere can start a fresh scan", async ({ page }) => {
+  const requests: Record<string, unknown>[] = [];
+  const previous = { ...snapshot("failed"), status: "failed", cleanup_state: "complete",
+    error: { code: "SAVE_FAILED", message: "保存失败" } };
+  const duplicate = { ...previous, error: { code: "IDENTITY_ALREADY_BOUND", message: "请切换抖音账号后重新扫码" } };
+  await page.route("**/api/crawler-accounts/account-fixture/login-sessions", route => {
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({ json: { item: [previous, duplicate, snapshot("qr_ready")][requests.length - 1] } });
+  });
+  await page.route("**/api/crawler-accounts/account-fixture/login-operations/operation-fixture", route =>
+    route.fulfill({ json: { item: { id: "operation-fixture", stage: "recovery_required" } } }));
+  await page.route("**/api/crawler-account-login-sessions/login-fixture", route =>
+    route.fulfill({ json: { item: previous } }));
+  await page.goto("/tests/crawlerLoginV2.html");
+  await page.getByRole("button", { name: "继续完成登录" }).click();
+  await expect(page.getByText("请切换抖音账号后重新扫码")).toBeVisible();
+  await page.getByRole("button", { name: "重新扫码" }).click();
+  await expect.poll(() => requests.length).toBe(3);
+  expect(requests[1]).toMatchObject({ intent: "recover", source_operation_id: "operation-fixture" });
+  expect(requests[2].intent).toBe("reauth");
+  expect(requests[2]).not.toHaveProperty("source_operation_id");
+});
+
 test("save recovery authorization failure does not offer reset or unverified recovery", async ({
   page,
 }) => {
@@ -2310,3 +2333,23 @@ test("isolated native Firefox caret projects on the existing React canvas eviden
   await expect(page.locator(".crawler-login-confirmed-focus")).toHaveCount(0);
   await page.screenshot({ path: "/Users/hose/project/zhanyun/.omx/qa/camoufox-caret-react-fixture-20261016.png" });
 });
+
+for (const replay of [false, true]) {
+  test(`retry after route contention checks existing login state (${replay ? "replay" : "HTTP"})`, async ({ page }) => {
+    const intents: string[] = [];
+    const error = { code: "PROXY_BUSY", message: "当前登录线路正在使用，请稍后重试。" };
+    await page.route("**/api/crawler-accounts/account-fixture/login-session-claims", route =>
+      route.fulfill({ status: 404, json: { detail: { code: "ACTIVE_LOGIN_NOT_FOUND" } } }));
+    await page.route("**/api/crawler-accounts/account-fixture/login-sessions", route => {
+      intents.push(route.request().postDataJSON().intent);
+      if (intents.length === 1 && replay) {
+        return route.fulfill({ json: { item: { ...snapshot("failed"), id: "", status: "failed", qr: null, error, cleanup_state: "complete" } } });
+      }
+      return route.fulfill({ status: 409, json: { detail: error } });
+    });
+    await page.goto("/tests/crawlerLoginV2.html");
+    await expect(page.getByText(error.message, { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "重试登录", exact: true }).click();
+    await expect.poll(() => intents).toEqual(["check_or_login", "check_or_login"]);
+  });
+}

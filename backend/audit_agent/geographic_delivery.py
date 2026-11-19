@@ -109,6 +109,10 @@ class GeographicDelivery:
                          plan_digest=p['plan_digest'], initial_evidence_digest=occurrence['evidence_digest'],
                          detail_evidence_digest=capture['content_digest'],
                          selection_policy=p['selection_policy'], target_level=p['target_level'])
+            from .geographic_mentions import is_mention_plan
+            if is_mention_plan(p):
+                basis['geographic_strategy'] = p['geographic_strategy']
+                basis['round_index'] = query['round_index']
             if a['tier'] == 'province_unknown' and occurrence['model_geo_tier'] in ('unresolved', 'ip_only'):
                 basis['selection_signal'] = 'province_hashtag'
             scope = p.get('scope_context', {}).get('scope', {})

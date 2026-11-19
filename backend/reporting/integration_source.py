@@ -4,7 +4,7 @@ import hashlib
 import json
 import sqlite3
 from contextlib import closing, contextmanager
-from copy import copy
+from copy import copy, deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -275,8 +275,14 @@ class CanonicalReportSource:
         public_keys = ("candidate_occurrences", "excluded_occurrences", "ineligible_occurrences",
                        "geographic_pending_or_conflict", "reserved", "collected", "handed_off",
                        "collected_not_delivered", "unfinished_queries", "reasons")
-        return {"coverage": {"source_job_id": source_job_id, **{key: summary.get(key) for key in public_keys}},
-                "selection_basis": basis}
+        coverage = {"source_job_id": source_job_id, **{key: summary.get(key) for key in public_keys}}
+        # Optional versioned fields stay absent for historical report snapshots.
+        if "geographic_strategy" in basis:
+            if summary.get("geographic_strategy") != basis["geographic_strategy"]:
+                raise ValueError("geographic report strategy binding mismatch")
+            coverage["geographic_strategy"] = basis["geographic_strategy"]
+            coverage["queries"] = deepcopy(summary["queries"])
+        return {"coverage": coverage, "selection_basis": basis}
 
     def coverage(self, task_id: str) -> dict[str, Any]:
         """Return public, sanitized coverage for completed and failed posts."""

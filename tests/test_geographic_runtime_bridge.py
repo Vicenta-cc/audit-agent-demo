@@ -193,7 +193,10 @@ def test_actual_confirmed_run_drives_bridge_without_risk_changes(creation_stack,
         baseline_engine.terms_for(snapshot['category_ids']), search_keyword=query['query'], rules=snapshot['rules'])
     assert occurrence['risk']['score'] == asdict(original)
     assert risk_client.calls == old_client.calls
-    assert occurrence['geo']['request']['context']['scope_origin'] == 'confirmed_run'
+    assert plan['scope_context']['scope_origin'] == 'confirmed_run'
+    assert occurrence['geo']['geographic_strategy'] == 'geographic-mention-v1'
+    assert geo_client.calls == []
+    assert 'request' not in occurrence['geo']
     # Same tier detail changes preserve original risk and do not invoke its client.
     changed = deepcopy(occurrence['candidate']['raw_source'])
     changed['post']['desc'] = '精采后同档新正文'
@@ -229,7 +232,7 @@ def test_actual_confirmed_run_drives_bridge_without_risk_changes(creation_stack,
 
 def test_provider_metadata_is_not_passed_into_strict_p3_contract(
         creation_stack, content, monkeypatch, tmp_path):
-    bridge, _, geo_client, _, _ = confirmed_bridge(
+    bridge, _, geo_client, _, _ = legacy_confirmed_bridge(
         creation_stack, content, monkeypatch, tmp_path)
     geo_client.response = response() | {
         '_llm_meta': {'model': 'qwen3.6-flash', 'finish_reason': 'stop', 'total_tokens': 42}}
@@ -252,7 +255,7 @@ def test_provider_metadata_is_not_passed_into_strict_p3_contract(
 def test_geo_retries_only_invalid_evidence_with_fixed_protocol_reminder(
         creation_stack, content, monkeypatch, tmp_path, entrypoint, invalid_count):
     from backend.audit_agent.scoped_selection import eligible_tier
-    bridge, _, geo_client, _, _ = confirmed_bridge(
+    bridge, _, geo_client, _, _ = legacy_confirmed_bridge(
         creation_stack, content, monkeypatch, tmp_path)
     plan = bridge.plan
     query = plan['queries'][0]
@@ -313,7 +316,7 @@ def test_geo_retries_only_invalid_evidence_with_fixed_protocol_reminder(
 def test_geo_retry_does_not_swallow_exceptions(
         creation_stack, content, monkeypatch, tmp_path, entrypoint, failure):
     from backend.audit_agent import geographic_bridge
-    bridge, _, geo_client, _, _ = confirmed_bridge(
+    bridge, _, geo_client, _, _ = legacy_confirmed_bridge(
         creation_stack, content, monkeypatch, tmp_path)
     plan = bridge.plan
     query = plan['queries'][0]
@@ -346,7 +349,7 @@ def test_geo_retry_does_not_swallow_exceptions(
 ])
 def test_geo_compound_binding_requires_exact_source_and_matching_parent(
         creation_stack, content, monkeypatch, tmp_path, title, model_place, expected):
-    bridge, _, client, _, _ = confirmed_bridge(creation_stack, content, monkeypatch, tmp_path)
+    bridge, _, client, _, _ = legacy_confirmed_bridge(creation_stack, content, monkeypatch, tmp_path)
     plan = bridge.plan
     query = plan['queries'][0]
     occurrence = bridge.occurrence(query['query_id'], 'dy:compound', 0,
@@ -366,7 +369,7 @@ def test_geo_compound_binding_requires_exact_source_and_matching_parent(
 
 def test_geo_attempt_budget_survives_interrupted_calls(
         creation_stack, content, monkeypatch, tmp_path):
-    bridge, _, client, _, _ = confirmed_bridge(creation_stack, content, monkeypatch, tmp_path)
+    bridge, _, client, _, _ = legacy_confirmed_bridge(creation_stack, content, monkeypatch, tmp_path)
     plan = bridge.plan
     query = plan['queries'][0]
     occurrence = bridge.occurrence(query['query_id'], 'dy:interrupt', 0,
@@ -392,7 +395,7 @@ def test_geo_attempt_budget_survives_interrupted_calls(
 
 def test_geo_completed_attempt_replays_without_model_call(
         creation_stack, content, monkeypatch, tmp_path):
-    bridge, _, client, _, _ = confirmed_bridge(creation_stack, content, monkeypatch, tmp_path)
+    bridge, _, client, _, _ = legacy_confirmed_bridge(creation_stack, content, monkeypatch, tmp_path)
     plan = bridge.plan
     query = plan['queries'][0]
     occurrence = bridge.occurrence(query['query_id'], 'dy:cached', 0,
@@ -417,7 +420,7 @@ def test_geo_adapter_does_not_move_evidence_between_fields():
 
 def test_geo_legacy_record_remains_replayable(creation_stack, content, monkeypatch, tmp_path):
     from backend.audit_agent.geographic_bridge import _geo_attempt_prompt
-    bridge, _, client, _, _ = confirmed_bridge(creation_stack, content, monkeypatch, tmp_path)
+    bridge, _, client, _, _ = legacy_confirmed_bridge(creation_stack, content, monkeypatch, tmp_path)
     plan = bridge.plan
     query = plan['queries'][0]
     occurrence = bridge.occurrence(query['query_id'], 'dy:legacy', 0,
@@ -444,3 +447,37 @@ def test_geo_compound_binding_is_independent_of_target_and_keeps_duplicate_prote
     duplicated['locations'].append({'field': 'title', 'place': '克拉玛依市'})
     result, _ = consume(request, duplicated)
     assert result['evaluation_status'] == 'invalid_response'
+
+
+def test_legacy_confirmed_profile_still_parses_and_uses_geo_model(creation_stack, content, monkeypatch, tmp_path):
+    from backend.audit_agent import geographic_mentions as mentions, geographic_p3_runtime as legacy
+    from backend.audit_agent.config import settings
+    from backend.investigation_creation.scope_search_plan import parse_confirmed_scope_search_plan
+    with monkeypatch.context() as old:
+        old.setattr(mentions, 'freeze_profile', lambda **kwargs: legacy.freeze_p3_inputs(
+            model=settings.triage_model,
+            model_config_source={'origin':'confirmed_run','reference':'legacy regression fixture'}))
+        old.setattr(mentions, 'derive_context', legacy.derive_scope_context)
+        bridge, risk_client, geo_client, bindings, frozen = confirmed_bridge(
+            creation_stack, content, monkeypatch, tmp_path)
+    parsed=parse_confirmed_scope_search_plan(frozen, expected_identity=bindings['expected_identity'],
+        expected_digest=bindings['expected_plan_digest'])
+    assert parsed.policy.version == 'geo-select-confirmed-v1'
+    plan=bridge.plan;query=plan['queries'][0]
+    occurrence=bridge.occurrence(query['query_id'],'dy:one',1,
+        {'post_id':'one','title':'克拉玛依市收费','source_keyword':query['query']})
+    record=bridge.geo(plan,query,occurrence)
+    bridge.validate_geo(plan,occurrence['candidate'],record)
+    assert 'request' in record
+    assert len(geo_client.calls)==1
+
+
+def legacy_confirmed_bridge(stack, body, monkeypatch, tmp_path, **resources):
+    from backend.audit_agent import geographic_mentions as mentions, geographic_p3_runtime as legacy
+    from backend.audit_agent.config import settings
+    with monkeypatch.context() as old:
+        old.setattr(mentions, 'freeze_profile', lambda **kwargs: legacy.freeze_p3_inputs(
+            model=settings.triage_model,
+            model_config_source={'origin':'confirmed_run','reference':'legacy regression fixture'}))
+        old.setattr(mentions, 'derive_context', legacy.derive_scope_context)
+        return confirmed_bridge(stack, body, monkeypatch, tmp_path, **resources)

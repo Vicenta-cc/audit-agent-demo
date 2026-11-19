@@ -2,8 +2,12 @@ import { apiRequest } from "./apiClient";
 import { fetchAuditResults, fetchJob, getResultTime, isRiskAuditResult } from "./jobs";
 import type {
   AccountStatus,
+  CommentRiskLevel,
+  CommentRiskProfile,
   MonitoredAccount,
   RelatedAccount,
+  RiskCommentRecord,
+  RiskDistributionItem,
   RiskLevel,
   RiskOutput,
   TimelineEvent
@@ -15,6 +19,8 @@ interface ApiMonitoredUser {
   platform?: unknown;
   stable_key?: unknown;
   display_name?: unknown;
+  public_douyin_id?: unknown;
+  sec_uid?: unknown;
   profile_url?: unknown;
   raw_identity?: unknown;
   source_audit_result_id?: unknown;
@@ -30,6 +36,8 @@ interface ApiRelatedAccount {
   platform?: unknown;
   display_name?: unknown;
   avatar_url?: unknown;
+  public_douyin_id?: unknown;
+  sec_uid?: unknown;
   profile_url?: unknown;
   raw_identity?: unknown;
   source_comment_id?: unknown;
@@ -40,6 +48,23 @@ interface ApiRelatedAccount {
   analysis_status?: unknown;
   analysis_job?: unknown;
   updated_at?: unknown;
+}
+
+interface ApiCommentRiskUser {
+  id?: unknown;
+  platform?: unknown;
+  display_name?: unknown;
+  public_douyin_id?: unknown;
+  sec_uid?: unknown;
+  profile_url?: unknown;
+  avatar_url?: unknown;
+  violation_count?: unknown;
+  high_risk_count?: unknown;
+  medium_risk_count?: unknown;
+  pending_review_count?: unknown;
+  comment_area_count?: unknown;
+  latest_at?: unknown;
+  comments?: unknown;
 }
 
 type PlatformLabel = MonitoredAccount["platform"];
@@ -62,7 +87,9 @@ const DEFAULT_MOCK_MONITORED_ACCOUNTS: MonitoredAccount[] = [
     updatedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     name: "世界杯盘口小助手",
     platform: "抖音",
-    platformAccountId: "DY_88920194",
+    publicDouyinId: "DY_88920194",
+    secUid: "",
+    profileUrl: "",
     avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&h=120&fit=crop",
     monitorScope: ["账号主页", "发布内容", "评论区"],
     status: "watching",
@@ -131,6 +158,8 @@ const DEFAULT_MOCK_MONITORED_ACCOUNTS: MonitoredAccount[] = [
         name: "球赛情报局",
         platform: "快手",
         avatarUrl: "https://picsum.photos/seed/rel-101-a/100/100",
+        publicDouyinId: "",
+        secUid: "",
         profileUrl: "",
         sourceCommentId: "comment-kuaishou-881",
         sourceCommentText: "看主页置顶，按步骤操作即可领取试玩金",
@@ -147,6 +176,8 @@ const DEFAULT_MOCK_MONITORED_ACCOUNTS: MonitoredAccount[] = [
         name: "绿荫足彩分析",
         platform: "小红书",
         avatarUrl: "https://picsum.photos/seed/rel-101-b/100/100",
+        publicDouyinId: "",
+        secUid: "",
         profileUrl: "",
         sourceCommentId: "comment-xhs-992",
         sourceCommentText: "同源网址跳转，私信获取暗号",
@@ -205,7 +236,9 @@ const DEFAULT_MOCK_MONITORED_ACCOUNTS: MonitoredAccount[] = [
     updatedAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
     name: "维汉情感交流驿站",
     platform: "小红书",
-    platformAccountId: "RED_6728190",
+    publicDouyinId: "",
+    secUid: "",
+    profileUrl: "",
     avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&h=120&fit=crop",
     monitorScope: ["发布内容", "评论区"],
     status: "watching",
@@ -263,6 +296,8 @@ const DEFAULT_MOCK_MONITORED_ACCOUNTS: MonitoredAccount[] = [
         name: "西域文化视角",
         platform: "抖音",
         avatarUrl: "https://picsum.photos/seed/rel-102-a/100/100",
+        publicDouyinId: "",
+        secUid: "",
         profileUrl: "",
         sourceCommentId: "comment-dy-772",
         sourceCommentText: "同话题视频搬运与评论引导",
@@ -305,7 +340,9 @@ const DEFAULT_MOCK_MONITORED_ACCOUNTS: MonitoredAccount[] = [
     updatedAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
     name: "极客违禁线索观察",
     platform: "快手",
-    platformAccountId: "KS_1092831",
+    publicDouyinId: "",
+    secUid: "",
+    profileUrl: "",
     avatarUrl: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=120&h=120&fit=crop",
     monitorScope: ["账号主页", "发布内容"],
     status: "continuous",
@@ -371,7 +408,7 @@ const DEFAULT_MOCK_MONITORED_ACCOUNTS: MonitoredAccount[] = [
   }
 ];
 
-export async function fetchMonitoredAccounts(): Promise<MonitoredAccount[]> {
+export async function fetchMonitoredAccounts({ demoMode }: { demoMode: boolean }): Promise<MonitoredAccount[]> {
   try {
     const payload = await apiRequest<{ items?: ApiMonitoredUser[] }>("/api/monitored-users");
     const items = payload.items ?? [];
@@ -383,9 +420,15 @@ export async function fetchMonitoredAccounts(): Promise<MonitoredAccount[]> {
       return accounts;
     }
   } catch (err) {
+    if (!demoMode) throw err;
     console.warn("API fetch failed, falling back to local monitored accounts:", err);
   }
-  return DEFAULT_MOCK_MONITORED_ACCOUNTS;
+  return demoMode ? DEFAULT_MOCK_MONITORED_ACCOUNTS : [];
+}
+
+export async function fetchCommentRiskProfiles(): Promise<CommentRiskProfile[]> {
+  const payload = await apiRequest<{ items?: ApiCommentRiskUser[] }>("/api/comment-risk-users");
+  return (payload.items ?? []).map(mapCommentRiskProfile);
 }
 
 export async function fetchMonitoredAccountDetail(account: MonitoredAccount): Promise<MonitoredAccount> {
@@ -446,14 +489,13 @@ function mapMonitoredAccount(item: ApiMonitoredUser, sourceJob: RawJob | undefin
   const sourceAuditResultId = toPositiveNumber(item.source_audit_result_id);
   const platform = mapPlatform(item.platform);
   const name = toText(item.display_name, author.nickname, author.user_unique_id, "未知账号");
-  const platformAccountId = toText(
+  const publicDouyinId = toText(
+    item.public_douyin_id,
     author.user_unique_id,
-    author.short_user_id,
-    author.user_id,
-    item.raw_identity,
-    item.stable_key,
-    item.id
+    author.short_user_id
   );
+  const secUid = toText(item.sec_uid, author.sec_uid);
+  const profileUrl = safeDouyinProfileUrl(item.profile_url);
   const status = mapAccountStatus(taskState.status);
   const riskOutputs = auditResults
     .filter((result) => isRiskAuditResult(result) && isWithinDays(getResultTime(result), 30))
@@ -467,14 +509,16 @@ function mapMonitoredAccount(item: ApiMonitoredUser, sourceJob: RawJob | undefin
   const monitoringPlan = mapMonitoringPlan(sourceJob);
 
   return {
-    id: toText(item.id, item.stable_key, platformAccountId),
+    id: toText(item.id, item.stable_key, publicDouyinId, name),
     sourceJobId,
     sourceAuditResultId,
     riskDataLoaded: !sourceJobId,
     updatedAt: latestUpdatedAt,
     name,
     platform,
-    platformAccountId,
+    publicDouyinId,
+    secUid,
+    profileUrl,
     avatarUrl: toText(author.avatar, author.avatar_url),
     monitorScope: monitoringPlan.scope,
     status,
@@ -501,8 +545,8 @@ function mapMonitoredAccount(item: ApiMonitoredUser, sourceJob: RawJob | undefin
 
 function matchAccountResults(account: MonitoredAccount, results: AuditResult[]): AuditResult[] {
   const identities = new Set([
-    account.platformAccountId,
-    account.name
+    account.secUid,
+    account.publicDouyinId
   ].map((value) => toText(value).toLowerCase()).filter(Boolean));
 
   return results.filter((result) => {
@@ -510,12 +554,9 @@ function matchAccountResults(account: MonitoredAccount, results: AuditResult[]):
     if (account.sourceAuditResultId && resultId === account.sourceAuditResultId) return true;
     const resultAuthor = result.author ?? {};
     return [
-      result.author_key,
       resultAuthor.sec_uid,
-      resultAuthor.user_id,
       resultAuthor.user_unique_id,
-      resultAuthor.short_user_id,
-      resultAuthor.nickname
+      resultAuthor.short_user_id
     ].some((value) => identities.has(toText(value).toLowerCase()));
   });
 }
@@ -685,7 +726,9 @@ function mapRelatedAccount(raw: Record<string, unknown>): RelatedAccount {
     name: toText(item.display_name, item.raw_identity, "未知评论用户"),
     platform: mapPlatform(item.platform),
     avatarUrl: toText(item.avatar_url, `https://picsum.photos/seed/${encodeURIComponent(id)}/100/100`),
-    profileUrl: toText(item.profile_url),
+    publicDouyinId: toText(item.public_douyin_id),
+    secUid: toText(item.sec_uid),
+    profileUrl: safeDouyinProfileUrl(item.profile_url),
     sourceCommentId: toText(item.source_comment_id),
     sourceCommentText: toText(item.source_comment_text),
     sourceRiskContent: toText(item.source_risk_content),
@@ -696,6 +739,104 @@ function mapRelatedAccount(raw: Record<string, unknown>): RelatedAccount {
     updatedAt,
     updatedAtLabel: formatDateTime(updatedAt)
   };
+}
+
+function mapCommentRiskProfile(item: ApiCommentRiskUser): CommentRiskProfile {
+  const publicDouyinId = toText(item.public_douyin_id);
+  const secUid = toText(item.sec_uid);
+  const comments = toRecordArray(item.comments).map((raw): RiskCommentRecord => {
+    const primaryLibrary = asRecord(raw.primary_library);
+    return {
+      id: toText(raw.source_comment_id, raw.id),
+      platform: mapPlatform(item.platform),
+      identity: {
+        sec_uid: secUid || undefined,
+        user_unique_id: publicDouyinId || undefined
+      },
+      authorName: toText(item.display_name, publicDouyinId, "未知评论用户"),
+      avatarUrl: toText(item.avatar_url) || undefined,
+      content: toText(raw.content),
+      riskLevel: mapCommentRiskLevel(raw.risk_level),
+      riskScore: Number.isFinite(Number(raw.risk_score)) ? Number(raw.risk_score) : 0,
+      primaryLibrary: toText(primaryLibrary.id, primaryLibrary.label)
+        ? {
+            id: toText(primaryLibrary.id, primaryLibrary.label),
+            label: toText(primaryLibrary.label, primaryLibrary.id)
+          }
+        : undefined,
+      sourceId: toText(raw.source_job_id, raw.source_audit_result_id),
+      sourceTitle: toText(raw.source_title, "未命名来源内容"),
+      occurredAt: toText(raw.occurred_at)
+    };
+  });
+  const highRiskCount = nonNegativeNumber(item.high_risk_count);
+  const mediumRiskCount = nonNegativeNumber(item.medium_risk_count);
+  const pendingReviewCount = nonNegativeNumber(item.pending_review_count);
+  return {
+    id: toText(item.id, secUid, publicDouyinId),
+    name: toText(item.display_name, publicDouyinId, "未知评论用户"),
+    platform: mapPlatform(item.platform),
+    avatarUrl: toText(item.avatar_url) || undefined,
+    publicDouyinId,
+    secUid,
+    profileUrl: safeDouyinProfileUrl(item.profile_url),
+    violationCount: nonNegativeNumber(item.violation_count),
+    highRiskCount,
+    mediumRiskCount,
+    pendingReviewCount,
+    commentAreaCount: nonNegativeNumber(item.comment_area_count),
+    latestAt: toText(item.latest_at),
+    comments,
+    riskDistribution: riskDistribution({ high: highRiskCount, medium: mediumRiskCount, review: pendingReviewCount }),
+    libraryDistribution: libraryDistribution(comments)
+  };
+}
+
+function mapCommentRiskLevel(value: unknown): CommentRiskLevel {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === "high") return "high";
+  if (normalized === "medium") return "medium";
+  return "review";
+}
+
+function riskDistribution(counts: Record<CommentRiskLevel, number>): RiskDistributionItem[] {
+  const meta: Record<CommentRiskLevel, { label: string; color: string }> = {
+    high: { label: "高危", color: "#d63b32" },
+    medium: { label: "中危", color: "#efa52f" },
+    review: { label: "待复核", color: "#3b82d9" }
+  };
+  const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+  return (Object.keys(meta) as CommentRiskLevel[])
+    .filter((key) => counts[key] > 0)
+    .map((key) => ({
+      key,
+      label: meta[key].label,
+      count: counts[key],
+      percentage: total ? Math.round((counts[key] / total) * 100) : 0,
+      color: meta[key].color
+    }));
+}
+
+function libraryDistribution(comments: RiskCommentRecord[]): RiskDistributionItem[] {
+  const colors = ["#3768df", "#327f73", "#8b5ab5", "#ca6b32", "#64748b"];
+  const counts = new Map<string, { label: string; count: number }>();
+  comments.forEach((comment) => {
+    const key = comment.primaryLibrary?.id || "unclassified";
+    const current = counts.get(key);
+    counts.set(key, {
+      label: comment.primaryLibrary?.label || "未归类",
+      count: (current?.count ?? 0) + 1
+    });
+  });
+  return [...counts.entries()]
+    .sort((left, right) => right[1].count - left[1].count)
+    .map(([key, value], index) => ({
+      key,
+      label: value.label,
+      count: value.count,
+      percentage: comments.length ? Math.round((value.count / comments.length) * 100) : 0,
+      color: colors[index % colors.length]
+    }));
 }
 
 function mapPlatform(value: unknown): PlatformLabel {
@@ -777,9 +918,32 @@ function toText(...values: unknown[]): string {
   return "";
 }
 
+function safeDouyinProfileUrl(value: unknown): string {
+  const text = toText(value);
+  if (!text) return "";
+  try {
+    const parsed = new URL(text);
+    if (
+      parsed.protocol !== "https:"
+      || parsed.hostname !== "www.douyin.com"
+      || !/^\/user\/[^/]+\/?$/.test(parsed.pathname)
+    ) {
+      return "";
+    }
+    return `https://www.douyin.com${parsed.pathname}`;
+  } catch {
+    return "";
+  }
+}
+
 function toPositiveNumber(value: unknown): number | null {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function nonNegativeNumber(value: unknown): number {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : 0;
 }
 
 function uniqueTexts(values: unknown[]): string[] {

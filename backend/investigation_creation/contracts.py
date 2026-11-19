@@ -700,13 +700,16 @@ class CrawlerAccountConfirmedState(StrictModel):
 
 
 class ConfirmationPreview(StrictModel):
+    geographic_strategy: Literal["geographic-mention-v1"] | None = None
+    geographic_max_rounds: StrictInt | None = Field(default=None, ge=1, le=3)
     relevance_scope: RelevanceScope | None = None
     relevance_scope_state: PublicRelevanceScopeState | None = None
 
     @model_serializer(mode='wrap')
     def serialize_preview(self, handler):
         payload = handler(self)
-        for key in ('relevance_scope', 'relevance_scope_state'):
+        for key in ('relevance_scope', 'relevance_scope_state',
+                    'geographic_strategy', 'geographic_max_rounds'):
             if getattr(self, key) is None:
                 payload.pop(key, None)
         return payload

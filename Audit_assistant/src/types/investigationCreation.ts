@@ -183,6 +183,8 @@ export interface PublicInvestigationDraft {
 }
 
 export interface ConfirmationPreview {
+  geographic_strategy?: string;
+  geographic_max_rounds?: number;
   relevance_scope?: RelevanceScope | null;
   relevance_scope_state?: RelevanceScopeState;
   max_post_limit?: number;
@@ -387,11 +389,21 @@ export interface InvestigationWorkspaceState {
 }
 
 export type GeographicTier = 'local' | 'province_unknown' | 'ip_only' | 'other_region' | 'unresolved' | 'conflict';
+export interface GeographicQueryProgress {
+  logical_query_id: string;
+  query: string;
+  round_index: number;
+  max_rounds: number;
+  status: string;
+  end_reason?: string | null;
+}
 export interface GeographicSelectionPage {
+  geographic_strategy?: string;
   run_id: string;
   status: 'pending' | 'not_applicable' | 'ready' | 'empty' | 'incomplete';
   reason?: string;
   summary?: {
+    queries?: GeographicQueryProgress[];
     candidate_occurrences: number;
     geographic_evaluation_pending?: number;
     reserved: number;
@@ -407,6 +419,7 @@ export interface GeographicSelectionPage {
     content_key: string;
     rank: number;
     source_keyword: string;
+    round_index?: number;
     geo_tier: GeographicTier | null;
     geo_status: string | null;
     evaluation_status?: string | null;

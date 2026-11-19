@@ -17,6 +17,7 @@ import time
 
 SECRET_KEYS = {"DASHSCOPE_API_KEY", "RESOURCE_GENERATION_API_KEY", "CONVERSATION_API_KEY", "REMOTE_INFERENCE_API_KEY", "CRAWLER_AUTH_ENCRYPTION_KEY"}
 SETTING_KEYS = {
+    "CRAWLER_PROXY_ENABLED", "CRAWLER_SAFETY_ENABLED", "CRAWLER_DIRECT_DEGRADE_ENABLED", "CRAWLER_PROXY_ECHO_URL",
     "QWEN_TEXT_MODEL", "RESOURCE_GENERATION_MODEL", "QWEN_VL_MODEL", "QWEN_IMAGE_AUDIT_MODEL",
     "QWEN_CONTACT_SHEET_MODEL", "ASR_TRANSLATE_MODEL", "ASR_LANGUAGE", "DOLPHIN_LANG_SYM",
     "DOLPHIN_REGION_SYM", "INVESTIGATION_MAX_POSTS", "APP_AUTH_COOKIE_SECURE",
@@ -66,7 +67,7 @@ FIELDS = {"schema_version", "environment_id", "repository", "commit", "runtime_r
           "crawler_repository", "crawler_commit", "crawler_python", "ffmpeg", "probe_video",
           "api_port", "frontend_port", "secrets_file", "dolphin_url", "settings"}
 SERVICES = ("api", "worker", "frontend")
-OPTIONAL_FIELDS = {"model_proxy_url", "crawler_proxy_url", "managed_proxy", "geographic_runtime"}
+OPTIONAL_FIELDS = {"model_proxy_url", "crawler_proxy_url", "managed_proxy", "geographic_runtime", "camoufox", "outputs_directory"}
 PROBE_STAGE = "configuration"
 
 
@@ -115,6 +116,12 @@ def load_config(path):
     root = Path(config["runtime_root"]).resolve()
     if path.resolve().parent != root or Path(config["secrets_file"]).resolve().parent != root:
         raise ValueError("Manifest and secrets must be directly inside runtime_root")
+    if "outputs_directory" in config:
+        outputs = config["outputs_directory"]
+        if (not isinstance(outputs, str) or not Path(outputs).is_absolute()
+                or any(c in outputs for c in "\r\n\x00")
+                or not Path(outputs).resolve().is_relative_to(root)):
+            raise ValueError("outputs_directory must be an absolute path inside runtime_root")
     repo = Path(config["repository"]).resolve()
     if root == repo or root.is_relative_to(repo) or repo.is_relative_to(root):
         raise ValueError("Runtime data and source checkout must be separate")
@@ -123,7 +130,7 @@ def load_config(path):
     if config["api_port"] == config["frontend_port"]:
         raise ValueError("API and frontend ports must differ")
     for key in ("commit", "crawler_commit"):
-        if not re.fullmatch(r"[a-f0-9]{40}", config[key]):
+        if not isinstance(config[key], str) or not re.fullmatch(r"[a-f0-9]{40}", config[key]):
             raise ValueError("Use full source SHA: " + key)
     if not isinstance(config["settings"], dict) or set(config["settings"]) - SETTING_KEYS:
         raise ValueError("Unknown/protected setting; runtime paths belong to the manifest")
@@ -159,7 +166,68 @@ def load_config(path):
             raise ValueError("Managed proxy config must be inside runtime_root")
         if type(proxy["port"]) is not int or not 1024 <= proxy["port"] <= 65535 or proxy["port"] in (config["api_port"], config["frontend_port"]):
             raise ValueError("Invalid managed proxy port")
+    validate_camoufox(config)
     return config
+
+
+def validate_camoufox(config):
+    """Permit explicit release assets, never path or safety overrides in settings."""
+    settings = config["settings"]
+    for key, expected in (("CRAWLER_PROXY_ENABLED", "true"), ("CRAWLER_SAFETY_ENABLED", "true"),
+                          ("CRAWLER_DIRECT_DEGRADE_ENABLED", "false")):
+        if key in settings and settings[key] != expected:
+            raise ValueError("Protected crawler setting: " + key)
+    if "CRAWLER_PROXY_ECHO_URL" in settings:
+        from urllib.parse import urlsplit
+        url = urlsplit(settings["CRAWLER_PROXY_ECHO_URL"])
+        if (url.scheme != "https" or not url.hostname or url.username or url.password
+                or url.query or url.fragment or any(c.isspace() for c in settings["CRAWLER_PROXY_ECHO_URL"])):
+            raise ValueError("Crawler echo URL must use HTTPS without credentials")
+    if "camoufox" not in config:
+        return
+    browser = config["camoufox"]
+    if not isinstance(browser, dict) or set(browser) != {"executable", "version", "sha256"}:
+        raise ValueError("camoufox requires executable, version and sha256")
+    executable = browser["executable"]
+    if (not isinstance(executable, str) or not Path(executable).is_absolute()
+            or any(c in executable for c in "\r\n\x00")):
+        raise ValueError("Camoufox executable must be an absolute path")
+    if not isinstance(browser["version"], str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+-[a-z]+\.[0-9]+", browser["version"]):
+        raise ValueError("Camoufox version must be an exact browser release")
+    if not isinstance(browser["sha256"], str) or not re.fullmatch(r"[a-f0-9]{64}", browser["sha256"]):
+        raise ValueError("Camoufox executable requires full SHA256")
+    for key, expected in (("CRAWLER_PROXY_ENABLED", "true"), ("CRAWLER_SAFETY_ENABLED", "true"),
+                          ("CRAWLER_DIRECT_DEGRADE_ENABLED", "false"), ("CRAWLER_LOGIN_V2_ENABLED", "true")):
+        if settings.get(key) != expected:
+            raise ValueError("Camoufox requires explicit protection: " + key)
+    origins = settings.get("CRAWLER_LOGIN_V2_ORIGINS", "").split(",")
+    allowed = {f"http://{host}:{config['frontend_port']}" for host in ("127.0.0.1", "localhost")}
+    if not origins or any(origin.strip() not in allowed for origin in origins):
+        raise ValueError("Camoufox login origins must match the local frontend")
+    root = Path(config["runtime_root"]).resolve()
+    # Check every directory used by the restricted browser helper, not only
+    # its root: a nested HOME/tmp/profile symlink can escape independently.
+    for relative in ("camoufox-state", "camoufox-state/home", "camoufox-state/home/.camoufox",
+                     "camoufox-state/cache", "camoufox-state/tmp", "camoufox-state/outputs", "browser-profiles"):
+        target = root / relative
+        if not target.resolve().is_relative_to(root):
+            raise ValueError("Camoufox state and cache must stay inside runtime_root")
+
+
+def verify_camoufox(config):
+    validate_camoufox(config)
+    if "camoufox" not in config:
+        return
+    browser = config["camoufox"]
+    path = Path(browser["executable"])
+    if not path.is_file() or not os.access(path, os.X_OK):
+        raise ValueError("Missing Camoufox executable")
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    if digest.hexdigest() != browser["sha256"]:
+        raise ValueError("Camoufox executable SHA256 mismatch")
 
 
 def verify_source(config):
@@ -174,6 +242,7 @@ def verify_source(config):
     for key in ("python", "node", "crawler_python", "ffmpeg"):
         if not os.access(config[key], os.X_OK):
             raise ValueError("Missing executable: " + key)
+    verify_camoufox(config)
     if not Path(config["probe_video"]).is_file():
         raise ValueError("Missing probe video")
 
@@ -206,7 +275,7 @@ def environment(config, *, frontend=False):
     # Disable implicit checkout .env loading in python-dotenv >=1.2; no shell inheritance.
     env.update(PYTHON_DOTENV_DISABLED="1", PYTHONDONTWRITEBYTECODE="1", PYTHONPATH=f"{repo}:{repo}/hermes_m0",
                AUDIT_RUNTIME_MANIFEST=str(root / "runtime.json"),
-               XHS_AUDIT_DATA_DIR=str(root / "data"), XHS_AUDIT_OUTPUTS_DIR=str(root / "outputs"),
+               XHS_AUDIT_DATA_DIR=str(root / "data"), XHS_AUDIT_OUTPUTS_DIR=config.get("outputs_directory", str(root / "outputs")),
                APP_AUTH_DB=str(root / "data/investigation_creation.sqlite3"), HERMES_HOME=str(root / "hermes"),
                CRAWLER_BROWSER_PROFILE_ROOT=str(root / "browser-profiles"), CRAWLER_AUTH_KEY_FILE=str(root / "data/crawler_auth.key"),
                REQUEST_SCHEDULER_DB=str(root / "scheduler.sqlite3"), MEDIACRAWLER_REQUEST_SCHEDULER_DB=str(root / "scheduler.sqlite3"),
@@ -216,7 +285,15 @@ def environment(config, *, frontend=False):
                RESOURCE_GENERATION_BASE_URL="https://www.dmxapi.cn/v1", FFMPEG_PATH=config["ffmpeg"],
                ASR_ENGINE="dolphin", USE_REMOTE_ASR="true", REMOTE_ASR_BASE_URL=config["dolphin_url"],
                ASR_TRANSLATE_ENABLE_THINKING="false", USE_REMOTE_VLM="false", USE_REMOTE_LLM="false")
+    validate_camoufox(config)
     env.update(config["settings"])
+    if "camoufox" in config:
+        browser = config["camoufox"]
+        state = root / "camoufox-state"
+        env.update(CRAWLER_CAMOUFOX_STATE_ROOT=str(state), CRAWLER_CAMOUFOX_CACHE_ROOT=str(state / "cache"))
+        for suffix, value in (("EXECUTABLE", browser["executable"]), ("BROWSER_VERSION", browser["version"]),
+                              ("EXECUTABLE_SHA256", browser["sha256"])):
+            env["CRAWLER_CAMOUFOX_" + suffix] = env["MEDIACRAWLER_CAMOUFOX_" + suffix] = value
     env["CRAWLER_PROXY_URL"] = config.get("crawler_proxy_url", "")
     if config.get("model_proxy_url"):
         for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
@@ -261,6 +338,53 @@ def verify_crawler_auth(config):
     return len(rows)
 
 
+def probe_crawler(config):
+    """Validate installed assets in the crawler interpreter without fetching any."""
+    verify_camoufox(config)
+    code = "from media_platform.douyin import DouYinCrawler; import playwright"
+    if "camoufox" not in config:
+        env = environment(config)
+    else:
+        state = Path(config["runtime_root"]) / "camoufox-state"
+        for relative in ("", "home", "home/.camoufox", "cache", "tmp", "outputs"):
+            (state / relative).mkdir(mode=0o700, parents=True, exist_ok=True)
+        browser = config["camoufox"]
+        # Asset checks have the same private HOME/cache as browser children;
+        # cloud credentials and application authentication never cross here.
+        env = {"HOME": str(state / "home"), "XDG_CACHE_HOME": str(state / "cache"),
+               "TMPDIR": str(state / "tmp"), "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1",
+               "PYTHONUNBUFFERED": "1", "LANG": "en_US.UTF-8", "PYTHON_DOTENV_DISABLED": "1",
+               "PATH": str(Path(config["crawler_python"]).parent) + ":/usr/bin:/bin:/usr/sbin:/sbin",
+               "PYTHONPATH": os.pathsep.join((config["repository"], config["crawler_repository"])),
+               "CRAWLER_RESTRICTED_CHILD": "1", "CRAWLER_CAMOUFOX_STATE_ROOT": str(state),
+               "CRAWLER_BROWSER_PROFILE_ROOT": str(Path(config["runtime_root"]) / "browser-profiles"),
+               "MEDIACRAWLER_CAMOUFOX_EXECUTABLE": browser["executable"],
+               "MEDIACRAWLER_CAMOUFOX_EXECUTABLE_SHA256": browser["sha256"],
+               "MEDIACRAWLER_CAMOUFOX_BROWSER_VERSION": browser["version"]}
+        # General crawler imports may run ordinary local discovery tools
+        # (for example matplotlib's fc-list). Keep the stricter offline guard
+        # scoped to a separate asset-check process, independent of font caches.
+        subprocess.run([config["crawler_python"], "-c", code], cwd=config["crawler_repository"],
+                       env=env, check=True, capture_output=True, timeout=60)
+        code = """
+import sys
+def offline_assets_only(event, args):
+    if event in {"socket.connect", "socket.getaddrinfo", "subprocess.Popen", "os.system"}:
+        raise RuntimeError("Crawler asset probe cannot access network or launch programs")
+sys.addaudithook(offline_assets_only)
+from importlib.metadata import version
+if version("camoufox") != "0.5.8" or version("playwright") != "1.62.0":
+    raise RuntimeError("Pinned Camoufox SDK/playwright version mismatch")
+from camoufox.fpgen_model import is_pinned
+from tools.camoufox_browser import _installed_executable
+if not is_pinned():
+    raise RuntimeError("Pinned fingerprint model is missing; provision release assets first")
+_installed_executable(__import__("os").environ["MEDIACRAWLER_CAMOUFOX_BROWSER_VERSION"])
+"""
+    subprocess.run([config["crawler_python"], "-c", code], cwd=config["crawler_repository"],
+                   env=env, check=True, capture_output=True, timeout=60)
+
+
 def probe(config):
     """Executed only in the fixed Python with the same clean environment as services."""
     global PROBE_STAGE
@@ -282,12 +406,11 @@ def probe(config):
     PROBE_STAGE = "python_dependency_consistency"
     check_dependencies()
     PROBE_STAGE = "crawler_imports"
-    subprocess.run([config["crawler_python"], "-c", "from media_platform.douyin import DouYinCrawler; import playwright"],
-                   cwd=config["crawler_repository"], check=True, capture_output=True)
+    probe_crawler(config)
     PROBE_STAGE = "frontend_dependencies"
     frontend = Path(config["repository"]) / "Audit_assistant"
     if not (frontend / "node_modules/vite/bin/vite.js").is_file():
-        raise ValueError("Install frontend dependencies with npm ci")
+        raise ValueError("Install frontend dependencies with pnpm install --frozen-lockfile --ignore-scripts")
     node_version = subprocess.check_output([config["node"], "--version"], text=True).strip()
     root = Path(config["runtime_root"])
     audio = root / "receipts/probe.wav"

@@ -1,0 +1,175 @@
+{
+  "date": "2026-11-19",
+  "baseline_commit": "6f68c31a57d8afefa744d7e169c0f53e9bb39c83",
+  "baseline_worktree_clean": true,
+  "method": {
+    "scale": "six identical candidates with two identical comments each; legacy one batch of six versus mention three batches of two",
+    "network": "external crawler and model replaced by fixed offline ports; socket.create_connection forbidden",
+    "risk_response": "strong / 85 / offline fixed for all candidates",
+    "geography": "all candidates outside target; zero details or deliveries; legacy six additional fixed geographic AI responses; mention no geographic model",
+    "memory": "resource.ru_maxrss for independent pytest processes, includes imports and fixture setup, not incremental allocation",
+    "storage": "SQLite retained immutable object bytes and allocated database pages; NOT physical write I/O bytes",
+    "timing": "Single-run wall time; final new run used the same offline benchmark after validation-cache change. Processes include unrelated fixture/import work; no production throughput claim.",
+    "limits": [
+      "Only six candidates measured, not thirty; no production-load claim.",
+      "No OS physical-write instrumentation; logical retained bytes reported explicitly.",
+      "Plan validation still parses the shared frozen directory on each scoped read; compact object count does not mean zero catalog parsing.",
+      "Full ordinary-risk end-to-end performance not measured; comparator is production confirmed geographic pipeline.",
+      "New five-poll time remains above the small legacy-plan baseline: frozen catalog bytes are still authenticated on every read."
+    ]
+  },
+  "production_single_batch": {
+    "mode": "legacy",
+    "source_root": "/Users/ext.wanghongtao6/Documents/Codex/development/report-snapshot-90s/app",
+    "candidates": 6,
+    "comments": 12,
+    "capture_batches": 1,
+    "model_calls": 12,
+    "execution_seconds": 24.008303333073854,
+    "peak_rss_bytes": 322420736,
+    "before": {
+      "object_count": 24,
+      "object_bytes": 18444,
+      "database_bytes": 2068480
+    },
+    "after": {
+      "object_count": 550,
+      "object_bytes": 818826,
+      "database_bytes": 2654208
+    },
+    "object_bytes_added": 800382,
+    "database_bytes_added": 585728,
+    "five_summary_polls_seconds": 0.0077299997210502625,
+    "summary_object_reads": 105,
+    "hot_full_load_forbidden": true,
+    "summary_candidate_reads": 0
+  },
+  "mention_before_shared_profile": {
+    "mode": "mention",
+    "source_root": "/Users/ext.wanghongtao6/Documents/Codex/development/geographic-mention-20261119/app",
+    "candidates": 6,
+    "comments": 12,
+    "capture_batches": 3,
+    "model_calls": 6,
+    "execution_seconds": 35.56274099973962,
+    "peak_rss_bytes": 267927552,
+    "before": {
+      "object_count": 3275,
+      "object_bytes": 1130858,
+      "database_bytes": 3440640
+    },
+    "after": {
+      "object_count": 3630,
+      "object_bytes": 1324339,
+      "database_bytes": 3854336
+    },
+    "object_bytes_added": 193481,
+    "database_bytes_added": 413696,
+    "five_summary_polls_seconds": 1.3337120423093438,
+    "summary_object_reads": 16415,
+    "hot_full_load_forbidden": true,
+    "summary_candidate_reads": 0
+  },
+  "mention_final": {
+    "mode": "mention",
+    "source_root": "/Users/ext.wanghongtao6/Documents/Codex/development/geographic-mention-20261119/app",
+    "candidates": 6,
+    "comments": 12,
+    "capture_batches": 3,
+    "model_calls": 6,
+    "execution_seconds": 6.965815917123109,
+    "peak_rss_bytes": 267911168,
+    "before": {
+      "object_count": 26,
+      "object_bytes": 825764,
+      "database_bytes": 2887680
+    },
+    "after": {
+      "object_count": 381,
+      "object_bytes": 1019245,
+      "database_bytes": 3190784
+    },
+    "object_bytes_added": 193481,
+    "database_bytes_added": 303104,
+    "five_summary_polls_seconds": 0.2641493328846991,
+    "summary_object_reads": 150,
+    "hot_full_load_forbidden": true,
+    "summary_candidate_reads": 0,
+    "shared_catalog_nodes": 1,
+    "evaluation_plan_unchanged": true
+  },
+  "checks": [
+    "hot store.load prohibited throughout execution",
+    "six original risk inputs evaluated",
+    "five summary polls read no candidate/comment bodies",
+    "five summary polls read at most 200 immutable objects",
+    "single frozen mention profile object shared before/after all three batches",
+    "evaluation plan reused by identity and unchanged by digest after execution",
+    "bounded semantic-validation cache keyed only after fresh actual-payload hashing; external expected bindings checked before every hit"
+  ],
+  "reproduce": {
+    "new": "PYTHONPATH=backend:. PYTHONDONTWRITEBYTECODE=1 GEO_BUDGET_RESULT=/tmp/geo-budget-new.json <venv-app>/bin/python -m pytest -q -p no:cacheprovider tests/test_geographic_mention_storage_budget.py",
+    "old": "GEO_BUDGET_ROOT=<production-baseline-root> GEO_BUDGET_MODE=legacy GEO_BUDGET_RESULT=/tmp/geo-budget-old.json PYTHONDONTWRITEBYTECODE=1 <venv-app>/bin/python -m pytest -q -p no:cacheprovider <new-root>/tests/test_geographic_mention_storage_budget.py"
+  },
+  "validation": {
+    "old": "1 passed, 2 dependency warnings in 27.73s",
+    "new": "Final implementation: 1 passed, 2 dependency warnings in 10.98s; matcher 25 passed separately.",
+    "diff_check": "passed"
+  },
+  "mention_shared_profile_before_validation_cache": {
+    "mode": "mention",
+    "source_root": "/Users/ext.wanghongtao6/Documents/Codex/development/geographic-mention-20261119/app",
+    "candidates": 6,
+    "comments": 12,
+    "capture_batches": 3,
+    "model_calls": 6,
+    "execution_seconds": 33.034020124934614,
+    "peak_rss_bytes": 271958016,
+    "before": {
+      "object_count": 26,
+      "object_bytes": 825764,
+      "database_bytes": 2887680
+    },
+    "after": {
+      "object_count": 381,
+      "object_bytes": 1019245,
+      "database_bytes": 3182592
+    },
+    "object_bytes_added": 193481,
+    "database_bytes_added": 294912,
+    "five_summary_polls_seconds": 1.2291291672736406,
+    "summary_object_reads": 150,
+    "hot_full_load_forbidden": true,
+    "summary_candidate_reads": 0,
+    "shared_catalog_nodes": 1,
+    "evaluation_plan_unchanged": true
+  },
+  "mention_after_validation_cache": {
+    "mode": "mention",
+    "source_root": "/Users/ext.wanghongtao6/Documents/Codex/development/geographic-mention-20261119/app",
+    "candidates": 6,
+    "comments": 12,
+    "capture_batches": 3,
+    "model_calls": 6,
+    "execution_seconds": 8.780818791128695,
+    "peak_rss_bytes": 269795328,
+    "before": {
+      "object_count": 26,
+      "object_bytes": 825764,
+      "database_bytes": 2887680
+    },
+    "after": {
+      "object_count": 381,
+      "object_bytes": 1019245,
+      "database_bytes": 3190784
+    },
+    "object_bytes_added": 193481,
+    "database_bytes_added": 303104,
+    "five_summary_polls_seconds": 0.25801562517881393,
+    "summary_object_reads": 150,
+    "hot_full_load_forbidden": true,
+    "summary_candidate_reads": 0,
+    "shared_catalog_nodes": 1,
+    "evaluation_plan_unchanged": true
+  }
+}

@@ -13,7 +13,7 @@ from .geographic_query_summary import make_query_summary
 
 
 FORMAT = 'geographic-records-v1'
-_OPAQUE = frozenset({'admin_catalog', 'catalog', 'risk_config', 'config'})
+_OPAQUE = frozenset({'admin_catalog', 'catalog', 'risk_config', 'config', 'mention_profile'})
 
 
 def init_schema(db):

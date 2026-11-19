@@ -110,6 +110,9 @@ export function InvestigationSidebar({
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             {filteredSessions.map((session) => {
               const isActive = activeSubView === null && session.id === activeSessionId;
+              const risk = session.status === "读取异常"
+                ? null
+                : riskSummaryPresentation(session.riskSummary);
               return (
                 <div
                   key={session.id}
@@ -132,9 +135,31 @@ export function InvestigationSidebar({
                   </div>
 
                   <div className="inv-session-meta">
-                    <span className={`inv-status-pill st-${session.status}`} style={{ fontSize: "11px", padding: "1px 5px", height: "18px" }}>
-                      {session.status}
-                    </span>
+                    <div className="inv-session-badges">
+                      <span className={`inv-status-pill st-${session.status}`}>
+                        {session.status}
+                      </span>
+                      {risk ? (
+                        <span
+                          className="inv-risk-levels"
+                          aria-label={risk.map((item) => `${item.label}风险 ${item.count}`).join("，")}
+                        >
+                          {risk.map((item) => (
+                            <span className={`inv-risk-level is-${item.tone}`} key={item.tone}>
+                              <span
+                                className={`inv-risk-level-count ${item.count === 0 ? "is-zero" : ""}`}
+                                aria-label={`${item.label}风险 ${item.count}`}
+                                title={`${item.label}风险 ${item.count}`}
+                              >
+                                <span className="inv-risk-level-number" aria-hidden="true">
+                                  {item.count}
+                                </span>
+                              </span>
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
+                    </div>
                     <span className="inv-session-time">{session.updatedAt}</span>
                   </div>
 
@@ -232,4 +257,16 @@ export function InvestigationSidebar({
       </div>
     </aside>
   );
+}
+
+export function riskSummaryPresentation(
+  summary?: InvestigationSession["riskSummary"]
+): Array<{ label: "高" | "中" | "低"; count: number; tone: "high" | "medium" | "low" }> | null {
+  if (!summary) return null;
+  const count = (value: number) => Math.max(0, Number(value) || 0);
+  return [
+    { label: "高", count: count(summary.high_count), tone: "high" },
+    { label: "中", count: count(summary.medium_count), tone: "medium" },
+    { label: "低", count: count(summary.low_count), tone: "low" }
+  ];
 }
