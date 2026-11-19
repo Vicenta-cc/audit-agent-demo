@@ -182,7 +182,9 @@ def load_config(path):
 def validate_camoufox(config):
     """Permit explicit release assets, never path or safety overrides in settings."""
     settings = config["settings"]
-    for key, expected in (("CRAWLER_PROXY_ENABLED", "true"), ("CRAWLER_SAFETY_ENABLED", "true"),
+    if "CRAWLER_PROXY_ENABLED" in settings and settings["CRAWLER_PROXY_ENABLED"] not in ("true", "false"):
+        raise ValueError("CRAWLER_PROXY_ENABLED must be true or false")
+    for key, expected in (("CRAWLER_SAFETY_ENABLED", "true"),
                           ("CRAWLER_DIRECT_DEGRADE_ENABLED", "false")):
         if key in settings and settings[key] != expected:
             raise ValueError("Protected crawler setting: " + key)
@@ -205,7 +207,9 @@ def validate_camoufox(config):
         raise ValueError("Camoufox version must be an exact browser release")
     if not isinstance(browser["sha256"], str) or not re.fullmatch(r"[a-f0-9]{64}", browser["sha256"]):
         raise ValueError("Camoufox executable requires full SHA256")
-    for key, expected in (("CRAWLER_PROXY_ENABLED", "true"), ("CRAWLER_SAFETY_ENABLED", "true"),
+    if "CRAWLER_PROXY_ENABLED" not in settings:
+        raise ValueError("Camoufox requires explicit routing: CRAWLER_PROXY_ENABLED")
+    for key, expected in (("CRAWLER_SAFETY_ENABLED", "true"),
                           ("CRAWLER_DIRECT_DEGRADE_ENABLED", "false"), ("CRAWLER_LOGIN_V2_ENABLED", "true")):
         if settings.get(key) != expected:
             raise ValueError("Camoufox requires explicit protection: " + key)

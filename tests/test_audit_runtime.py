@@ -262,6 +262,59 @@ def test_legacy_manifest_without_conversation_remains_supported(config):
         runtime.environment(config)
 
 
+@pytest.fixture
+def camoufox_config(config):
+    config["camoufox"] = {"executable": "/fixed/camoufox", "version": "135.0.1-beta.24", "sha256": "a" * 64}
+    config["settings"].update(CRAWLER_PROXY_ENABLED="false", CRAWLER_SAFETY_ENABLED="true",
+                              CRAWLER_DIRECT_DEGRADE_ENABLED="false", CRAWLER_LOGIN_V2_ENABLED="true",
+                              CRAWLER_LOGIN_V2_ORIGINS=f"http://127.0.0.1:{config['frontend_port']}")
+    return config
+
+
+@pytest.mark.parametrize("proxy_enabled", ["true", "false"])
+def test_camoufox_accepts_explicit_routing(camoufox_config, proxy_enabled):
+    camoufox_config["settings"]["CRAWLER_PROXY_ENABLED"] = proxy_enabled
+    path = Path(camoufox_config["runtime_root"]) / "runtime.json"
+    path.write_text(json.dumps(camoufox_config))
+    assert runtime.load_config(path)["settings"]["CRAWLER_PROXY_ENABLED"] == proxy_enabled
+
+
+def test_camoufox_direct_environment_preserves_state_without_inherited_proxy(camoufox_config, monkeypatch):
+    proxy_keys = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
+    for key in (*proxy_keys, "CRAWLER_PROXY_URL"):
+        monkeypatch.setenv(key, "http://wrong-shell:9999")
+    env = runtime.environment(camoufox_config)
+    assert env["CRAWLER_PROXY_ENABLED"] == "false"
+    assert env["CRAWLER_PROXY_URL"] == ""
+    assert not set(proxy_keys).intersection(env)
+    assert env["CRAWLER_AUTH_KEY_FILE"] == camoufox_config["runtime_root"] + "/data/crawler_auth.key"
+    assert env["CRAWLER_BROWSER_PROFILE_ROOT"] == camoufox_config["runtime_root"] + "/browser-profiles"
+    assert env["CRAWLER_SAFETY_ENABLED"] == env["CRAWLER_LOGIN_V2_ENABLED"] == "true"
+    assert env["CRAWLER_DIRECT_DEGRADE_ENABLED"] == "false"
+
+
+@pytest.mark.parametrize("value", ["", "yes", "TRUE", True, False, None])
+def test_camoufox_rejects_invalid_routing(camoufox_config, value):
+    camoufox_config["settings"]["CRAWLER_PROXY_ENABLED"] = value
+    with pytest.raises(ValueError, match="CRAWLER_PROXY_ENABLED"):
+        runtime.validate_camoufox(camoufox_config)
+
+
+@pytest.mark.parametrize("key,value", [
+    ("CRAWLER_PROXY_ENABLED", None), ("CRAWLER_SAFETY_ENABLED", "false"),
+    ("CRAWLER_SAFETY_ENABLED", None), ("CRAWLER_DIRECT_DEGRADE_ENABLED", "true"),
+    ("CRAWLER_DIRECT_DEGRADE_ENABLED", None), ("CRAWLER_LOGIN_V2_ENABLED", "false"),
+    ("CRAWLER_LOGIN_V2_ENABLED", None), ("CRAWLER_LOGIN_V2_ORIGINS", "https://outside.example"),
+])
+def test_camoufox_direct_mode_keeps_required_protections(camoufox_config, key, value):
+    if value is None:
+        camoufox_config["settings"].pop(key)
+    else:
+        camoufox_config["settings"][key] = value
+    with pytest.raises(ValueError):
+        runtime.environment(camoufox_config)
+
+
 @pytest.mark.parametrize("field,value", [
     ("model_proxy_url", "http://outside:7890"), ("crawler_proxy_url", "http://user:secret@127.0.0.1:7890"),
     ("geographic_runtime", "true"), ("managed_proxy", {"binary": "/bin/proxy", "config": "/tmp/foreign", "port": 17890}),
