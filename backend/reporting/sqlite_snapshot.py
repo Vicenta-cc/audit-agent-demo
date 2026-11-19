@@ -14,7 +14,7 @@ SQLITE_BACKUP_DIGEST = "sqlite-backup-sha256/v1"
 
 
 @contextmanager
-def sqlite_snapshot(path: Path, *, timeout: float = 30.0) -> Iterator[tuple[Path, str]]:
+def sqlite_snapshot(path: Path, *, timeout: float = 90.0) -> Iterator[tuple[Path, str]]:
     """Yield one consistent, WAL-aware database image and its file digest.
 
     The private image is removed on success or failure. Never open the live
