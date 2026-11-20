@@ -1,5 +1,6 @@
 import type { TaskDraft } from "../../types/investigation";
 import type { ConfirmationPreview, RelevanceScope, RelevanceScopeState } from "../../types/investigationCreation";
+import { MENTION_STRATEGY, mentionPolicyDescription } from './geographicPresentation';
 
 const platformLabels = {
   dy: "抖音",
@@ -11,6 +12,8 @@ const platformLabels = {
 } as const;
 
 export function buildRelevanceScopeView(source?: {
+  geographic_strategy?: string;
+  geographic_max_rounds?: number;
   relevance_scope?: RelevanceScope | null;
   relevance_scope_state?: RelevanceScopeState;
   blockers?: Array<{ code: string }>;
@@ -26,7 +29,9 @@ export function buildRelevanceScopeView(source?: {
     target: pending
       ? state.target_text || "待明确地域"
       : `${scope!.target.name}${province && province !== scope!.target.name ? `（${province}）` : ""}`,
-    policy: policy === "local_only"
+    policy: source?.geographic_strategy === MENTION_STRATEGY
+      ? mentionPolicyDescription(source.geographic_max_rounds)
+      : policy === "local_only"
       ? "仅本地，不补充其他地区"
       : policy === "local_first_with_supplement" ? (pending ? "本地优先，不足时补充其他地区（默认策略）" : "本地优先，不足时按已确认策略补充") : "",
     reason: pending ? state.reason || "地域尚未明确，请在对话中提供省级、地级市或直辖市名称。" : "",

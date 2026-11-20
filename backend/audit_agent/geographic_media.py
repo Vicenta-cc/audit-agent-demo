@@ -1,4 +1,4 @@
-"""Durable, local-only media handoff bound to approved geographic evidence."""
+"""Durable local media handoff with separate geographic and triage identities."""
 from __future__ import annotations
 
 import hashlib
@@ -141,15 +141,16 @@ def _publish_record(root, path, record, fence):
             Path(name).unlink()
 
 
-class GeographicMediaReadiness:
+class MediaReadiness:
     def __init__(self, root):
         self.root = Path(root).resolve()
 
     def path(self, binding):
-        if any(not isinstance(binding.get(k), str) or not re.fullmatch(r'[A-Za-z0-9_-]+', binding[k])
-               for k in ('attempt_id', 'content_key')):
-            raise GeographicMediaNotReady('invalid geographic media identity')
+        self.source_folder(binding)
         return self.root / 'media_ready' / (digest(binding) + '.json')
+
+    def source_folder(self, binding):
+        raise NotImplementedError
 
     def load(self, binding, *, collect_media, image_urls, video_urls, image_limit, analysis_scope, fence=lambda: None):
         """Replay is local-only: never fetch, repair, or reinterpret saved evidence."""
@@ -171,7 +172,7 @@ class GeographicMediaReadiness:
             checked = []
             for entry in files:
                 path = _contained(self.root, self.root / entry['path'])
-                path.resolve().relative_to(self.root / 'details' / binding['attempt_id'] / 'douyin')
+                path.resolve().relative_to(self.source_folder(binding))
                 if not path.is_file() or path.stat().st_size != entry['size']:
                     raise ValueError('geographic media changed after readiness')
                 if not isinstance(entry['sha256'], str):
@@ -289,7 +290,7 @@ class GeographicMediaReadiness:
         if path.exists():
             return self.load(binding, **policy, fence=fence)
         required = self.required(**policy)
-        folder = _contained(self.root, self.root / 'details' / binding['attempt_id'] / 'douyin')
+        folder = self.source_folder(binding)
         if collect_media and not video_urls and any((folder / 'videos' / binding['content_key']).glob('*')):
             raise GeographicMediaNotReady('local video has no immutable source URL; reconcile before delivery')
         files = []
@@ -319,3 +320,44 @@ class GeographicMediaReadiness:
                       image_limit=image_limit, analysis_scope=analysis_scope, required=required, files=files)
         _publish_record(self.root, path, record, fence)
         return self.load(binding, **policy, fence=fence)
+
+
+class GeographicMediaReadiness(MediaReadiness):
+    def source_folder(self, binding):
+        if any(not isinstance(binding.get(k), str) or not re.fullmatch(r'[A-Za-z0-9_-]+', binding[k])
+               for k in ('attempt_id', 'content_key')):
+            raise GeographicMediaNotReady('invalid geographic media identity')
+        return _contained(self.root, self.root / 'details' / binding['attempt_id'] / 'douyin')
+
+
+class TriageMediaReadiness(MediaReadiness):
+    """Ordinary selected details bind media to their exact collection attempt."""
+    @staticmethod
+    def _source_directory(binding):
+        key = binding.get('content_key')
+        if (binding.get('platform') != 'dy' or not isinstance(key, str) or not key
+                or key in {'.', '..'} or any(c in key for c in ('/', '\\', '\x00'))
+                or not isinstance(binding.get('job_id'), str) or not binding['job_id']
+                or not isinstance(binding.get('content_digest'), str)
+                or not re.fullmatch(r'[0-9a-f]{64}', binding['content_digest'])
+                or not isinstance(binding.get('source_dir'), str) or not binding['source_dir']):
+            raise GeographicMediaNotReady('invalid triage media identity')
+        source = Path(binding['source_dir'])
+        if source.is_absolute() or '..' in source.parts:
+            raise GeographicMediaNotReady('triage source directory escapes task')
+        return source
+
+    def source_folder(self, binding):
+        return _contained(self.root, self.root / self._source_directory(binding) / 'douyin')
+
+    @staticmethod
+    def validate_item_binding(item, job_id, platform, content_key):
+        from .ingestion import content_identity
+        binding = item.get('triage_media_binding')
+        original = {k: v for k, v in item.items() if k != 'triage_media_binding'}
+        if (content_identity(item, platform) != content_key or not isinstance(binding, dict) or binding.get('job_id') != job_id
+                or binding.get('platform') != platform or binding.get('content_key') != content_key
+                or binding.get('content_digest') != digest(original)):
+            raise GeographicMediaNotReady('triage media content binding mismatch')
+        TriageMediaReadiness._source_directory(binding)
+        return binding

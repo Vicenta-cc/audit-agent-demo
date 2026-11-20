@@ -12,6 +12,7 @@ from .geographic_recovery import GeographicCaptureDeferred
 from .ingestion import content_identity, comment_content_identity
 from .scoped_execution import ScopedExecution
 from .scoped_selection import digest
+from .geographic_mentions import is_mention_plan
 
 
 class GeographicPipeline:
@@ -45,11 +46,13 @@ class GeographicPipeline:
             projection['binding'] | projection['runtime_binding'], projection['plan_digest'], lease_fence,
             state_lock=state_lock)
         self.sink = GeographicDelivery(ingestion, self.store, projection, self.root / 'delivered')
-        self.execution = ScopedExecution(self.store, projection, capture=self.capture,
+        from .geographic_mention_execution import MentionExecution
+        executor = MentionExecution if is_mention_plan(projection) else ScopedExecution
+        self.execution = executor(self.store, projection, capture=self.capture,
             risk=self.risk, geo=self.geo, detail=self.detail,
             deliver=self.deliver, validate_geo=self.bridge.validate_geo,
             account=self.account, rotate=self.rotate, stop=stop, checkpoint=self.progress,
-            durable_geo_attempts=True)
+            durable_geo_attempts=not is_mention_plan(projection))
 
     def progress(self, stage, payload):
         if stage == 'after_settle':
@@ -98,12 +101,23 @@ class GeographicPipeline:
         collection = self.bridge.p2.collection
         params = collection.effective_parameters
         account_id = self.account(query)
+        if is_mention_plan(plan) and query['round_index'] > 1:
+            previous = next(q for q in plan['queries'] if q['logical_query_id'] == query['logical_query_id']
+                            and q['round_index'] == query['round_index'] - 1)
+            account_id = self.execution.read_state(lambda s: s['queries'][previous['query_id']]['capture_account'])
+            if account_id not in self.accounts:
+                raise CrawlerAuthenticationError('geographic search session account is not leased')
         self.progress('capture_started', {'query_id': query['query_id'], 'query': query['query']})
         for attempt in range(2):
             self.fence()
             if self.stop():
                 raise RuntimeError('geographic capture incomplete: stopped')
             account = self.accounts[account_id]
+            continuation = {}
+            if is_mention_plan(plan):
+                from .geographic_capture_state import prepare_continuation
+                continuation['geographic_continuation'] = prepare_continuation(
+                    plan['execution_id'], query['logical_query_id'], query['query_id'])
             try:
                 with self._acquire_route(account_id) as route_context:
                     self.fence()
@@ -118,9 +132,17 @@ class GeographicPipeline:
                         stream_items=False, content_callback=None, stop_checker=self.stop,
                         auth_state=account['auth_state'], account_id=account_id, route_context=route_context,
                         started_callback=self.started_callback, search_sort=params.search_sort,
-                        reusable_content_db=None, current_task_id=plan['runtime_binding']['job_id'])
+                        reusable_content_db=None, current_task_id=plan['runtime_binding']['job_id'],
+                        **continuation)
                 self.started_callback = None
             except (CrawlerAuthenticationError, CrawlerVerificationError) as error:
+                if is_mention_plan(plan):
+                    # A persisted search session belongs to its original account.
+                    # Restarting this batch under another account cannot safely
+                    # preserve its cursor, pending page or profile request budget.
+                    self._retire_account(account_id, error)
+                    error.triage_rotation_stop = True
+                    raise
                 replacement = self.rotate(query, account_id, error)
                 if attempt or replacement is None:
                     raise
@@ -140,7 +162,17 @@ class GeographicPipeline:
                     self.original(item, key, query['query']), comments)
                 occurrence['already_audited'] = key in audited
                 occurrences.append(occurrence)
-            return {'occurrences': occurrences, 'account_id': account_id,
+            continuation_result = {}
+            if is_mention_plan(plan):
+                receipt = output.continuation
+                expected = continuation['geographic_continuation']
+                if (not isinstance(receipt, dict) or receipt.get('status') != 'complete'
+                        or type(receipt.get('exhausted')) is not bool
+                        or receipt.get('count') != len(occurrences)
+                        or any(receipt.get(k) != expected[k] for k in ('scope_id', 'query_id', 'batch_id'))):
+                    raise ValueError('geographic capture continuation receipt mismatch')
+                continuation_result = {'continuation': deepcopy(receipt)}
+            return {'occurrences': occurrences, 'account_id': account_id, **continuation_result,
                     'capture_parameters': deepcopy(query['capture_parameters']),
                     'observed_parameters': {'max_notes': collection.candidate_count,
                         'max_comments': collection.candidate_comment_limit,

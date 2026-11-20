@@ -149,9 +149,9 @@ def test_two_video_ready_delivery_overlaps_first_audit(
             detail_calls.append((key, bundle))
             self.events.append(('detail', kwargs))
             snapshot = bundle.snapshot
-            receipt = contract.ProbeReceipt(snapshot.proxy_id, snapshot.config_revision,
-                snapshot.context_id, snapshot.observed_exit_ip, snapshot.observed_exit_at,
-                snapshot.exit_generation)
+            # Match the real pinned crawler context, which reuses its verified
+            # startup observation instead of supplying a new probe receipt.
+            assert snapshot.local_direct_pinned and bundle.pass_fds
             item = dict(aweme_id=key, title='克拉玛依市欠薪', desc=f'精采原文-{key}',
                         follower_count=1, user_id='offline-author',
                         sec_uid='offline-sec-user', nickname='离线作者')
@@ -160,9 +160,10 @@ def test_two_video_ready_delivery_overlaps_first_audit(
             shutil.copyfile(video_fixture, folder / 'video.mp4')
             item['video_download_url'] = f'https://offline.invalid/{key}.mp4'
             item['collection_route_provenance'] = contract.collection_route_provenance(
-                snapshot, receipt, observation_id=f'offline-observation-{key}',
+                snapshot, None, observation_id=f'offline-observation-{key}',
                 source_task_id=bundle.execution_id, source_batch_id=f'offline-batch-{key}',
-                collected_at=time.time(), context_id=snapshot.context_id)
+                collected_at=time.time(), context_id=snapshot.context_id,
+                pinned_context_active=True)
             return CrawlOutput('dy', [item], [], kwargs['save_root'])
 
     class DelayedFirstAudit(AuditModel):

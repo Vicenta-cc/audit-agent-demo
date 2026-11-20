@@ -7,6 +7,7 @@ import type {
   PublicInvestigationDraft
 } from "../../types/investigationCreation";
 import { buildRelevanceScopeView } from "./confirmationView";
+import { MENTION_STRATEGY } from "./geographicPresentation";
 import { InvestigationKeywordEditor } from "./InvestigationKeywordEditor";
 import { DraftResourceSave } from "./DraftResourceSave";
 import { GeographicSelectionPanel } from "./GeographicSelectionPanel";
@@ -87,7 +88,15 @@ export function InvestigationContextDrawer({
   onFollowUpUser
 }: InvestigationContextDrawerProps) {
   if (!isOpen || !type) return null;
-  const relevanceScope = buildRelevanceScopeView(confirmationPreview || creationDraft?.configuration);
+  const unconfirmedDraft = creationDraft?.status === "DRAFT"
+    && creationDraft.confirmed_revision == null && !draft?.confirmed
+    && !draft?.historicalConfiguration?.length && !geographicRunId;
+  const relevanceScope = buildRelevanceScopeView(confirmationPreview || (unconfirmedDraft
+    ? { ...creationDraft.configuration, geographic_strategy: MENTION_STRATEGY }
+    : undefined));
+  if (!confirmationPreview && relevanceScope) {
+    relevanceScope.policy = "按目标地域、同省文字、作者 IP 依次筛选；轮数以确认预览为准";
+  }
   const draftSuggestionPlan = draftSuggestion
     ? buildDraftSuggestionPlanView(draftSuggestion)
     : null;

@@ -44,7 +44,8 @@ def test_interrupted_proxy_stream_keeps_local_audit_and_defers_old_remote_source
         return {'note_id':subject.note_id,'decision':'pass','risk_level':'low','summary':'local fixture','evidence':[]}
     monkeypatch.setattr(pipeline_module.AuditPipeline,'_analyze_subject',audit)
     class InterruptedCollector(RotationCrawler):
-        def collect(self,callback):
+        def run_search(self, *, content_callback, **kwargs):
+            callback = content_callback
             callback([
                 {'aweme_id':'remote','desc':'missing remote fixture','aweme_type':'68','note_download_url':'https://fixture.invalid/old.png','collection_route_provenance':provenance},
                 {'aweme_id':'local','desc':'local fixture','collection_route_provenance':provenance},
@@ -52,7 +53,13 @@ def test_interrupted_proxy_stream_keeps_local_audit_and_defers_old_remote_source
             assert done.wait(3), 'route-deferred subject blocked the ready local subject'
             raise pipeline_module.CollectionRouteError('PROXY_EXIT_CHANGED')
     collector=InterruptedCollector()
-    monkeypatch.setattr(pipeline_module.AuditPipeline,'_run_triaged_search',lambda self,**kwargs:collector.collect(kwargs['content_callback']))
+    original_run = pipeline_module.AuditPipeline.run
+    def run_legacy_stream(self, request):
+        # This test covers the legacy unprepared stream's source authorization;
+        # selected details now prepare media before delivery and cannot use it.
+        monkeypatch.setattr(pipeline_module.settings, 'triage_mode', 'off')
+        return original_run(self, request)
+    monkeypatch.setattr(pipeline_module.AuditPipeline, 'run', run_legacy_stream)
     with pytest.raises(pipeline_module.CollectionRouteError,match='PROXY_REVISION_MISMATCH'):
         _run_pipeline(env,monkeypatch,collector,account,settings_auto_analyze=True,auto_analyze=True,analyze_limit=2,max_total_notes=2)
     assert analyzed==['remote','local'] and downloads==['remote']

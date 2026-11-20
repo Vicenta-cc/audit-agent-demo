@@ -262,6 +262,69 @@ def test_legacy_manifest_without_conversation_remains_supported(config):
         runtime.environment(config)
 
 
+@pytest.fixture
+def camoufox_config(config):
+    config["camoufox"] = {"executable": "/fixed/camoufox", "version": "135.0.1-beta.24", "sha256": "a" * 64}
+    config["settings"].update(CRAWLER_PROXY_ENABLED="false", CRAWLER_SAFETY_ENABLED="true",
+                              CRAWLER_DIRECT_DEGRADE_ENABLED="false", CRAWLER_LOGIN_V2_ENABLED="true",
+                              CRAWLER_LOGIN_V2_ORIGINS=f"http://127.0.0.1:{config['frontend_port']}")
+    return config
+
+
+@pytest.mark.parametrize("proxy_enabled", ["true", "false"])
+def test_camoufox_accepts_explicit_routing(camoufox_config, proxy_enabled):
+    camoufox_config["settings"]["CRAWLER_PROXY_ENABLED"] = proxy_enabled
+    path = Path(camoufox_config["runtime_root"]) / "runtime.json"
+    path.write_text(json.dumps(camoufox_config))
+    assert runtime.load_config(path)["settings"]["CRAWLER_PROXY_ENABLED"] == proxy_enabled
+
+
+def test_camoufox_direct_environment_preserves_state_without_inherited_proxy(camoufox_config, monkeypatch):
+    proxy_keys = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
+    for key in (*proxy_keys, "CRAWLER_PROXY_URL"):
+        monkeypatch.setenv(key, "http://wrong-shell:9999")
+    env = runtime.environment(camoufox_config)
+    assert env["CRAWLER_PROXY_ENABLED"] == "false"
+    assert env["CRAWLER_PROXY_URL"] == ""
+    assert not set(proxy_keys).intersection(env)
+    assert env["CRAWLER_AUTH_KEY_FILE"] == camoufox_config["runtime_root"] + "/data/crawler_auth.key"
+    assert env["CRAWLER_BROWSER_PROFILE_ROOT"] == camoufox_config["runtime_root"] + "/browser-profiles"
+    assert env["CRAWLER_SAFETY_ENABLED"] == env["CRAWLER_LOGIN_V2_ENABLED"] == "true"
+    assert env["CRAWLER_DIRECT_DEGRADE_ENABLED"] == "false"
+
+
+def test_local_direct_pinning_requires_explicit_direct_manifest(camoufox_config):
+    key = "CRAWLER_LOCAL_DIRECT_PINNING_ENABLED"
+    assert key not in runtime.environment(camoufox_config)
+    camoufox_config["settings"][key] = "true"
+    assert runtime.environment(camoufox_config)[key] == "true"
+    camoufox_config["crawler_proxy_url"] = "http://localhost:9001"
+    with pytest.raises(ValueError, match="direct pinning"):
+        runtime.environment(camoufox_config)
+
+
+@pytest.mark.parametrize("value", ["", "yes", "TRUE", True, False, None])
+def test_camoufox_rejects_invalid_routing(camoufox_config, value):
+    camoufox_config["settings"]["CRAWLER_PROXY_ENABLED"] = value
+    with pytest.raises(ValueError, match="CRAWLER_PROXY_ENABLED"):
+        runtime.validate_camoufox(camoufox_config)
+
+
+@pytest.mark.parametrize("key,value", [
+    ("CRAWLER_PROXY_ENABLED", None), ("CRAWLER_SAFETY_ENABLED", "false"),
+    ("CRAWLER_SAFETY_ENABLED", None), ("CRAWLER_DIRECT_DEGRADE_ENABLED", "true"),
+    ("CRAWLER_DIRECT_DEGRADE_ENABLED", None), ("CRAWLER_LOGIN_V2_ENABLED", "false"),
+    ("CRAWLER_LOGIN_V2_ENABLED", None), ("CRAWLER_LOGIN_V2_ORIGINS", "https://outside.example"),
+])
+def test_camoufox_direct_mode_keeps_required_protections(camoufox_config, key, value):
+    if value is None:
+        camoufox_config["settings"].pop(key)
+    else:
+        camoufox_config["settings"][key] = value
+    with pytest.raises(ValueError):
+        runtime.environment(camoufox_config)
+
+
 @pytest.mark.parametrize("field,value", [
     ("model_proxy_url", "http://outside:7890"), ("crawler_proxy_url", "http://user:secret@127.0.0.1:7890"),
     ("geographic_runtime", "true"), ("managed_proxy", {"binary": "/bin/proxy", "config": "/tmp/foreign", "port": 17890}),
@@ -359,3 +422,83 @@ def test_login_v2_keys_accepted_by_manifest(config):
     path = Path(config["runtime_root"]) / "runtime.json"
     path.write_text(json.dumps(config))
     assert runtime.load_config(path) == config
+
+
+@pytest.fixture
+def xfyun_config(config):
+    config["settings"]["ASR_ENGINE"] = "xfyun"
+    Path(config["secrets_file"]).write_text(
+        "DASHSCOPE_API_KEY=test-audit\nRESOURCE_GENERATION_API_KEY=test-resource\n"
+        "XFYUN_APP_ID=test-app\nXFYUN_API_KEY=test-key\nXFYUN_API_SECRET=test-secret\n"
+        "CONVERSATION_API_KEY=test-conversation\n"
+    )
+    return config
+
+
+def test_xfyun_environment_uses_only_selected_asr_credentials(xfyun_config, monkeypatch):
+    monkeypatch.setenv("USE_REMOTE_ASR", "true")
+    monkeypatch.setenv("USE_REMOTE_WHISPER", "true")
+    path = Path(xfyun_config["runtime_root"]) / "runtime.json"
+    path.write_text(json.dumps(xfyun_config))
+    config = runtime.load_config(path)
+    env = runtime.environment(config)
+    assert env["ASR_ENGINE"] == "xfyun"
+    assert env["USE_REMOTE_ASR"] == env["USE_REMOTE_WHISPER"] == "false"
+    assert env["XFYUN_API_SECRET"] == "test-secret"
+    assert "REMOTE_INFERENCE_API_KEY" not in env
+    assert not runtime.SECRET_KEYS.intersection(runtime.environment(config, frontend=True))
+
+
+@pytest.mark.parametrize("key", sorted(runtime.XFYUN_SECRET_KEYS | {"DASHSCOPE_API_KEY", "RESOURCE_GENERATION_API_KEY"}))
+def test_xfyun_requires_asr_and_model_credentials(xfyun_config, key):
+    path = Path(xfyun_config["secrets_file"])
+    path.write_text("\n".join(line for line in path.read_text().splitlines() if not line.startswith(key + "=")))
+    with pytest.raises(ValueError, match=key):
+        runtime.environment(xfyun_config)
+
+
+def test_xfyun_preserves_conversation_credential_requirement(xfyun_config):
+    xfyun_config["settings"]["CONVERSATION_MODEL"] = "configured-model"
+    path = Path(xfyun_config["secrets_file"])
+    path.write_text("\n".join(line for line in path.read_text().splitlines() if not line.startswith("CONVERSATION_API_KEY=")))
+    with pytest.raises(ValueError, match="CONVERSATION_API_KEY"):
+        runtime.environment(xfyun_config)
+
+
+@pytest.mark.parametrize("engine", ["", "whisper", "XFYUN"])
+def test_unsupported_asr_engine_rejected(config, engine):
+    config["settings"]["ASR_ENGINE"] = engine
+    path = Path(config["runtime_root"]) / "runtime.json"
+    path.write_text(json.dumps(config))
+    with pytest.raises(ValueError, match="Unsupported ASR_ENGINE"):
+        runtime.load_config(path)
+    with pytest.raises(ValueError, match="Unsupported ASR_ENGINE"):
+        runtime.environment(config)
+
+
+@pytest.mark.parametrize("engine,provider,accepted", [
+    ("xfyun", "xfyun_spark_mul_cn_iat", True),
+    ("dolphin", "dolphin", False),
+    ("xfyun", "dolphin", False),
+    ("dolphin", "xfyun_spark_mul_cn_iat", False),
+])
+def test_xfyun_real_audio_probe_verifies_identity_and_redacts(xfyun_config, monkeypatch, engine, provider, accepted):
+    from backend.audit_agent import video_processor
+    audio = Path("probe.wav")
+    transcribe = Mock(return_value={"asr_engine": engine, "provider": provider,
+                                   "text": "private transcript", "segments": [], "raw": {"secret": "private"}})
+    monkeypatch.setattr(video_processor, "DemoAudioProcessor", lambda: SimpleNamespace(transcribe=transcribe))
+    if accepted:
+        assert runtime.probe_audio(xfyun_config, audio) == {"asr_engine": "xfyun", "xfyun_real_audio": "passed"}
+    else:
+        with pytest.raises(ValueError, match="configured XFYUN provider"):
+            runtime.probe_audio(xfyun_config, audio)
+    transcribe.assert_called_once_with(audio)
+    assert runtime.PROBE_STAGE == "xfyun_real_transcription"
+
+
+def test_legacy_dolphin_probe_still_accepts_provider_only(config, monkeypatch):
+    from backend.audit_agent import video_processor
+    monkeypatch.setattr(video_processor, "DemoAudioProcessor", lambda: SimpleNamespace(
+        transcribe=lambda audio: {"provider": "dolphin", "text": "speech", "segments": []}))
+    assert runtime.probe_audio(config, Path("probe.wav")) == {"asr_engine": "dolphin", "dolphin_real_audio": "passed"}

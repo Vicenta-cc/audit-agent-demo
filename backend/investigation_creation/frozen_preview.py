@@ -53,7 +53,12 @@ def confirmed_run_preview(run: InvestigationRun) -> ConfirmationPreview:
             execution.geographic_plan["inputs"]["configuration"]
         ) if execution.geographic_plan is not None else None
     )
+    frozen_profile = (execution.geographic_plan["inputs"]["p3_inputs"]
+                      if execution.geographic_plan is not None else {})
+    strategy = frozen_profile.get("geographic_strategy")
     return ConfirmationPreview(
+        geographic_strategy=strategy,
+        geographic_max_rounds=frozen_profile.get("max_rounds") if strategy else None,
         relevance_scope=(geographic_configuration.relevance_scope
                          if geographic_configuration is not None else None),
         relevance_scope_state=(project_state(geographic_configuration.relevance_scope_state)

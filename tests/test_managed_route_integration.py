@@ -1,6 +1,8 @@
 """Offline App/Crawler operation handshake over real inherited pipes."""
 from dataclasses import replace
 import os
+import shlex
+import sys
 from pathlib import Path
 import subprocess
 import threading
@@ -21,6 +23,32 @@ def isolated_managed_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(app.settings, 'crawler_browser_profile_root', tmp_path / 'logical-profiles')
     monkeypatch.setattr(app.settings, 'request_scheduler_db', tmp_path / 'scheduler.sqlite3')
     monkeypatch.setattr(app.settings, 'task_resource_lock_dir', tmp_path / 'resource-locks')
+
+
+def configure_local_browser_python(tmp_path, monkeypatch, fixture, direct_server=None):
+    """Use a loopback-only outer sandbox for the real macOS fixture browser."""
+    python = Path(os.getenv('LOGIN_BROWSER_TEST_PYTHON') or app.settings.crawler_login_python).absolute()
+    assert python.is_file(), f'Configure LOGIN_BROWSER_TEST_PYTHON with the crawler interpreter: {python}'
+    if sys.platform == 'darwin':
+        # Camoufox content processes cannot initialize another macOS sandbox
+        # inside Seatbelt. Only these fixture children inherit this exception.
+        servers = [fixture.proxy, fixture.http, fixture.https]
+        if direct_server is not None:
+            servers.append(direct_server)
+        profile = '(version 1)(allow default)(deny network-outbound)' + ''.join(
+            f'(allow network-outbound (remote tcp "localhost:{server.server_port}"))'
+            for server in servers
+        )
+        wrapper = tmp_path / 'loopback-browser-python'
+        wrapper.write_text(
+            '#!/bin/sh\n'
+            f'exec /usr/bin/sandbox-exec -p {shlex.quote(profile)} /usr/bin/env '
+            f'MOZ_DISABLE_CONTENT_SANDBOX=1 {shlex.quote(str(python))} "$@"\n'
+        )
+        wrapper.chmod(0o700)
+        python = wrapper
+    monkeypatch.setenv('LOGIN_BROWSER_TEST_PYTHON', str(python))
+    monkeypatch.setenv('MEDIACRAWLER_CAMOUFOX_BROWSER_VERSION', app.settings.crawler_camoufox_browser_version)
 
 
 def managed(tmp_path, mode='proxy_preferred'):
@@ -118,6 +146,7 @@ def test_real_browser_managed_ack_and_explicit_transport(tmp_path,monkeypatch,mo
             target=f'https://www.douyin.com:{server.server_port}/business'
         else:
             echo=fixture.url(host='echo');target=fixture.url('/business',host='www.douyin.com')
+        configure_local_browser_python(tmp_path, monkeypatch, fixture, server)
         accounts=CrawlerAccountStore(tmp_path/'accounts.sqlite3');account=accounts.create(platform='dy',display_name='fixture')
         accounts.save_auth_state(account['id'],'fixture-ciphertext')
         accounts.observe_shared_exit(fixture.exit_ip,service_exit=mode=='direct_degraded')
@@ -210,8 +239,10 @@ asyncio.run(main())
         env={**os.environ,**route_pipe.env,**receipt_pipe.env,'PYTHONPATH':crawler,'MEDIACRAWLER_ACCOUNT_ID':account['id'],'MEDIACRAWLER_PROXY_REQUIRED':'true',
             'HTTP_PROXY':'http://127.0.0.1:1','HTTPS_PROXY':'http://127.0.0.1:1','ALL_PROXY':'http://127.0.0.1:1','NO_PROXY':'',
             'MEDIACRAWLER_DY_BROWSER_ENGINE':'camoufox',**authority.env}
-        child=subprocess.Popen([os.environ['LOGIN_BROWSER_TEST_PYTHON'],'-c',script],env=env,cwd=crawler,
-            pass_fds=(*route_pipe.pass_fds,*receipt_pipe.pass_fds,*authority.pass_fds),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+        stderr_path = tmp_path / 'managed-browser.stderr'
+        with stderr_path.open('wb') as diagnostics:
+            child=subprocess.Popen([os.environ['LOGIN_BROWSER_TEST_PYTHON'],'-c',script],env=env,cwd=crawler,
+                pass_fds=(*route_pipe.pass_fds,*receipt_pipe.pass_fds,*authority.pass_fds),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=diagnostics,text=True,start_new_session=True)
         try:
             authority.bind_child(child.pid)
             route_pipe.start(child);receipt_pipe.start(child)
@@ -229,7 +260,7 @@ asyncio.run(main())
                         if not line:return False
                         lines.append(line)
                         if marker in line:return True
-                raise AssertionError('managed browser protocol timed out')
+                raise AssertionError(f'managed browser protocol timed out waiting for {marker}; stderr: {stderr_path}')
             acked=until('BROWSER_ACK_OK')
             if acked:
                 if fault=='rendering':
@@ -247,7 +278,8 @@ asyncio.run(main())
                     with accounts._connect() as db:
                         db.execute("UPDATE crawler_shared_exits SET pause_reason='ACCOUNT_CHALLENGE',paused_until=? WHERE exit_key=?",(time.time()+30,snap.observed_exit_ip))
                 child.stdin.write('pause\n');child.stdin.flush()
-            tail,err=child.communicate(timeout=45)
+            tail,_=child.communicate(timeout=45)
+            err=stderr_path.read_text(errors='replace')
             out=''.join(lines)+tail
             assert fixture.password not in out+err
             if fault=='407':
@@ -368,6 +400,7 @@ def test_actual_bounded_login_checker_uses_same_profile_and_local_identity(tmp_p
             tls=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);tls.load_cert_chain(fixture.root/'server.crt',fixture.root/'server.key');direct_server.socket=tls.wrap_socket(direct_server.socket,server_side=True)
             threading.Thread(target=direct_server.serve_forever,daemon=True).start()
             echo=f'https://echo.proxy-test.invalid:{direct_server.server_port}/echo'
+        configure_local_browser_python(tmp_path, monkeypatch, fixture, direct_server)
         crawler=Path(app.settings.media_crawler_dir)
         for name,value in dict(crawler_login_python=Path(os.environ['LOGIN_BROWSER_TEST_PYTHON']),
             crawler_proxy_echo_url=echo,crawler_browser_profile_root=tmp_path/'profiles',request_scheduler_db=tmp_path/'gate.db',
@@ -560,6 +593,7 @@ def test_inactive_crawl_child_supplement_uses_crawler_helper_in_app_interpreter(
     from backend.task_admission.resources import ExecutionLeaseBundle
     assert importlib.util.find_spec('cloakbrowser') is None
     with local_proxy(tmp_path/'network') as fixture:
+        configure_local_browser_python(tmp_path, monkeypatch, fixture)
         for name,value in dict(crawler_login_python=Path(os.environ['LOGIN_BROWSER_TEST_PYTHON']),
             crawler_safety_enabled=True,crawler_proxy_enabled=True,app_auth_mode='disabled',
             crawler_proxy_echo_url=fixture.url(host='echo'),crawler_browser_profile_root=tmp_path/'profiles',
@@ -666,7 +700,11 @@ def test_actual_manager_challenge_pauses_once_but_qr_and_human_claim_remain_vali
         manager.handle_event(session.id,dict(type='snapshot',phase='challenge_required'))
         manager.handle_event(session.id,dict(type='snapshot',phase='challenge_required'))
         assert accounts.get(a['id'])['risk_count']==1
-        with pytest.raises(ValueError,match='ACCOUNT_CHALLENGE'):accounts.admit_route(b['id'],'198.51.100.8',1,'after-challenge')
+        assert accounts.admit_route(b['id'],'198.51.100.8',1,'after-challenge') == 'after-challenge'
+        accounts.release_route_admission('after-challenge')
+        with accounts._connect() as db:
+            assert db.execute('SELECT pause_reason FROM crawler_shared_exits WHERE exit_key=?',
+                              ('198.51.100.8',)).fetchone()[0] == ''
         # The existing explicit human claim may continue verification despite expired credentials.
         accounts.mark_douyin_auth_invalid(a['id'],status='login_required',reset=True)
         assert accounts.admit_route(a['id'],'198.51.100.8',1,'human-continue',recovery_claim=bundle.snapshot.recovery_claim)=='human-continue'
@@ -730,5 +768,11 @@ def test_two_fresh_proxy_samples_share_newer_canonical_exit_without_timestamp_re
     bundle=app.acquire_route_execution(items[0][0]['id'],'risk','owner',account_store=accounts)
     try:app.record_login_challenge(bundle)
     finally:bundle.close()
-    for a,_,_ in items:
-        with pytest.raises(app.CollectionRouteError):app.acquire_route_execution(a['id'],'after-risk','owner',account_store=accounts)
+    with pytest.raises(app.CollectionRouteError):
+        app.acquire_route_execution(items[0][0]['id'],'after-risk','owner',account_store=accounts)
+    healthy = app.acquire_route_execution(items[1][0]['id'],'after-risk','owner',account_store=accounts)
+    try:
+        assert healthy.snapshot.observed_exit_at == items[1][2]
+        assert healthy.snapshot.exit_generation == 1
+    finally:
+        healthy.close()

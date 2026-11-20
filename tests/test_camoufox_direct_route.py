@@ -327,3 +327,187 @@ def test_login_probe_only_retires_proven_transport_incident(direct, monkeypatch,
     assert ('other',1,'PROXY_TRANSPORT_FAILED') in rows
     assert (marker not in rows) == (scenario in {'blocked','legacy','expired_cooldown','active_admission'})
     assert store.get(aid)['route_state'] == state_before
+
+
+def test_investigation_pin_is_live_owner_scoped_and_rechecks_binding(direct, monkeypatch, tmp_path):
+    from contextlib import closing
+
+    accounts, account = direct
+    accounts.save_auth_state(account['id'], 'fixture-ciphertext')
+    accounts.observe_shared_exit('203.0.113.9', service_exit=True)
+    monkeypatch.setattr(app.settings, 'task_resource_lock_dir', tmp_path / 'locks')
+    monkeypatch.setattr(app.settings, 'crawler_local_direct_pinning_enabled', True)
+    budgets = []
+
+    def bootstrap(bundle):
+        budgets.append(app.probe_env(bundle)['MEDIACRAWLER_PROXY_PROBE_BUDGET_ID'])
+        return app.route_contract().ProbeReceipt('service-direct', 1, 'bootstrap', '203.0.113.9', time.time())
+
+    monkeypatch.setattr(app, '_run_maintenance_probe', bootstrap)
+    def acquire(pin, job='job', owner='owner', **kwargs):
+        return app.acquire_route_execution(account['id'], job, owner, account_store=accounts,
+            direct_egress_pin=pin, investigation_collection=True, **kwargs)
+
+    pin = app.LocalDirectEgressPin(execution_id='job', owner_id='owner')
+    with pytest.raises(app.CollectionRouteError, match='PROXY_REVISION_MISMATCH'):
+        acquire(pin, owner='other')
+    assert not budgets
+    with closing(acquire(pin)) as first:
+        assert first.snapshot.local_direct_pinned
+        clock = first.snapshot.observed_exit_at
+        with pytest.raises(app.CollectionRouteError, match='PROXY_REVISION_MISMATCH'):
+            acquire(None, job='other-job', snapshot=first.snapshot)
+    monkeypatch.setattr(time, 'time', lambda: clock + 1600)
+    with closing(acquire(pin)) as later:
+        assert later.snapshot.observed_exit_at == clock
+        with accounts._connect() as db:
+            db.execute('UPDATE crawler_accounts SET binding_revision=binding_revision+1 WHERE id=?', (account['id'],))
+        with pytest.raises(app.CollectionRouteError, match='PROXY_REVISION_MISMATCH'):
+            app.require_route_renewal(later)
+    with pytest.raises(app.CollectionRouteError, match='PROXY_REVISION_MISMATCH'):
+        acquire(pin)
+    assert len(budgets) == 1
+    restarted = app.LocalDirectEgressPin(execution_id='job', owner_id='owner')
+    with closing(acquire(restarted)) as fresh:
+        assert fresh.snapshot.observed_exit_at > clock
+    assert len(set(budgets)) == 2
+
+
+@pytest.mark.parametrize(('failure', 'expected'), [
+    ('PROXY_TRANSPORT_FAILED', 'SUPPLEMENT_DEFERRED'),
+    ('PROXY_EXIT_CHANGED', 'PROXY_EXIT_CHANGED'),
+    ('PROBE_BUDGET_EXHAUSTED', 'PROBE_BUDGET_EXHAUSTED'),
+])
+def test_failed_pin_bootstrap_cannot_authorize_capture(direct, monkeypatch, tmp_path, failure, expected):
+    accounts, account = direct
+    accounts.save_auth_state(account['id'], 'fixture-ciphertext')
+    monkeypatch.setattr(app.settings, 'task_resource_lock_dir', tmp_path / 'locks')
+    monkeypatch.setattr(app.settings, 'crawler_local_direct_pinning_enabled', True)
+    def failed(bundle):
+        raise app.CollectionRouteError(failure)
+    monkeypatch.setattr(app, '_run_maintenance_probe', failed)
+    pin = app.LocalDirectEgressPin(execution_id='job', owner_id='owner')
+    with pytest.raises(app.CollectionRouteError, match=expected):
+        app.acquire_route_execution(account['id'], 'job', 'owner', account_store=accounts,
+            investigation_collection=True, direct_egress_pin=pin)
+    with accounts._connect() as db:
+        assert not db.execute('SELECT 1 FROM crawler_route_admissions').fetchone()
+        assert not db.execute('SELECT 1 FROM crawler_shared_exits').fetchone()
+
+
+@pytest.mark.parametrize('change', ['unchanged', 'update', 'replace', 'reinsert', 'late', 'risk',
+                                    'binding', 'generation', 'shared_pause', 'different_exit', 'failed',
+                                    'past_risk', 'intervening_exit', 'challenge', 'stale_receipt',
+                                    'auth_revision', 'profile_generation', 'bad_cooldown'])
+def test_pin_bootstrap_retires_only_preexisting_transport_marker(direct, monkeypatch, change):
+    from types import SimpleNamespace
+    from dataclasses import replace
+
+    store, account = direct
+    aid = account['id']
+    ip = '203.0.113.9'
+    monkeypatch.setattr(app.settings, 'crawler_local_direct_pinning_enabled', True)
+    store.save_auth_state(aid, 'fixture-encrypted')
+    if change == 'stale_receipt':
+        monkeypatch.setattr(app.settings, 'crawler_exit_observation_ttl', 1)
+    observed_at = time.time() - app.settings.crawler_exit_observation_ttl - 60
+    gen = store.observe_shared_exit(ip, service_exit=True)['shared_exit_generation']
+    store.set_route_state(aid, state='active', shared_exit_key=ip, generation=gen)
+    with store._connect() as db:
+        db.execute('UPDATE crawler_shared_exits SET observed_at=? WHERE exit_key=?', (observed_at, ip))
+        if change == 'past_risk':
+            db.execute("UPDATE crawler_accounts SET risk_count=2, last_risk_at=?, recovery_state='manual_success' WHERE id=?",
+                       ('2026-01-01T00:00:00', aid))
+    snapshot = app.resolve_account_route(aid, account_store=store)
+    assert snapshot.observed_exit_ip is None
+    from tools.bound_proxy import route_health_key
+    key = route_health_key(replace(snapshot, observed_exit_ip=ip, exit_generation=gen))
+    marker = (key, 1, 'ACCOUNT_CHALLENGE' if change == 'challenge' else 'PROXY_TRANSPORT_FAILED')
+    other = ('another-exit', 1, 'ACCOUNT_CHALLENGE')
+    with sqlite3.connect(snapshot.scheduler_db_path) as db:
+        db.execute('CREATE TABLE collection_route_health(proxy_id TEXT, config_revision INTEGER, stop_code TEXT, PRIMARY KEY(proxy_id,config_revision))')
+        db.execute('INSERT INTO collection_route_health VALUES(?,?,?)', other)
+        if change != 'late':
+            db.execute('INSERT INTO collection_route_health VALUES(?,?,?)', marker)
+
+    def probe(bundle):
+        if change == 'failed':
+            raise app.CollectionRouteError('PROXY_UNAVAILABLE')
+        with sqlite3.connect(snapshot.scheduler_db_path) as db:
+            if change == 'reinsert':
+                db.execute('DELETE FROM collection_route_health WHERE proxy_id=?', (key,))
+            if change in {'late', 'replace', 'reinsert'}:
+                db.execute('INSERT OR REPLACE INTO collection_route_health VALUES(?,?,?)', marker)
+            if change == 'update':
+                db.execute('UPDATE collection_route_health SET stop_code=stop_code WHERE proxy_id=?', (key,))
+        with store._connect() as db:
+            if change in {'auth_revision', 'profile_generation'}:
+                column = 'auth_state_revision' if change == 'auth_revision' else 'profile_generation'
+                db.execute(f'UPDATE crawler_accounts SET {column}={column}+1 WHERE id=?', (aid,))
+            if change == 'bad_cooldown':
+                db.execute("UPDATE crawler_accounts SET cooldown_until='invalid' WHERE id=?", (aid,))
+            if change == 'risk':
+                db.execute("UPDATE crawler_accounts SET risk_count=1 WHERE id=?", (aid,))
+            if change == 'binding':
+                db.execute('UPDATE crawler_accounts SET binding_revision=binding_revision+1 WHERE id=?', (aid,))
+            if change == 'generation':
+                db.execute('UPDATE crawler_shared_exits SET generation=generation+1 WHERE exit_key=?', (ip,))
+            if change == 'shared_pause':
+                db.execute("UPDATE crawler_shared_exits SET pause_reason='ACCOUNT_CHALLENGE' WHERE exit_key=?", (ip,))
+        if change == 'intervening_exit':
+            store.observe_shared_exit('203.0.113.10', service_exit=True)
+            store.observe_shared_exit(ip, service_exit=True)
+        return app.route_contract().ProbeReceipt('service-direct', 1, 'bootstrap',
+            '203.0.113.10' if change == 'different_exit' else ip, time.time() - (2 if change == 'stale_receipt' else 0))
+
+    monkeypatch.setattr(app, '_run_maintenance_probe', probe)
+    pin = app.LocalDirectEgressPin(execution_id='job', owner_id='owner')
+    bundle = SimpleNamespace(snapshot=snapshot, account_store=store, account_id=aid, execution_id='job', owner_id='owner')
+    if change == 'stale_receipt':
+        with pytest.raises(ValueError, match='PROXY_STALE_OBSERVATION'):
+            pin.resolve(bundle, snapshot)
+    elif change in {'failed', 'shared_pause'}:
+        with pytest.raises(app.CollectionRouteError):
+            pin.resolve(bundle, snapshot)
+    else:
+        pin.resolve(bundle, snapshot)
+    with sqlite3.connect(snapshot.scheduler_db_path) as db:
+        rows = db.execute('SELECT * FROM collection_route_health').fetchall()
+    assert other in rows
+    assert (marker in rows) == (change not in {'unchanged', 'past_risk'})
+    if change == 'past_risk':
+        assert store.get(aid)['risk_count'] == 2
+
+
+@pytest.mark.parametrize(('setting', 'value'), [
+    ('crawler_safety_enabled', False),
+    ('crawler_proxy_enabled', True),
+    ('crawler_direct_degrade_enabled', True),
+    ('crawler_proxy_trial_id', 'old-trial'),
+    ('crawler_proxy_default_id', 'old-proxy'),
+    ('crawler_proxy_pool_ids', ['old-proxy']),
+])
+def test_direct_investigation_rejects_conflicting_configuration(direct, monkeypatch, setting, value):
+    accounts, account = direct
+    monkeypatch.setattr(app.settings, setting, value)
+    monkeypatch.setattr(app, '_run_maintenance_probe', lambda bundle: pytest.fail('must reject before probing'))
+    pin = app.LocalDirectEgressPin(execution_id='job', owner_id='owner')
+    with pytest.raises(app.CollectionRouteError, match='PROXY_CONFIG_INVALID'):
+        app.acquire_route_execution(account['id'], 'job', 'owner', account_store=accounts,
+                                    direct_egress_pin=pin, investigation_collection=True)
+    with accounts._connect() as db:
+        assert not db.execute('SELECT 1 FROM crawler_route_admissions').fetchone()
+
+
+@pytest.mark.parametrize(('column', 'value'), [
+    ('proxy_id', 'legacy-proxy'), ('proxy_required', 1), ('route_mode', 'direct_degraded'),
+])
+def test_direct_investigation_rejects_residual_account_binding(direct, monkeypatch, column, value):
+    accounts, account = direct
+    with accounts._connect() as db:
+        db.execute(f'UPDATE crawler_accounts SET {column}=? WHERE id=?', (value, account['id']))
+    monkeypatch.setattr(app, '_run_maintenance_probe', lambda bundle: pytest.fail('must reject before probing'))
+    pin = app.LocalDirectEgressPin(execution_id='job', owner_id='owner')
+    with pytest.raises(app.CollectionRouteError, match='PROXY_CONFIG_INVALID'):
+        app.acquire_route_execution(account['id'], 'job', 'owner', account_store=accounts,
+                                    direct_egress_pin=pin, investigation_collection=True)

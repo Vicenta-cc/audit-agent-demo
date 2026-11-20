@@ -13,7 +13,7 @@ import time
 import json
 import secrets
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 from functools import lru_cache
 
 from .config import settings
@@ -392,13 +392,77 @@ def resolve_account_route(account_id, *, account_store=None, expected_binding_re
         raise _safe_error(exc) from None
 
 
+def require_direct_investigation_policy():
+    """Supported investigations require verified direct routing, without fallback."""
+    if (not settings.crawler_safety_enabled or settings.crawler_proxy_enabled
+            or settings.crawler_direct_degrade_enabled or settings.crawler_proxy_trial_id
+            or settings.crawler_proxy_default_id or settings.crawler_proxy_pool_ids):
+        raise CollectionRouteError('PROXY_CONFIG_INVALID')
+
+
+class LocalDirectEgressPin:
+    """One investigation's real startup observation, retained only by its owner."""
+    def __init__(self, *, execution_id, owner_id):
+        self.execution_id = execution_id
+        self.owner_id = owner_id
+        self._lock = threading.Lock()
+        self._observation = None
+        self._bindings = {}
+
+    def require_owner(self, execution_id, owner_id):
+        if (execution_id, owner_id) != (self.execution_id, self.owner_id):
+            raise CollectionRouteError('PROXY_REVISION_MISMATCH')
+
+    def resolve(self, bundle, snapshot):
+        self.require_owner(bundle.execution_id, bundle.owner_id)
+        accounts = bundle.account_store
+        with self._lock:
+            if self._observation is None:
+                # A restarted investigation may still have its old probe ledger.
+                # This distinct bootstrap gets both initial pairs, even on restart.
+                bundle.bootstrap_probe_id = secrets.token_hex(16)
+                try:
+                    self._observation = _probe_pinned_exit(bundle, snapshot)
+                except CollectionRouteError as exc:
+                    if exc.code in {'PROXY_TRANSPORT_FAILED', 'PROXY_UNAVAILABLE', 'PROXY_CONNECTION_REFUSED'}:
+                        # The echo-only helper cannot have started platform capture.
+                        raise CollectionRouteError('SUPPLEMENT_DEFERRED') from exc
+                    raise
+                finally:
+                    del bundle.bootstrap_probe_id
+            ip, observed_at, generation = self._observation
+            revision = self._bindings.setdefault(snapshot.account_id, snapshot.binding_revision)
+            if revision != snapshot.binding_revision or not accounts.get_pinned_direct_route(
+                    snapshot.account_id, ip, generation, observed_at=observed_at):
+                raise CollectionRouteError('PROXY_REVISION_MISMATCH')
+            return replace(snapshot, observed_exit_ip=ip, observed_exit_at=observed_at, exit_generation=generation,
+                           scope_ids=tuple(sorted(('dy', 'dy:account:'+snapshot.account_id,
+                                                   'dy:service_exit:'+ip, 'dy:exit:'+ip))))
+
+
+def _pinned_admission(snapshot):
+    if getattr(snapshot, 'local_direct_pinned', False):
+        return {'local_direct_pinned': True, 'pinned_observed_at': snapshot.observed_exit_at}
+    return {}
+
+
 def acquire_route_execution(account_id, execution_id, owner_id, *, account_store=None,
                             account_handle=None, snapshot=None, allow_probe=False, recovery_claim=None, human_login_operation_id=None,
-                            migration_id=None, investigation_collection=False, interactive_intent=False):
+                            migration_id=None, investigation_collection=False, interactive_intent=False, direct_egress_pin=None):
     from .crawler_child_runtime import require_browser_available
+    if direct_egress_pin is not None:
+        require_direct_investigation_policy()
+        from .crawler_account_store import crawler_account_store
+        account = (account_store or crawler_account_store).get(account_id)
+        if (not account or account.get('platform') != 'dy' or account.get('proxy_required')
+                or account.get('proxy_id') or account.get('route_mode') == 'direct_degraded'):
+            raise CollectionRouteError('PROXY_CONFIG_INVALID')
     require_browser_available(account_id, store=account_store, owner_id=owner_id,
         migration_id=migration_id, operation_id=execution_id)
     from backend.task_admission.resources import ExecutionLeaseBundle
+    if getattr(snapshot, 'local_direct_pinned', False):
+        # A prior operation's signed snapshot cannot grant a new investigation a pin.
+        raise CollectionRouteError('PROXY_REVISION_MISMATCH')
     snapshot = snapshot or resolve_account_route(account_id, account_store=account_store, allow_probe=allow_probe)
     store = get_proxy_store(account_store) if snapshot and snapshot.route_mode not in {'direct_degraded', 'legacy_direct'} else None
     resource = store.get_public(snapshot.proxy_id) if snapshot and snapshot.route_mode not in {'direct_degraded', 'legacy_direct'} else None
@@ -419,6 +483,15 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
     # The first exit check runs before a managed snapshot exists. All helpers
     # for this collection inherit its accounting policy from the owner.
     bundle.investigation_collection = investigation_collection
+    pinned = bool(direct_egress_pin is not None
+                  and settings.crawler_safety_enabled and investigation_collection and snapshot and snapshot.route_mode == 'legacy_direct'
+                  and not (settings.crawler_proxy_enabled or settings.crawler_proxy_trial_id or recovery_claim
+                           or interactive_intent or human_login_operation_id or allow_probe or migration_id))
+    if direct_egress_pin is not None and not pinned:
+        raise CollectionRouteError('PROXY_CONFIG_INVALID')
+    bundle.direct_egress_pin = direct_egress_pin if pinned else None
+    if pinned:
+        direct_egress_pin.require_owner(execution_id, owner_id)
     bundle.proxy_store = store
     bundle.migration_id = migration_id
     if store is not None:
@@ -449,7 +522,12 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
             contract = route_contract()
             now = time.time()
             expiry = _ticket_expiry(now, snapshot.expires_at)
-            if snapshot.observed_exit_ip is None or (allow_probe and (snapshot.observed_exit_at is None or now-snapshot.observed_exit_at > settings.crawler_exit_observation_ttl)):
+            if pinned:
+                if not fresh or fresh.route_mode != snapshot.route_mode or fresh.proxy_id != snapshot.proxy_id:
+                    raise CollectionRouteError('PROXY_REVISION_MISMATCH')
+                snapshot = direct_egress_pin.resolve(bundle, fresh)
+                bundle.snapshot = snapshot
+            elif snapshot.observed_exit_ip is None or (allow_probe and (snapshot.observed_exit_at is None or now-snapshot.observed_exit_at > settings.crawler_exit_observation_ttl)):
                 original_snapshot = snapshot
                 if snapshot.route_mode == 'direct_degraded':
                     bundle.snapshot = replace(snapshot, route_mode='legacy_direct',
@@ -465,12 +543,14 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
                 bundle.snapshot = snapshot
             if interactive_login and account_store.direct_exit_paused():
                 raise CollectionRouteError('PROXY_UNAVAILABLE')
-            observation = bundle.account_store.consume_cached_exit(snapshot.observed_exit_ip, observed_at=snapshot.observed_exit_at, service_exit=snapshot.route_mode in {'direct_degraded', 'legacy_direct'})
+            generation = snapshot.exit_generation if pinned else bundle.account_store.consume_cached_exit(
+                snapshot.observed_exit_ip, observed_at=snapshot.observed_exit_at,
+                service_exit=snapshot.route_mode in DIRECT_ROUTE_MODES)['shared_exit_generation']
             if not bundle.acquire_exit_capacity(snapshot.observed_exit_ip):
                 bundle.close()
                 raise CollectionRouteError('PROXY_BUSY')
             if human_login_operation_id and not recovery_claim:
-                recovery_claim=bundle.account_store.begin_manual_recovery(account_id,human_login_operation_id,owner_id=owner_id,allow_active=True,observed_exit=snapshot.observed_exit_ip,generation=observation['shared_exit_generation'])
+                recovery_claim=bundle.account_store.begin_manual_recovery(account_id,human_login_operation_id,owner_id=owner_id,allow_active=True,observed_exit=snapshot.observed_exit_ip,generation=generation)
                 if not recovery_claim:raise CollectionRouteError('PROXY_BUSY')
                 acquired_claim = recovery_claim
             bundle.manual_recovery_claim=recovery_claim if human_login_operation_id else None
@@ -478,12 +558,14 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
             mode = 'legacy_direct' if snapshot.route_mode == 'legacy_direct' else bundle.account_store.get(account_id).get('route_mode', 'proxy_required')
             managed = replace(snapshot, route_mode=mode, operation_id=secrets.token_hex(16), lease_id=secrets.token_hex(16),
                 lease_version=1, owner_id=owner_id, context_id=secrets.token_hex(16),
-                exit_generation=observation['shared_exit_generation'],
+                exit_generation=generation,
                 safety_db_path=str(bundle.account_store.db_path.resolve()),
                 # Ordinary login keeps its settlement claim in the parent. Its
                 # child gets no recovery privilege if the exit is paused later.
                 recovery_claim='' if interactive_login else recovery_claim or '',
                 login_bootstrap=bool(human_login_operation_id or allow_probe and not recovery_claim))
+            if pinned:
+                managed = replace(managed, local_direct_pinned=True)
             managed = replace(managed, snapshot_digest=contract.snapshot_digest(managed))
             operation = RouteOperation(operation_id=managed.operation_id, lease_id=managed.lease_id,
                 lease_version=managed.lease_version, owner_id=owner_id, account_id=account_id,
@@ -494,7 +576,7 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
             bundle.route_operation_store = RouteOperationStore(str(settings.request_scheduler_db.resolve()))
             try:
                 token = bundle.account_store.admit_route(account_id, managed.observed_exit_ip, managed.exit_generation, managed.operation_id, recovery_claim=recovery_claim, login_bootstrap=managed.login_bootstrap,
-                    require_healthy_exit=interactive_login)
+                    require_healthy_exit=interactive_login, **_pinned_admission(managed))
                 bundle.add_closer(lambda: bundle.account_store.release_route_admission(token))
                 bundle.route_operation_store.issue(operation)
                 bundle.add_closer(lambda: end_route_operation(bundle))
@@ -515,6 +597,16 @@ def _require_same_route(snapshot, accounts, *, allow_probe=False):
     current = resolve_account_route(snapshot.account_id, account_store=accounts,
         expected_binding_revision=snapshot.binding_revision, expected_config_revision=snapshot.config_revision,
         allow_probe=allow_probe)
+    if getattr(snapshot, 'local_direct_pinned', False):
+        require_direct_investigation_policy()
+        if (not settings.crawler_safety_enabled
+                or settings.crawler_proxy_enabled
+                or settings.crawler_proxy_trial_id or current is None or current.route_mode != 'legacy_direct'
+                or current.proxy_id != snapshot.proxy_id or current.config_revision != snapshot.config_revision
+                or not accounts.get_pinned_direct_route(snapshot.account_id, snapshot.observed_exit_ip,
+                                                        snapshot.exit_generation, observed_at=snapshot.observed_exit_at)):
+            raise CollectionRouteError('PROXY_REVISION_MISMATCH')
+        return
     if (current is None or current.proxy_id != snapshot.proxy_id
             or current.binding_revision != snapshot.binding_revision or current.config_revision != snapshot.config_revision
             or current.observed_exit_ip != snapshot.observed_exit_ip or current.exit_generation != snapshot.exit_generation):
@@ -547,7 +639,8 @@ def require_route_renewal(bundle):
     _require_same_route(snapshot, accounts, allow_probe=bool(snapshot.login_bootstrap or snapshot.recovery_claim))
     accounts.admit_route(snapshot.account_id, snapshot.observed_exit_ip, snapshot.exit_generation,
         snapshot.operation_id, recovery_claim=bundle.manual_recovery_claim if interactive_login else snapshot.recovery_claim,
-        login_bootstrap=snapshot.login_bootstrap, require_existing=True, require_healthy_exit=interactive_login)
+        login_bootstrap=snapshot.login_bootstrap, require_existing=True, require_healthy_exit=interactive_login,
+        **_pinned_admission(snapshot))
 
 
 def parent_renew_ticket(bundle, prior):
@@ -708,7 +801,7 @@ def route_execution_context(bundle):
 
 
 @contextmanager
-def authorize_source_route(provenance, owner_id, execution_id, *, route_context=None, account_store=None, auth_store=None):
+def authorize_source_route(provenance, owner_id, execution_id, *, route_context=None, account_store=None, auth_store=None, direct_egress_pin=None):
     if provenance is None:
         raise CollectionRouteError('SUPPLEMENT_DEFERRED')
     try:
@@ -721,19 +814,37 @@ def authorize_source_route(provenance, owner_id, execution_id, *, route_context=
         expected_binding_revision=value['binding_revision'], expected_config_revision=value['config_revision'])
     if snapshot is None or value['route_mode'] == 'legacy_direct' and not value.get('operation_id'):
         raise CollectionRouteError('SUPPLEMENT_DEFERRED')
-    if snapshot and 'exit_generation' in value and snapshot.exit_generation != value['exit_generation']:
-        raise CollectionRouteError('PROXY_REVISION_MISMATCH')
-    if snapshot and (snapshot.route_mode != value['route_mode'] and not (snapshot.route_mode == 'proxy_required' and value['route_mode'] == 'proxy_preferred') or snapshot.proxy_id != value['proxy_id'] or snapshot.observed_exit_ip is not None and snapshot.observed_exit_ip != value['observed_exit_ip']):
-        raise CollectionRouteError('PROXY_EXIT_CHANGED')
+
+    def check_provenance(current):
+        if 'exit_generation' in value and current.exit_generation != value['exit_generation']:
+            raise CollectionRouteError('PROXY_REVISION_MISMATCH')
+        if (current.route_mode != value['route_mode'] and not (current.route_mode == 'proxy_required' and value['route_mode'] == 'proxy_preferred')
+                or current.proxy_id != value['proxy_id'] or current.observed_exit_ip is not None and current.observed_exit_ip != value['observed_exit_ip']):
+            raise CollectionRouteError('PROXY_EXIT_CHANGED')
+
+    direct_egress_pin = direct_egress_pin or getattr(route_context, 'direct_egress_pin', None)
+    if direct_egress_pin is not None:
+        direct_egress_pin.require_owner(execution_id, owner_id)
     if route_context is not None and route_context.account_id == account_id:
+        if getattr(route_context.snapshot, 'local_direct_pinned', False):
+            _require_same_route(route_context.snapshot, route_context.account_store)
+            snapshot = route_context.snapshot
+        check_provenance(snapshot)
         if any(getattr(route_context.snapshot, key, None) != getattr(snapshot, key, None) for key in ("account_id", "proxy_id", "binding_revision", "config_revision")):
             raise CollectionRouteError("PROXY_REVISION_MISMATCH")
         with route_context.borrow(execution_id=execution_id, owner_id=owner_id, account_id=account_id):
             yield route_context
         return
+    pinned_source = (direct_egress_pin is not None and value['route_mode'] == snapshot.route_mode == 'legacy_direct')
+    if direct_egress_pin is not None and not pinned_source:
+        raise CollectionRouteError('PROXY_CONFIG_INVALID')
+    if not pinned_source:
+        check_provenance(snapshot)
     bundle = acquire_route_execution(account_id, execution_id, owner_id, snapshot=snapshot, account_store=account_store,
-                                     investigation_collection=True)
+                                     investigation_collection=True, **({'direct_egress_pin': direct_egress_pin} if pinned_source else {}))
     try:
+        if pinned_source:
+            check_provenance(bundle.snapshot)
         yield bundle
     finally:
         bundle.close()
@@ -760,7 +871,7 @@ def child_route_snapshot(account_id):
 
 def probe_env(bundle):
     trial_id = str(getattr(settings, 'crawler_proxy_trial_id', '') or '').strip()
-    budget_identity = trial_id or bundle.execution_id
+    budget_identity = trial_id or getattr(bundle, 'bootstrap_probe_id', None) or bundle.execution_id
     budget_prefix = 'trial-' if trial_id else 'exec-'
     budget_digest = hashlib.sha256(budget_identity.encode()).hexdigest()
     result = {
@@ -774,6 +885,21 @@ def probe_env(bundle):
 
 
 def raise_route_log_error(log):
+    import re
+
+    # A retried TLS EOF logs this diagnostic before the operation has an outcome.
+    # Only discard its complete, known logger record. Terminal exceptions and
+    # unrecognized text must still participate in the existing error detection.
+    retry_diagnostic = re.compile(
+        r"(?:[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} "
+        r"tools\.bound_proxy WARNING \(bound_proxy\.py:[0-9]+\) - "
+        r"|WARNING:tools\.bound_proxy:)"
+        r"EXIT_PROBE_HTTP_FAILURE code=(?:PROXY_TRANSPORT_FAILED|PROXY_UNAVAILABLE) "
+        r"cause=tls errno=unknown ssl_type=SSLEOFError "
+        r"ssl_reason=(?:UNEXPECTED_EOF_WHILE_READING|unknown) ssl_verify_code=unknown"
+    )
+    if 'ssl_type=SSLEOFError' in log:
+        log = '\n'.join(line for line in log.splitlines() if not retry_diagnostic.fullmatch(line))
     for code in ('PROXY_BUSY', 'SUPPLEMENT_DEFERRED', 'PROXY_REVISION_MISMATCH',
                  'PROXY_EXIT_CHANGED', 'PROXY_UNAVAILABLE', 'PROXY_AUTH_FAILED',
                  'PROXY_CONFIG_INVALID', 'PROBE_BUDGET_EXHAUSTED', 'SCHEDULER_POLICY_CONFLICT',
@@ -937,6 +1063,7 @@ class RouteReceiptPipe:
         self.thread = None
         self.process = None
         self.stopped = threading.Event()
+        self.pinned_context_ready = False
 
     @property
     def pass_fds(self):
@@ -990,6 +1117,14 @@ class RouteReceiptPipe:
                             return result
                         value = json.loads(line, object_pairs_hook=unique)
                         snapshot = self.snapshot
+                        if isinstance(value, dict) and value.get('type') in {'pinned_context_ready', 'pinned_context_closed'}:
+                            keys = ('operation_id', 'lease_id', 'context_id', 'snapshot_digest')
+                            if (not getattr(snapshot, 'local_direct_pinned', False) or set(value) != {'type', *keys}
+                                    or any(value[key] != getattr(snapshot, key) for key in keys)):
+                                return
+                            with self.bundle._lock:
+                                self.pinned_context_ready = value['type'] == 'pinned_context_ready'
+                            continue
                         if isinstance(value,dict) and value.get('type')=='browser_guard_stopped':
                             fields={'type','operation_id','owner_id','lease_version','snapshot_digest','context_id','reason'}
                             if (set(value)!=fields or not snapshot.managed or type(value['lease_version']) is not int
@@ -1033,6 +1168,8 @@ class RouteReceiptPipe:
                                 snapshot_digest=value['snapshot_digest'], context_id=value['context_id'])
                             os.write(self.ack_write_fd, (json.dumps(result['ack'], allow_nan=False) + '\n').encode())
                             continue
+                        if getattr(snapshot, 'local_direct_pinned', False):
+                            return  # A pinned child's readiness never establishes an observation.
                         fields = {'schema_version', 'type', 'platform', 'account_id', 'proxy_id', 'binding_revision', 'config_revision', 'context_id', 'ip', 'observed_at'}
                         if snapshot.managed:
                             fields |= {'operation_id', 'lease_id', 'lease_version', 'owner_id', 'snapshot_digest', 'exit_generation'}
@@ -1076,6 +1213,7 @@ class RouteReceiptPipe:
             finally:
                 poll.close()
                 with self.bundle._lock:
+                    self.pinned_context_ready = False
                     if getattr(self.bundle,'child_receipt_pipe',None) is self:
                         self.bundle.child_receipt = None
         self.thread = threading.Thread(target=read, daemon=True)
@@ -1099,6 +1237,17 @@ class RouteReceiptPipe:
         self.close()
         if store:
             store.transition(snapshot.operation_id, state='ended', owner_id=snapshot.owner_id, lease_version=version)
+
+    def live_pinned_context(self):
+        with self.bundle._lock:
+            authority = getattr(self.bundle, 'pinned_child_authority', None)
+            if (not self.pinned_context_ready or self.stopped.is_set() or self.process is None
+                    or self.process.poll() is not None or self.bundle.child_receipt_pipe is not self
+                    or authority is None or not authority.pinned_context_live(self.snapshot, self.process.pid)
+                    or self.bundle.snapshot.operation_id != self.snapshot.operation_id
+                    or getattr(self.bundle, 'route_error', None)):
+                raise CollectionRouteError('SUPPLEMENT_DEFERRED')
+            return self.snapshot.context_id
 
     def receipt(self):
         with self.bundle._lock:
@@ -1154,7 +1303,8 @@ def renew_same_route_phase(bundle, *, allowed_borrowers=1):
         account_id=new.account_id,profile_key=new.profile_key,route_mode=new.route_mode,proxy_id=new.proxy_id,
         resource_revision=new.config_revision,observed_exit=new.observed_exit_ip,exit_generation=new.exit_generation,
         expires_at=expiry,context_id=new.context_id,scope_ids=new.scope_ids,snapshot_digest=new.snapshot_digest,proxy_expires_at=new.expires_at or 0)
-    token=bundle.account_store.admit_route(new.account_id,new.observed_exit_ip,new.exit_generation,new.operation_id)
+    token=bundle.account_store.admit_route(new.account_id,new.observed_exit_ip,new.exit_generation,new.operation_id,
+        **_pinned_admission(new))
     bundle.add_closer(lambda:bundle.account_store.release_route_admission(token))
     bundle.route_operation_store.issue(operation)
     bundle.snapshot=new
@@ -1162,9 +1312,13 @@ def renew_same_route_phase(bundle, *, allowed_borrowers=1):
 
 
 def prepare_collection_child(bundle, *, allowed_borrowers=0, timeout=15):
-    """Drain a supplementary context after every other media borrower finishes."""
+    """Hand off the previous collection or supplementary browser before launch."""
     process=getattr(bundle,'asset_browser_process',None)
     if process is None:
+        pipe=getattr(bundle,'child_receipt_pipe',None)
+        if (pipe is not None and bundle.snapshot.managed
+                and pipe.snapshot.operation_id == bundle.snapshot.operation_id):
+            renew_same_route_phase(bundle,allowed_borrowers=allowed_borrowers)
         return
     deadline=time.monotonic()+timeout
     while getattr(bundle,'_borrowers',0)>allowed_borrowers:
@@ -1243,8 +1397,17 @@ def start_asset_browser_child(bundle):
         raise
 
 
+def _require_live_child(bundle):
+    pipe = getattr(bundle, 'child_receipt_pipe', None)
+    if pipe is None:
+        raise CollectionRouteError('SUPPLEMENT_DEFERRED')
+    if getattr(bundle.snapshot, 'local_direct_pinned', False):
+        return pipe.live_pinned_context()
+    return pipe.receipt()
+
+
 class _BorrowedChildSession(_AssetLoopSession):
-    """Use actual live child browser sample; compare a fresh HTTP-only echo."""
+    """Borrow the live child context under the owning operation's exit policy."""
     async def open(self):
         pipe=getattr(self.bundle,'child_receipt_pipe',None)
         live=pipe is not None and pipe.process is not None and pipe.process.poll() is None and not pipe.stopped.is_set()
@@ -1253,7 +1416,7 @@ class _BorrowedChildSession(_AssetLoopSession):
             deadline=time.monotonic()+45
             while time.monotonic()<deadline:
                 try:
-                    self.bundle.child_receipt_pipe.receipt()
+                    _require_live_child(self.bundle)
                     break
                 except CollectionRouteError:
                     if self.bundle.child_receipt_pipe.process.poll() is not None:
@@ -1287,6 +1450,15 @@ class _BorrowedChildSession(_AssetLoopSession):
         pipe = getattr(self.bundle, 'child_receipt_pipe', None)
         if pipe is None:
             raise CollectionRouteError('SUPPLEMENT_DEFERRED')
+        if getattr(self.bundle.snapshot, 'local_direct_pinned', False):
+            context_id = pipe.live_pinned_context()
+            if not self.session.pinned_context_active:
+                self.session.context = pipe
+                self.session.authorize_pinned_context(context_id)
+                from .crawler_request_authority import tighten_owner_account_policy
+                tighten_owner_account_policy(self.session)
+                self.session._gate = self.session._make_gate()
+            return self.session._gate
         receipt = pipe.receipt()
         self.session.budget.reserve('boundary')
         ip = await self.session._http_sample()
@@ -1304,7 +1476,7 @@ class _BorrowedChildSession(_AssetLoopSession):
         slot = self.session.slot('media', timeout=timeout, max_wait=timeout)
         await slot.__aenter__()
         try:
-            getattr(self.bundle, 'child_receipt_pipe').receipt()
+            _require_live_child(self.bundle)
         except BaseException:
             # Reservation succeeded: release capacity even when the live browser
             # receipt disappears before transmission. Started budget stays spent.
@@ -1587,7 +1759,8 @@ def _run_maintenance_probe(bundle, *, timeout=None, check_login=False, expected_
                 _stop_probe_process_group(process)
                 if verified_receipt is not None:
                     assert_profile_browser_stopped(snapshot.account_id)
-                    _retire_verified_probe_uncertainty(bundle,verified_receipt)
+                    if not getattr(bundle, 'bootstrap_probe_id', None):
+                        _retire_verified_probe_uncertainty(bundle,verified_receipt)
         finally:
             if authority is not None:
                 authority.close()
@@ -1606,6 +1779,96 @@ def _direct_transport_key(db, snapshot):
     row = db.execute("SELECT stop_code FROM probe_health.collection_route_health WHERE proxy_id=? AND config_revision=?",
                      (key, snapshot.config_revision)).fetchone()
     return key if row and row[0] == 'PROXY_TRANSPORT_FAILED' else None
+
+
+def _bootstrap_transport_baseline(db, bundle, snapshot):
+    """Only a previously bound, healthy service exit may supply a maintenance baseline."""
+    from datetime import datetime
+    accounts = bundle.account_store
+    account = db.execute('SELECT * FROM crawler_accounts WHERE id=?', (snapshot.account_id,)).fetchone()
+    if (not account or account['binding_revision'] != snapshot.binding_revision
+            or account['failure_kind'] or not account['auth_state_ciphertext']
+            or account['recovery_state'] not in {'', 'manual_success', 'success'}):
+        return None
+    if account['cooldown_until']:
+        try:
+            if datetime.fromisoformat(account['cooldown_until']).timestamp() > time.time():
+                return None
+        except (ValueError, TypeError, OverflowError):
+            return None
+    ip, generation = account['shared_exit_key'], account['shared_exit_generation']
+    if not ip or snapshot.observed_exit_ip and (snapshot.observed_exit_ip, snapshot.exit_generation) != (ip, generation):
+        return None
+    row = db.execute('SELECT observed_at FROM crawler_shared_exits WHERE exit_key=? AND generation=?',
+                     (ip, generation)).fetchone()
+    if not row:
+        return None
+    # Keep the original timestamp on recheck to detect an intervening different service exit.
+    observed_at = snapshot.observed_exit_at or row['observed_at']
+    if accounts._pinned_direct_exit(db, account, ip, generation, observed_at):
+        baseline = replace(snapshot, observed_exit_ip=ip, exit_generation=generation, observed_exit_at=observed_at)
+        return baseline, (account['risk_count'], account['last_risk_at'],
+                          account['auth_state_revision'], account['profile_generation'])
+    return None
+
+
+def _watch_bootstrap_transport(bundle, snapshot):
+    from pathlib import Path
+    if not Path(snapshot.scheduler_db_path).is_file():
+        return None
+    with bundle.account_store._connect() as db:
+        db.execute('ATTACH DATABASE ? AS probe_health', (snapshot.scheduler_db_path,))
+        db.execute('BEGIN IMMEDIATE')
+        candidate = _bootstrap_transport_baseline(db, bundle, snapshot)
+        if candidate is None:
+            return None
+        baseline, account_revisions = candidate
+        key = _direct_transport_key(db, baseline)
+        if not key:
+            return None
+        # Keep the existing three-column health table compatible with every writer.
+        # A new write to the key invalidates this watch even when the stop code is identical.
+        db.execute("""CREATE TABLE IF NOT EXISTS probe_health.bootstrap_transport_watch (
+            proxy_id TEXT, config_revision INTEGER, token TEXT NOT NULL, PRIMARY KEY(proxy_id,config_revision))""")
+        for event, refs in [('INSERT', ('NEW',)), ('DELETE', ('OLD',)), ('UPDATE', ('OLD', 'NEW'))]:
+            matches = ' OR '.join(f'(proxy_id={ref}.proxy_id AND config_revision={ref}.config_revision)' for ref in refs)
+            db.execute(f"""CREATE TRIGGER IF NOT EXISTS probe_health.invalidate_bootstrap_watch_{event}
+                AFTER {event} ON collection_route_health BEGIN DELETE FROM bootstrap_transport_watch WHERE {matches}; END""")
+        db.execute('INSERT OR REPLACE INTO probe_health.bootstrap_transport_watch VALUES(?,?,?)',
+                   (key, snapshot.config_revision, bundle.bootstrap_probe_id))
+        return baseline, account_revisions, key
+
+
+def _probe_pinned_exit(bundle, snapshot):
+    watch = _watch_bootstrap_transport(bundle, snapshot)
+    accepted = None
+    try:
+        # Returns only after child result verification, process-group drain and profile check.
+        receipt = _run_maintenance_probe(bundle)
+        if snapshot.observed_exit_ip and receipt.ip != snapshot.observed_exit_ip:
+            raise CollectionRouteError('PROXY_EXIT_CHANGED')
+        observed = bundle.account_store.consume_cached_exit(receipt.ip, observed_at=receipt.observed_at, service_exit=True)
+        accepted = receipt
+        return receipt.ip, receipt.observed_at, observed['shared_exit_generation']
+    finally:
+        if watch is not None:
+            _finish_bootstrap_transport(bundle, watch, accepted)
+
+
+def _finish_bootstrap_transport(bundle, watch, receipt):
+    baseline, account_revisions, key = watch
+    with bundle.account_store._connect() as db:
+        db.execute('ATTACH DATABASE ? AS probe_health', (baseline.scheduler_db_path,))
+        db.execute('BEGIN IMMEDIATE')
+        watched = db.execute("""DELETE FROM probe_health.bootstrap_transport_watch
+            WHERE proxy_id=? AND config_revision=? AND token=?""",
+            (key, baseline.config_revision, bundle.bootstrap_probe_id)).rowcount
+        if (watched and receipt and receipt.ip == baseline.observed_exit_ip
+                and 0 <= time.time() - receipt.observed_at <= settings.crawler_proxy_probe_ttl
+                and _bootstrap_transport_baseline(db, bundle, baseline) == (baseline, account_revisions)):
+            db.execute("""DELETE FROM probe_health.collection_route_health
+                WHERE proxy_id=? AND config_revision=? AND stop_code='PROXY_TRANSPORT_FAILED'""",
+                (key, baseline.config_revision))
 
 
 def _direct_login_transport_marker(db, bundle):
@@ -1867,7 +2130,7 @@ def download_asset_hop(bundle, url, headers, timeout, verify, on_chunk, *, media
                             async for chunk in response.aiter_bytes():
                                 helper.session.check_stop()
                                 if getattr(bundle, 'child_active', False):
-                                    bundle.child_receipt_pipe.receipt()
+                                    _require_live_child(bundle)
                                 on_chunk(chunk)
                         return response.status_code, public_headers
             finally:

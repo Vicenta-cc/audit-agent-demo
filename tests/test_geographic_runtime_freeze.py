@@ -75,11 +75,20 @@ def test_confirm_job_roundtrip_and_live_drift(creation_stack, content, monkeypat
     with pytest.raises(ConfigurationValidationError, match='地域执行能力'):
         app.confirm_and_queue(command, principal=P)
     IsolatedGeographicCapability(tmp_path).install(app)
+    draft_preview = app.get_confirmation_preview(authority['identity']['draft_id'], principal=P)
+    assert draft_preview.model_dump(mode='json')['geographic_strategy'] == 'geographic-mention-v1'
+    assert draft_preview.geographic_max_rounds == 3
+    response = creation_stack['client'].get(f"/api/investigation-drafts/{authority['identity']['draft_id']}/confirmation-preview")
+    assert response.status_code == 200
+    assert response.json()['geographic_strategy'] == 'geographic-mention-v1'
+    assert response.json()['geographic_max_rounds'] == 3
     run = app.confirm_and_queue(command, principal=P)
     assert run.confirmed_configuration['schema_version'] == 'investigation-run-config-v5'
     frozen = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
     assert frozen.execution.geographic_plan['identity'] == authority['identity']
     preview = confirmed_run_preview(run)
+    assert preview.geographic_strategy == 'geographic-mention-v1'
+    assert preview.geographic_max_rounds == frozen.execution.geographic_plan['inputs']['p3_inputs']['max_rounds'] == 3
     assert preview.draft_id == run.draft_id
     assert preview.resolved_search_terms == frozen.resolved_search_terms
     frozen_configuration = frozen.execution.geographic_plan['inputs']['configuration']
@@ -241,3 +250,39 @@ def test_runtime_fence_checks_current_claim_on_every_call(creation_stack, conten
                     pytest.fail('stale claimant entered commit section')
     adapter.pipeline_factory = Pipeline
     adapter.run_pipeline(job_id, {**run.confirmed_configuration['execution'], '_authoritative_m3_contract': True})
+
+
+@pytest.mark.parametrize('rounds', [1, 2])
+def test_geographic_rounds_freeze_and_preview_ignore_live_changes(creation_stack, content, monkeypatch, tmp_path, rounds):
+    from backend.audit_agent.config import settings
+    from backend.investigation_creation.geographic_runtime import IsolatedGeographicCapability
+    from backend.investigation_creation.scope_search_plan import parse_confirmed_scope_search_plan
+    from backend.investigation_creation.frozen_preview import confirmed_run_preview
+    monkeypatch.setattr(settings, 'triage_mode', 'select')
+    monkeypatch.setattr(settings, 'geographic_max_rounds', rounds)
+    authority = make_authority(creation_stack, content)
+    app = creation_stack['app_service']
+    IsolatedGeographicCapability(tmp_path).install(app)
+    assert app.get_confirmation_preview(authority['identity']['draft_id'], principal=P).geographic_max_rounds == rounds
+    run = app.confirm_and_queue(_command(authority['identity']), principal=P)
+    plan = run.confirmed_configuration['execution']['geographic_plan']
+    assert plan['inputs']['p3_inputs']['max_rounds'] == rounds
+    monkeypatch.setattr(settings, 'geographic_max_rounds', 3)
+    parsed = parse_confirmed_scope_search_plan(plan, expected_identity=authority['identity'], expected_digest=plan['plan_digest'])
+    assert parsed.inputs.p3_inputs['max_rounds'] == rounds
+    assert confirmed_run_preview(run).geographic_max_rounds == rounds
+    assert app.get_confirmation_preview(run.draft_id, principal=P).geographic_max_rounds == rounds
+
+
+@pytest.mark.parametrize('value,valid', [('1', True), ('2', True), ('3', True), ('0', False), ('4', False), ('invalid', False)])
+def test_geographic_rounds_environment_bounds(value, valid):
+    import os
+    import subprocess
+    import sys
+    env = dict(os.environ, GEOGRAPHIC_MAX_ROUNDS=value)
+    result = subprocess.run([sys.executable, '-c', 'from backend.audit_agent.config import settings; print(settings.geographic_max_rounds)'], env=env, capture_output=True, text=True)
+    assert (result.returncode == 0) is valid, result.stderr
+    if valid:
+        assert result.stdout.strip() == value
+    else:
+        assert 'ValueError' in result.stderr

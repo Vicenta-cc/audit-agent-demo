@@ -129,8 +129,10 @@ def selection_page(service, run_id, principal, *, offset=0, limit=50, tier=None)
     raw_plan = snapshot.execution.geographic_plan
     if not raw_plan:
         return {'run_id':run.id, 'status':'not_applicable', 'items':[], 'total':0, 'offset':offset, 'limit':limit}
+    strategy = raw_plan['inputs']['p3_inputs'].get('geographic_strategy')
+    pending_extra = {'geographic_strategy': strategy} if strategy else {}
     if not run.job_id:
-        return {'run_id':run.id, 'status':'pending', 'items':[], 'total':0, 'offset':offset, 'limit':limit}
+        return {'run_id':run.id, 'status':'pending', **pending_extra, 'items':[], 'total':0, 'offset':offset, 'limit':limit}
     if run.job_id != AuditPipelineExecutionAdapter.job_id_for_run(run.id):
         raise ValueError("geographic Run/Job identity mismatch")
     identity = raw_plan["identity"]
@@ -143,7 +145,7 @@ def selection_page(service, run_id, principal, *, offset=0, limit=50, tier=None)
     AuditPipelineExecutionAdapter._validate_job_payload(job, snapshot.execution.model_dump(mode="json"))
     summary = deepcopy((job.get('control') or {}).get('geographic_selection'))
     if not summary:
-        return {'run_id':run.id, 'status':'pending', 'items':[], 'total':0, 'offset':offset, 'limit':limit}
+        return {'run_id':run.id, 'status':'pending', **pending_extra, 'items':[], 'total':0, 'offset':offset, 'limit':limit}
     p2 = parse_confirmed_scope_search_plan(raw_plan, expected_identity=raw_plan['identity'], expected_digest=raw_plan['plan_digest'])
     expected = project_plan(p2, execution_id=summary['execution_id'],run_id=run.id,job_id=run.job_id,config_hash=snapshot.config_hash)
     if summary.get('plan_digest') != expected['plan_digest']:
@@ -154,8 +156,12 @@ def selection_page(service, run_id, principal, *, offset=0, limit=50, tier=None)
         raise ValueError('trusted runtime binding mismatch')
     if tier is not None:
         rows = [row for row in rows if row['geo_tier'] == tier]
-    return {'run_id':run.id, **classify_geographic_status(summary),
-            'summary':{k:summary.get(k) for k in ('candidate_occurrences','geographic_evaluation_pending','reserved','collected','handed_off','collected_not_delivered','unfinished_queries','reasons')},
+    extra = {'geographic_strategy': expected['geographic_strategy']} if 'geographic_strategy' in expected else {}
+    keys = ('candidate_occurrences','geographic_evaluation_pending','reserved','collected','handed_off','collected_not_delivered','unfinished_queries','reasons')
+    if extra:
+        keys += ('queries',)
+    return {'run_id':run.id, **classify_geographic_status(summary), **extra,
+            'summary':{k:summary.get(k) for k in keys},
             'items':[dict(item) for item in rows[offset:offset+limit]], 'total':len(rows), 'offset':offset,'limit':limit}
 
 
@@ -192,4 +198,6 @@ def _selection_rows(state):
                          'evaluation_status':geo.get('evaluation_status'),
                          'pending_reason':'geographic_response_invalid'
                              if geo.get('evaluation_status') == 'invalid_response' else None})
+            if state['plan'].get('geographic_strategy') == 'geographic-mention-v1':
+                rows[-1]['round_index'] = definitions[qid]['round_index']
     return rows

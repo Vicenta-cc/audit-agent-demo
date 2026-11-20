@@ -39,6 +39,14 @@ def _count(value):
 
 def validate_plan(plan, *, expected_execution_id=None, expected_plan_digest=None):
     """Reject malformed, changed or unsupported input with ValueError."""
+    from .geographic_mentions import is_mention_plan, validate_projected_plan
+    if is_mention_plan(plan):
+        validate_projected_plan(plan)
+        if expected_execution_id is not None:
+            _require(plan['execution_id'] == expected_execution_id, 'execution_binding_mismatch')
+        if expected_plan_digest is not None:
+            _require(plan['plan_digest'] == expected_plan_digest, 'expected_plan_digest_mismatch')
+        return
     _require(isinstance(plan, dict), 'plan_not_object')
     _require(plan.get('schema_version') == 'p4-fixture-input-v1' and
              plan.get('validation_origin') == 'fixture' or
@@ -190,6 +198,10 @@ def _validate_occurrence(plan, query, occurrence, *, risk_candidate=None):
              candidate['post'].get('post_id') == candidate['post_id'], 'candidate_post_identity_mismatch')
     _require(type(occurrence.get('already_audited', False)) is bool, 'invalid_already_audited')
     validate_risk_record(plan, occurrence, occurrence.get('risk'), risk_candidate=risk_candidate)
+    from .geographic_mentions import is_mention_plan, validate_occurrence_geo
+    if is_mention_plan(plan):
+        validate_occurrence_geo(plan, occurrence)
+        return
     geo = occurrence.get('geo')
     _require(isinstance(geo, dict) and geo.get('p3_version') == plan['p3_version'], 'geo_version_mismatch')
     request, result = geo.get('request'), geo.get('result')
@@ -266,6 +278,9 @@ def _validated_tier(plan, occurrence):
     tier = result['geo_tier']
     if occurrence.get('already_audited', False) or score['score'] <= 0 or score['band'] not in ('strong', 'weak'):
         return None
+    from .geographic_mentions import is_mention_plan
+    if is_mention_plan(plan):
+        return tier if tier in ('local', 'province_unknown', 'ip_only') else None
     if tier == 'local':
         return tier
     if plan['target_level'] != 'city' or plan['selection_policy'] != 'local_first_with_supplement':
@@ -354,7 +369,8 @@ def select_next_batch(plan, query_states, state):
         if remaining <= 0:
             return _result('exhausted', ['task_success_limit'])
         tiers = ['local']
-        if plan['target_level'] == 'city' and plan['selection_policy'] == 'local_first_with_supplement':
+        from .geographic_mentions import is_mention_plan
+        if is_mention_plan(plan) or (plan['target_level'] == 'city' and plan['selection_policy'] == 'local_first_with_supplement'):
             tiers += ['province_unknown', 'ip_only']
         occupied, excluded = set(state['occupied']), set(state['excluded_occurrences'])
         for tier in tiers:

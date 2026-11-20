@@ -45,6 +45,33 @@ def test_initial_human_login_can_retry_cancelled_claim_and_freeze_trusted_identi
     assert store.get(a['id'])['platform_account_id']=='trusted_new_identity'
 
 
+def test_pinned_direct_admission_rechecks_latest_exit_and_pause_without_refresh(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, 'crawler_local_direct_pinning_enabled', True)
+    monkeypatch.setattr(settings, 'crawler_safety_enabled', True)
+    monkeypatch.setattr(settings, 'crawler_proxy_enabled', False)
+    store = CrawlerAccountStore(tmp_path / 'pinned.sqlite3')
+    account_id = account(store, 'local')['id']
+    ip = '203.0.113.17'
+    observed_at = time.time() - 1800
+    row = store.observe_shared_exit(ip, observed_at=observed_at, service_exit=True)
+    generation = row['shared_exit_generation']
+    assert store.get_direct_route(account_id) is None
+    assert store.get_pinned_direct_route(account_id, ip, generation, observed_at=observed_at)['observed_exit_at'] == observed_at
+    store.admit_route(account_id, ip, generation, 'pinned', local_direct_pinned=True, pinned_observed_at=observed_at)
+    with pytest.raises(ValueError, match='ACCOUNT_CHALLENGE'):
+        store.admit_route(account_id, ip, generation, 'ordinary')
+    store.pause_account_exit(account_id, until=time.time() + 60)
+    assert store.get_pinned_direct_route(account_id, ip, generation, observed_at=observed_at) is None
+    with pytest.raises(ValueError):
+        store.admit_route(account_id, ip, generation, 'pinned', local_direct_pinned=True, pinned_observed_at=observed_at, require_existing=True)
+    second_account = account(store, 'second')['id']
+    assert store.get_pinned_direct_route(second_account, ip, generation, observed_at=observed_at)
+    other = store.observe_shared_exit('203.0.113.18', service_exit=True)
+    assert other['shared_exit_generation'] != generation
+    store.observe_shared_exit(ip, service_exit=True)  # A later return to the original IP cannot revive the pin.
+    assert store.get_pinned_direct_route(second_account, ip, generation, observed_at=observed_at) is None
+
+
 def admit_worker(path, account_id, barrier, queue):
     store=CrawlerAccountStore(path)
     barrier.wait(timeout=15)

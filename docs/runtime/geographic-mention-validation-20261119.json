@@ -1,0 +1,82 @@
+{
+  "date": "2026-11-19",
+  "production_deployed": false,
+  "external_platform_calls": false,
+  "app_base": "6f68c31a57d8afefa744d7e169c0f53e9bb39c83",
+  "crawler_base": "6261aee6798d6fcf4ac68f3e561582285ffc99c2",
+  "frontend_base": "bb6c14cae365e21bee0c9831510e32e84fbbc1f7",
+  "results": {
+    "app_geographic_integration": {
+      "passed": 279,
+      "subtests_passed": 4,
+      "seconds": 646.39
+    },
+    "risk_admission_snapshot_regression": {
+      "passed": 199
+    },
+    "geographic_validation_cache": {
+      "passed": 7
+    },
+    "memory_storage_budget": {
+      "passed": 1
+    },
+    "crawler_regression": {
+      "passed": 128,
+      "skipped": 1
+    },
+    "frontend": {
+      "passed": 13,
+      "typecheck": "passed",
+      "build": "passed (final source, tsc --noEmit and vite build)"
+    },
+    "resource_reference_test_refresh": {
+      "passed": 55,
+      "priority_file_passed": 12,
+      "related_regression_passed": 43,
+      "seconds": 8.2,
+      "product_code_changed": false
+    }
+  },
+  "known_baseline_failures": {
+    "file": "tests/test_search_risk_priority.py",
+    "failed": 6,
+    "also_failed_on_clean_production_base": true,
+    "cause": "September test setup omitted trusted resource_ref and matching session required since 4487b9f on 2026-10-09; product validation unchanged",
+    "status": "resolved_test_setup_only",
+    "remaining_failures": 0,
+    "original_assertions_preserved": 17
+  },
+  "original_workspace_unchanged": true,
+  "final_recheck": {
+    "date": "2026-11-19",
+    "product_code_changed": false,
+    "app_focused": {
+      "passed": 269,
+      "seconds": 164.02
+    },
+    "app_storage_compatibility": {
+      "passed": 11,
+      "seconds": 17.09
+    },
+    "crawler": {
+      "passed": 53,
+      "skipped": 1
+    },
+    "frontend": {
+      "passed": 13,
+      "seconds": 1.5,
+      "typecheck": "passed"
+    },
+    "protected_risk_source_unchanged": true,
+    "original_creator_empty_response_retry_unchanged": true,
+    "incremental_storage_and_streamed_digest_fixes_preserved": true,
+    "sqlite_snapshot_implementation_unchanged": true,
+    "core_implementation_omissions_found": [],
+    "validation_gaps": [
+      "real-post human-labelled precision/recall",
+      "live-platform end-to-end collection",
+      "30-candidate and production concurrency performance"
+    ],
+    "production_deployed": false
+  }
+}

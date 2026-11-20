@@ -57,6 +57,10 @@ from .video_processor import DemoAudioProcessor, DemoFrameExtractor
 
 
 
+class _TriagePreparationStopped(Exception):
+    """User control stopped collection before a selected item was delivered."""
+
+
 @contextmanager
 def _tracked_geographic_route_borrow(borrowed, pending):
     released = threading.Event()
@@ -304,6 +308,7 @@ class AuditPipeline:
         return _GeographicFencedStore(job_store, self, {"update", "update_control", "log"})
 
     def run(self, request, crawl_epoch: int | None = None) -> None:
+        self._direct_egress_pin = None
         self._geographic_entry = bool(getattr(request, "geographic_plan", None))
         job_store = self._fenced_job_store()
         if settings.app_auth_mode == "required":
@@ -367,6 +372,11 @@ class AuditPipeline:
             if getattr(request, "geographic_plan", None) and verified is None:
                 raise ValueError("geographic execution requires a verified frozen Run")
             if verified is not None:
+                if verified.get("run_crawler") and verified.get("platform") == "dy":
+                    from .crawler_route import LocalDirectEgressPin, require_direct_investigation_policy
+                    require_direct_investigation_policy()
+                    self._direct_egress_pin = LocalDirectEgressPin(
+                        execution_id=self.job_id, owner_id=str(job_snapshot.get("owner_user_id") or "local-user"))
                 from types import SimpleNamespace
                 request = SimpleNamespace(**{**verified, "_authoritative_m3_contract": True,
                     "_confirmed_analyze_limit": verified["analyze_limit"]})
@@ -378,6 +388,11 @@ class AuditPipeline:
                 self.rule_snapshot = self._rule_snapshot_from_source(job_snapshot or request)
                 self._set_prompt_context(self._prompt_category_from_source(request), self._prompt_profile_from_source(request))
 
+            self._triage_local_media = bool((job_snapshot.get("control") or {}).get("triage_local_media"))
+            if (request.run_crawler and request.platform == "dy" and request.crawl_mode == "search"
+                    and not geographic_entry and settings.triage_mode in {"select", "compare"}):
+                self._triage_local_media = True
+                job_store.update_control(self.job_id, triage_local_media=True)
             collect_media = bool(getattr(request, "collect_media", True))
             self._geographic_collect_media = collect_media
             if not collect_media:
@@ -479,6 +494,9 @@ class AuditPipeline:
                 stream_queue: queue.Queue = queue.Queue()
                 stream_enqueue_lock = threading.Lock()
                 geographic_route_borrows: list[threading.Event] = []
+                ordinary_triage = (not geographic and request.platform == "dy"
+                                   and request.crawl_mode == "search"
+                                   and settings.triage_mode in {"select", "compare"})
                 analysis_errors: list[BaseException] = []
                 batch_writer = BatchWriter(
                     job_id=self.job_id,
@@ -599,7 +617,13 @@ class AuditPipeline:
                         if analysis_errors and not (settings.crawler_safety_enabled and request.platform == 'dy'
                                 and all(isinstance(error, CollectionRouteError) for error in analysis_errors)):
                             return
-                        bundle = None if geographic else getattr(self, "_collection_route_context", None)
+                        source_items = [entry["item"]] if isinstance(entry, dict) else entry[0]
+                        if ordinary_triage:
+                            from .geographic_media import TriageMediaReadiness
+                            for item in source_items:
+                                TriageMediaReadiness.validate_item_binding(
+                                    item, self.job_id, request.platform, content_identity(item, request.platform))
+                        bundle = None if geographic or ordinary_triage else getattr(self, "_collection_route_context", None)
                         source_item = entry.get("item") if isinstance(entry, dict) else next(iter(entry[0]), {})
                         source = (source_item or {}).get("collection_route_provenance") or {}
                         if bundle is not None and source.get("source_account_id") != bundle.account_id:
@@ -641,11 +665,14 @@ class AuditPipeline:
                         refresh_selected_contents()
                         for content in contents:
                             identity = content_identity(content, request.platform)
-                            if (
-                                not identity
-                                or identity in selected_identities
-                                or len(selected_memberships) >= selection_limit
-                            ):
+                            pending_selected = ordinary_triage and any(
+                                str(ref.get("content_key")) == identity
+                                and ref.get("analyze_status") in {"queued", "failed"}
+                                for ref in selected_refs
+                            )
+                            if (not identity or (not pending_selected and (
+                                    identity in selected_identities
+                                    or len(selected_memberships) >= selection_limit))):
                                 continue
                             batch_paths = batch_writer.add([content], comments)
                             if settings.triage_mode in {"select", "compare"} and request.crawl_mode == "search":
@@ -937,7 +964,8 @@ class AuditPipeline:
                     for ref in selected_refs:
                         if ref["analyze_status"] == "queued":
                             put_stream_entry(ref)
-                if use_batch_ingestion and selection_limit is None and not dy_creator:
+                # Each selected detail is flushed by its producer after route close.
+                if use_batch_ingestion and selection_limit is None and not dy_creator and not ordinary_triage:
                     batch_flusher = threading.Thread(
                         target=flush_batches_periodically,
                         name=f"audit-batch-flusher-{self.job_id}",
@@ -1429,6 +1457,9 @@ class AuditPipeline:
                 crawl_dir = source_root / "crawler"
                 job_store.log(self.job_id, f"跳过爬取，读取已有输出：{source_root.name}")
                 output = self.crawler.load_latest_output(crawl_dir, request.platform)
+                for item in output.contents:
+                    if "triage_media_binding" in item:
+                        self._triage_ready_media(item, output.platform, source_root, collect_media)
                 results = []
                 analyzed_ids = set()
                 analyze_limit = max(0, request.analyze_limit)
@@ -1518,6 +1549,7 @@ class AuditPipeline:
                     comments=output.comments,
                     keyword=request.keyword if request.crawl_mode == "search" else (request.creator_url or request.creator_id),
                     category=request.lexicon_category if getattr(request, "keyword_source", "keyword") == "lexicon" else "",
+                    **({"media_source_task_id": source_root.name} if not request.run_crawler else {}),
                 )
                 if selection_limit is not None:
                     (
@@ -1534,9 +1566,16 @@ class AuditPipeline:
                             "completed",
                             task_id=self.job_id,
                         )
+            subject_contents = output.contents
+            if getattr(self, "_triage_local_media", False):
+                completed_keys = {str(ref.get("content_key")) for ref in
+                    self.ingestion.validated_refs_for_task(self.job_id)
+                    if ref.get("analyze_status") in {"completed", "skipped"}}
+                subject_contents = [item for item in output.contents
+                    if content_identity(item, output.platform) not in completed_keys]
             subjects = self._build_subjects(
                 output.platform,
-                output.contents,
+                subject_contents,
                 output.comments,
                 source_root,
                 output.creators,
@@ -1804,6 +1843,8 @@ class AuditPipeline:
                 },
                 action="retry_after_recovery",
             )
+        finally:
+            self._direct_egress_pin = None
 
     @contextmanager
     def _geographic_route_operation(self, platform: str, account_id: str, leased_ids: set[str]):
@@ -1856,13 +1897,14 @@ class AuditPipeline:
                     finally:
                         self._collection_route_context = previous
             return
-        if not account_id or (not retain_direct and not getattr(settings, "crawler_proxy_enabled", False) and not (account or {}).get("proxy_required")):
+        pin = getattr(self, "_direct_egress_pin", None)
+        if not account_id or (pin is None and not retain_direct and not getattr(settings, "crawler_proxy_enabled", False) and not (account or {}).get("proxy_required")):
             yield None
             return
         job = job_store.get(self.job_id) or {}
         owner = str(job.get("owner_user_id") or "local-user")
         bundle = acquire_route_execution(account_id, self.job_id, owner, account_store=crawler_account_store,
-                                         investigation_collection=True)
+                                         investigation_collection=True, **({"direct_egress_pin": pin} if pin is not None else {}))
         previous = getattr(self, "_collection_route_context", None)
         self._collection_route_context = bundle
         try:
@@ -2094,6 +2136,7 @@ class AuditPipeline:
                 analysis_batch_size = verified["analysis_batch_size"]
                 self.authoritative_m3 = True
             platform = str(job.get("platform") or "xhs")
+            self._triage_local_media = bool((job.get("control") or {}).get("triage_local_media"))
             collect_media = bool(job.get("collect_media", True))
             self._geographic_collect_media = collect_media
             source_root = self._resume_source_root(job)
@@ -2711,6 +2754,7 @@ class AuditPipeline:
             pending.write_text(json.dumps(keyword_failures, ensure_ascii=False), encoding="utf-8")
             pending.replace(failure_path)
 
+        prepared_items: dict[str, dict] = {}
         selected_by_key: dict[str, str] = load_collected_selections(job_crawl_dir)  # content_key -> 选中它的词
         legacy_words = legacy_collected_keywords(job_crawl_dir)
         # A crash can occur after a complete snapshot is published but before the
@@ -2728,7 +2772,21 @@ class AuditPipeline:
             existing = next((ref for ref in refs if str(ref.get("content_key")) == key), None)
             if existing is not None and existing.get("comments", []) != payload["comments"]:
                 raise CrawlerCollectionIncompleteError(f"已入库评论与精采完成快照不一致：{key}；需复核后重新审核")
-            if existing is None and content_callback:
+            if existing is not None and existing.get("analyze_status") in {"completed", "skipped"}:
+                selected_by_key[key] = word
+                continue
+            if platform == "dy":
+                recovered = CrawlOutput(platform, [item], payload["comments"],
+                    Path(payload.get("attempt_root") or receipt.parents[2]), creators=payload.get("creators", []))
+                try:
+                    self._prepare_triage_delivery(recovered, root=job_crawl_dir, save_root=receipt.parents[2],
+                        collect_media=bool(getattr(request, "collect_media", True)), route=None, stop_checker=stop_checker)
+                except _TriagePreparationStopped:
+                    break
+                item = recovered.contents[0]
+                prepared_items[key] = item
+            if content_callback and (existing is None or (platform == "dy"
+                    and existing.get("analyze_status") in {"queued", "failed"})):
                 content_callback([item], payload["comments"])
             selected_by_key[key] = word
 
@@ -2769,23 +2827,24 @@ class AuditPipeline:
                 job_store.log(self.job_id, f"词「{keyword}」使用账号 {account['display_name']}")
             if "ranked" not in state:
                 job_store.log(self.job_id, f"初筛候选采集：{keyword}，目标 {candidate_count} 条，选 {wanted} 条")
-                candidates = self.crawler.run_search(
-                    platform=platform, keyword=keyword, start_page=start_page,
-                    max_notes=candidate_count, max_total_notes=candidate_count,
-                    max_comments=candidate_comments, max_concurrency=crawler_concurrency,
-                    max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
-                    get_sub_comment=False, collect_comments=collect_comments and candidate_comments > 0,
-                    collect_media=False, save_root=candidate_root,
-                    fetch_author_profile=True,
-                    skip_profile_verify_regex="|".join(settings.triage_official_verify_patterns),
-                    stream_items=False, stop_checker=stop_checker, auth_state=account["auth_state"],
-                    account_id=account["id"],
-                    route_context=getattr(self, "_collection_route_context", None),
-                    started_callback=None if crawler_started else started_callback,
-                    reusable_content_db=self.ingestion.db_path if platform == "dy" else None,
-                    current_task_id=self.job_id,
-                    search_sort=str(getattr(request, "search_sort", "general") or "general"),
-                )
+                with self._route_operation(account["id"]) if platform == "dy" else nullcontext():
+                    candidates = self.crawler.run_search(
+                        platform=platform, keyword=keyword, start_page=start_page,
+                        max_notes=candidate_count, max_total_notes=candidate_count,
+                        max_comments=candidate_comments, max_concurrency=crawler_concurrency,
+                        max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                        get_sub_comment=False, collect_comments=collect_comments and candidate_comments > 0,
+                        collect_media=False, save_root=candidate_root,
+                        fetch_author_profile=True,
+                        skip_profile_verify_regex="|".join(settings.triage_official_verify_patterns),
+                        stream_items=False, stop_checker=stop_checker, auth_state=account["auth_state"],
+                        account_id=account["id"],
+                        route_context=getattr(self, "_collection_route_context", None),
+                        started_callback=None if crawler_started else started_callback,
+                        reusable_content_db=self.ingestion.db_path if platform == "dy" else None,
+                        current_task_id=self.job_id,
+                        search_sort=str(getattr(request, "search_sort", "general") or "general"),
+                    )
                 crawler_started = True
                 clean_account_ids.add(account["id"])
                 comments_by_key: dict[str, list[dict]] = {}
@@ -2842,17 +2901,31 @@ class AuditPipeline:
                 job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}"
                                            f"（{strategy}，{selected.band}，分 {selected.score}{risk_note}）：{selected.reason}")
                 try:
-                    detail_output = self.crawler.run_detail(
-                        platform, selected.content_key, source_keyword=keyword,
-                        max_comments=detail_comments, max_concurrency=crawler_concurrency,
-                        max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
-                        get_sub_comment=bool(getattr(request, "get_sub_comment", False)), save_root=save_root,
-                        progress_callback=keyword_progress, content_callback=content_callback, stream_items=stream_items,
-                        stop_checker=stop_checker, auth_state=account["auth_state"], started_callback=None,
-                        account_id=account["id"], collect_comments=collect_comments,
-                        route_context=getattr(self, "_collection_route_context", None),
-                        collect_media=bool(getattr(request, "collect_media", True)),
-                    )
+                    with self._route_operation(account["id"]) if platform == "dy" else nullcontext():
+                        detail_output = self.crawler.run_detail(
+                            platform, selected.content_key, source_keyword=keyword,
+                            max_comments=detail_comments, max_concurrency=crawler_concurrency,
+                            max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                            get_sub_comment=bool(getattr(request, "get_sub_comment", False)), save_root=save_root,
+                            progress_callback=keyword_progress, content_callback=None if platform == "dy" else content_callback, stream_items=stream_items,
+                            stop_checker=stop_checker, auth_state=account["auth_state"], started_callback=None,
+                            account_id=account["id"], collect_comments=collect_comments,
+                            route_context=getattr(self, "_collection_route_context", None),
+                            collect_media=bool(getattr(request, "collect_media", True)),
+                        )
+                        if platform == "dy" and detail_output.contents:
+                            self._prepare_triage_delivery(detail_output, root=job_crawl_dir, save_root=save_root,
+                                collect_media=bool(getattr(request, "collect_media", True)),
+                                route=getattr(self, "_collection_route_context", None), stop_checker=stop_checker)
+                    if platform == "dy" and detail_output.contents:
+                        prepared_items[selected.content_key] = detail_output.contents[0]
+                        if content_callback:
+                            try:
+                                content_callback(detail_output.contents, detail_output.comments)
+                            except Exception as exc:
+                                raise CrawlerCollectionIncompleteError(
+                                    f"精采已完成但交付入库失败：{selected.content_key}；完整快照已保留，可恢复"
+                                ) from exc
                 except (CrawlerVerificationError, CrawlerAuthenticationError):
                     # 换账号重试这个词时不再挑这一条，也不把它记成已选
                     state["failed_picks"].add(selected.content_key)
@@ -2899,12 +2972,14 @@ class AuditPipeline:
                     crawler_account_store.mark_used(account["id"])
                     marked_used_ids.add(account["id"])
                 try:
-                    with self._route_operation(account["id"]):
+                    with nullcontext() if platform == "dy" else self._route_operation(account["id"]):
                         crawl_keyword(index, keyword, candidate_root, account, keyword_state)
                     clean_account_ids.add(account["id"])
                     if keyword in keyword_failures:
                         del keyword_failures[keyword]
                         persist_keyword_failures()
+                except _TriagePreparationStopped:
+                    break
                 # 登录态失效可换号重试一次；抖音验证需要人工核验。
                 except (CrawlerVerificationError, CrawlerAuthenticationError) as exc:
                     if not account["id"]:
@@ -2956,7 +3031,7 @@ class AuditPipeline:
                             crawler_account_store.reset_risk(account["id"])
         output = self.crawler._load_platform_output(save_root, platform)
         # 重新读盘拿到的是爬虫原始行：抖音 detail 模式不写 source_keyword，按选中它的词补回（R7）
-        output.contents = [item | {"source_keyword": selected_by_key[key]} for item in output.contents
+        output.contents = [prepared_items.get(key, item) | {"source_keyword": selected_by_key[key]} for item in output.contents
                            if (key := content_identity(item, platform)) in selected_by_key]
         output.comments = [comment for comment in output.comments
                            if comment_content_identity(comment, platform) in selected_by_key]
@@ -3005,6 +3080,7 @@ class AuditPipeline:
         comments: list[dict],
         keyword: str,
         category: str = "",
+        media_source_task_id: str | None = None,
     ) -> dict[str, dict]:
         batch_writer = BatchWriter(
             job_id=self.job_id,
@@ -3020,7 +3096,8 @@ class AuditPipeline:
         refs_by_key: dict[str, dict] = {}
         ingested_count = 0
         for batch_path in batch_paths:
-            refs = self.ingestion.ingest_batch(batch_path, raw_items_dir)
+            refs = self.ingestion.ingest_batch(batch_path, raw_items_dir,
+                **({"media_source_task_id": media_source_task_id} if media_source_task_id is not None else {}))
             ingested_count += len(refs)
             for ref in refs:
                 keys = {
@@ -3126,6 +3203,81 @@ class AuditPipeline:
             job_store.log(self.job_id, f"继续分析：已有输出媒体目录不可用，回退当前任务目录：{exc}")
             return current_root
 
+    def _prepare_triage_delivery(self, output, *, root, save_root, collect_media, route, stop_checker):
+        """Publish selected media and its exact source before releasing this route."""
+        from .geographic_media import TriageMediaReadiness, GeographicMediaNotReady, _fsync_directory
+        from .scoped_selection import digest
+        root = Path(root).resolve()
+        source_dir = Path(output.output_dir).absolute().relative_to(root)
+        item = {k: v for k, v in output.contents[0].items() if k != "triage_media_binding"}
+        from .ingestion import _validated_collection_source
+        source = item.get("collection_route_provenance")
+        item["collection_route_provenance"] = _validated_collection_source(source) if source is not None else None
+        key = content_identity(item, output.platform)
+        binding = dict(job_id=self.job_id, platform=output.platform, content_key=key,
+                       content_digest=digest(item), source_dir=str(source_dir))
+        if "triage_media_binding" in output.contents[0]:
+            saved = TriageMediaReadiness.validate_item_binding(output.contents[0], self.job_id, output.platform, key)
+            if saved != binding:
+                raise GeographicMediaNotReady("triage recovery source changed after readiness")
+        policy = self._geographic_media_policy(item, output.platform, collect_media)
+        if (TriageMediaReadiness.required(**policy)
+                and Path(output.output_dir).absolute() == Path(save_root).absolute()):
+            raise GeographicMediaNotReady("required triage media must come from an exact detail attempt")
+
+        def fence():
+            self._assert_geographic_lease()
+            if settings.app_auth_mode == "required":
+                from backend.task_admission.execution import assert_execution
+                assert_execution(self.job_id, getattr(self, "_admission_execution", None))
+            if stop_checker and stop_checker():
+                raise _TriagePreparationStopped("triage media preparation stopped")
+
+        def download(url, target):
+            fence()
+            job = job_store.get(self.job_id) or {}
+            return download_url_with_error(url, target, platform=output.platform,
+                referer=self._content_url(item, output.platform),
+                collection_route_provenance=item.get("collection_route_provenance"),
+                owner_id=str(job.get("owner_user_id") or "local-user"), execution_id=self.job_id,
+                route_context=route, required_route=True,
+                direct_egress_pin=getattr(self, "_direct_egress_pin", None))
+
+        ffmpeg = self.audio._resolve_ffmpeg() if policy["video_urls"] and collect_media and policy["analysis_scope"] != "image_text" else ""
+        TriageMediaReadiness(root).prepare(binding, **policy, route=route,
+            download=download, ffmpeg=ffmpeg, fence=fence)
+        item["triage_media_binding"] = binding
+        output.contents = [item]
+        # The adapter already wrote a complete raw snapshot. Upgrade it only after
+        # readiness so both queue delivery and crash recovery retain the binding.
+        directory = Path(save_root) / PLATFORM_DATA_DIRS[output.platform] / "detail_completed"
+        directory.mkdir(parents=True, exist_ok=True)
+        receipt = directory / (hashlib.sha256(key.encode()).hexdigest() + ".json")
+        payload = dict(contents=output.contents, comments=output.comments,
+                       creators=output.creators, attempt_root=str(Path(output.output_dir).absolute()))
+        pending = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", dir=directory, delete=False) as handle:
+                pending = Path(handle.name)
+                json.dump(payload, handle, ensure_ascii=False)
+                handle.flush()
+                os.fsync(handle.fileno())
+            fence()
+            os.replace(pending, receipt)
+            _fsync_directory(directory)
+        finally:
+            if pending is not None:
+                pending.unlink(missing_ok=True)
+
+    def _triage_ready_media(self, item, platform, media_root, collect_media):
+        from .geographic_media import TriageMediaReadiness
+        binding = TriageMediaReadiness.validate_item_binding(
+            item, Path(media_root).name, platform, content_identity(item, platform))
+        policy = self._geographic_media_policy(item, platform, collect_media)
+        root = Path(media_root) / "crawler"
+        ready = TriageMediaReadiness(root).load(binding, **policy, fence=self._assert_geographic_lease)
+        return ready, dict(root=str(root), binding=binding, policy=policy)
+
     def _geographic_media_policy(self, item, platform, collect_media):
         return dict(collect_media=collect_media, image_urls=self._image_urls(item, platform),
             video_urls=self._video_urls(item, platform), image_limit=settings.max_images_per_note,
@@ -3183,7 +3335,15 @@ class AuditPipeline:
         subjects = []
         for item in contents:
             note_id = self._content_id(item, platform)
-            if getattr(self, "_geographic_entry", False):
+            media_readiness = None
+            if getattr(self, "_triage_local_media", False) and "triage_media_binding" not in item:
+                from .geographic_media import GeographicMediaNotReady
+                raise GeographicMediaNotReady("selected triage content has no prepared media binding")
+            if "triage_media_binding" in item:
+                ready, media_readiness = self._triage_ready_media(item, platform, media_root, include_media)
+                local_video_paths, local_image_paths = ready["videos"], ready["images"]
+                image_urls, video_urls = [], []
+            elif getattr(self, "_geographic_entry", False):
                 ready = self._geographic_ready_media(platform, note_id, media_root, include_media)
                 local_video_paths, local_image_paths = ready["videos"], ready["images"]
                 image_urls, video_urls = [], []
@@ -3230,6 +3390,7 @@ class AuditPipeline:
                     local_image_paths=local_image_paths,
                     local_video_paths=local_video_paths,
                     collection_route_provenance=item.get("collection_route_provenance"),
+                    media_readiness=media_readiness,
                 )
             )
         return subjects
@@ -3393,6 +3554,13 @@ class AuditPipeline:
             subject.image_urls, subject.video_urls = [], []
         from backend.task_admission.resources import analysis_capacity
         with analysis_capacity(self._capacity_stop_requested) if settings.app_auth_mode == "required" else nullcontext():
+            if subject.media_readiness is not None:
+                from .geographic_media import TriageMediaReadiness
+                handoff = subject.media_readiness
+                ready = TriageMediaReadiness(handoff["root"]).load(handoff["binding"],
+                    **handoff["policy"], fence=self._assert_geographic_lease)
+                subject.local_image_paths, subject.local_video_paths = ready["images"], ready["videos"]
+                subject.image_urls, subject.video_urls = [], []
             return self._analyze_subject_with_capacity(subject)
 
     def _capacity_stop_requested(self):
@@ -8528,8 +8696,9 @@ class AuditPipeline:
         job = job_store.get(self.job_id) or {}
         owner_id = str(job.get("owner_user_id") or "local-user")
         route_context = getattr(getattr(self, "_media_route_context", None), "value", None)
-        if getattr(self, "_geographic_entry", False):
-            # Geographic media must be ready before the producer releases its
+        if (getattr(self, "_geographic_entry", False) or getattr(self, "_triage_local_media", False)
+                or subject.media_readiness is not None):
+            # Selected media must be ready before the producer releases its
             # source route. An audit consumer never performs platform network I/O.
             raise CollectionRouteError("SUPPLEMENT_DEFERRED")
         route_context = route_context or getattr(self, "_collection_route_context", None)
@@ -8541,6 +8710,7 @@ class AuditPipeline:
             collection_route_provenance=subject.collection_route_provenance,
             owner_id=owner_id, execution_id=self.job_id,
             route_context=route_context, required_route=required_route,
+            direct_egress_pin=getattr(self, "_direct_egress_pin", None),
         )
 
     def _analyze_images(self, subject: AuditSubject, image_dir: Path) -> list[dict]:

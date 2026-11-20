@@ -153,9 +153,9 @@ def capture_confirmed_authority(application, draft, *, principal, resource_conne
             'model_scores':dict(triage.MODEL_SCORES),'prompt_hit_limit':triage.PROMPT_HIT_LIMIT,'discard_score':triage.DISCARD_SCORE},
         identity={'max_followers_personal_verified':settings.triage_max_followers_personal_verified,
             'max_followers_unverified':settings.triage_max_followers_unverified,'official_verify_patterns':list(settings.triage_official_verify_patterns)})
-    profile=freeze_p3_inputs(model=settings.triage_model,
-        model_config_source={'origin':'confirmed_run','reference':'P1 settings.triage_model (identifier only; no credentials)'})
-    context=derive_scope_context(cfg.relevance_scope_state.model_dump(mode='json'),profile)
+    from backend.audit_agent.geographic_mentions import freeze_profile, derive_context
+    profile=freeze_profile(max_rounds=settings.geographic_max_rounds)
+    context=derive_context(cfg.relevance_scope_state.model_dump(mode='json'),profile)
     return dict(identity=provenance['identity'],title=draft.title,objective=draft.objective,
         configuration=cfg.model_dump(mode='json'),provenance=provenance,resolution=resolution.model_dump(mode='json'),
         resources=dict(ruleset_content=ruleset_content.model_dump(mode='json'),ruleset_source=ruleset_source,

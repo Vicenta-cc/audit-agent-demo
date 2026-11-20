@@ -12,6 +12,19 @@ from test_unified_draft_configuration import P
 
 @pytest.fixture
 def confirmed(creation_stack, content, monkeypatch, tmp_path):
+    # These historical contract tests intentionally freeze the legacy AI strategy.
+    # New confirmations/rounds have a separate unpatched fixture and test suite.
+    from backend.investigation_creation import geographic_runtime
+    from backend.audit_agent.geographic_p3_runtime import freeze_p3_inputs, derive_scope_context
+    capture = geographic_runtime.capture_confirmed_authority
+    def legacy_capture(*args, **kwargs):
+        authority = capture(*args, **kwargs)
+        profile = freeze_p3_inputs(model=settings.triage_model,
+            model_config_source={'origin': 'confirmed_run', 'reference': 'legacy regression fixture'})
+        authority['p3_inputs'] = profile
+        authority['scope_context'] = derive_scope_context(authority['configuration']['relevance_scope_state'], profile)
+        return authority
+    monkeypatch.setattr(geographic_runtime, 'capture_confirmed_authority', legacy_capture)
     from backend.audit_agent.config import settings
     from backend.investigation_creation.geographic_runtime import IsolatedGeographicCapability
     monkeypatch.setattr(settings, 'triage_mode', 'select')
@@ -613,6 +626,36 @@ def test_geographic_consumer_never_downloads_even_with_matching_source(monkeypat
     with pytest.raises(module.CollectionRouteError, match='SUPPLEMENT_DEFERRED'):
         pipeline._download_subject_media(subject, 'https://fixture.invalid/image', tmp_path/'image')
     assert calls == [] and not (tmp_path/'image').exists()
+
+
+def test_confirmed_run_scopes_direct_pin_to_one_execution_attempt(confirmed, monkeypatch):
+    from types import SimpleNamespace
+    from backend.audit_agent import pipeline as module
+
+    adapter, configuration = confirmed
+    pipeline = module.AuditPipeline.__new__(module.AuditPipeline)
+    pipeline.job_id = configuration['_verified_geographic_binding']['job_id']
+    pipeline.ingestion = adapter.ingestion_store
+    pipeline._m3_snapshot_validator = lambda: configuration
+    monkeypatch.setattr(module, 'job_store', adapter.job_store)
+    monkeypatch.setattr(module.settings, 'app_auth_mode', 'local')
+    monkeypatch.setattr(module.settings, 'crawler_proxy_enabled', False)
+    monkeypatch.setattr(module.settings, 'crawler_safety_enabled', True)
+    monkeypatch.setattr(module.settings, 'crawler_proxy_trial_id', '')
+    observed = []
+    def stop_before_collection(*args):
+        observed.append(pipeline._direct_egress_pin)
+        raise RuntimeError('fixture_stop_before_collection')
+    pipeline._set_prompt_context = stop_before_collection
+    for enabled in (False, True, True):
+        monkeypatch.setattr(module.settings, 'crawler_local_direct_pinning_enabled', enabled)
+        pipeline.run(SimpleNamespace(**configuration))
+        assert pipeline._direct_egress_pin is None
+    first, second, restarted = observed
+    assert len({id(pin) for pin in observed}) == 3
+    owner = adapter.job_store.get(pipeline.job_id)['owner_user_id']
+    for pin in (first, second, restarted):
+        pin.require_owner(pipeline.job_id, owner)
 
 
 def test_fresh_resume_from_verified_geographic_run_never_falls_back_to_producer(confirmed, tmp_path, monkeypatch):

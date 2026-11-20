@@ -90,6 +90,7 @@ class CrawlOutput:
     output_dir: Path
     creators: list[dict] = field(default_factory=list)
     command: list[str] = field(default_factory=list)
+    continuation: dict | None = None
 
 
 ProgressCallback = Callable[[int, int], None]
@@ -199,6 +200,7 @@ class MediaCrawlerAdapter:
         fetch_author_profile: bool = False,
         skip_profile_verify_regex: str = "",
         route_context=None,
+        geographic_continuation: dict | None = None,
     ) -> CrawlOutput:
         self._validate_platform(platform)
         max_items_per_minute, account_pacing = self._account_pacing(account_id, max_items_per_minute)
@@ -208,6 +210,8 @@ class MediaCrawlerAdapter:
         )
         if not terms:
             raise ValueError("at least one search keyword is required")
+        if geographic_continuation is not None and (platform != 'dy' or len(terms) != 1):
+            raise ValueError('geographic continuation requires one Douyin keyword')
         total_limit = min(
             max_notes * len(terms),
             max_total_notes if max_total_notes is not None else max_notes * len(terms),
@@ -237,7 +241,7 @@ class MediaCrawlerAdapter:
             existing_for_term = collected_by_term.get(term, 0)
             remaining_for_term = max_notes - existing_for_term
             new_capacity = min(remaining_total, remaining_for_term)
-            if new_capacity <= 0:
+            if new_capacity <= 0 and geographic_continuation is None:
                 continue
             if stop_checker and stop_checker():
                 break
@@ -253,6 +257,10 @@ class MediaCrawlerAdapter:
             command_limit = (
                 term_target if crawler_restores_term_count else new_capacity
             )
+            if geographic_continuation is not None:
+                # The persisted batch owns its original limit. Re-publishing a
+                # completed batch must not turn partial output into a new limit.
+                command_limit = max_notes
 
             command = [
                 *self._base_command(platform),
@@ -298,6 +306,8 @@ class MediaCrawlerAdapter:
                     # 官方/机构号在初筛里直接丢弃，不必为它们多发一次资料请求
                     command.extend(["--dy_skip_profile_verify_regex", skip_profile_verify_regex])
             command.extend(account_pacing)
+            if geographic_continuation is not None:
+                command.extend(['--dy_geographic_continuation', json.dumps(geographic_continuation)])
             if skip_content_ids_file:
                 command.extend(["--skip_aweme_ids_file", str(skip_content_ids_file)])
             if reusable_content_db:
@@ -365,6 +375,11 @@ class MediaCrawlerAdapter:
                 break
 
         output.command = last_command
+        if geographic_continuation is not None:
+            from .geographic_capture_state import read_continuation_receipt
+            output.continuation = read_continuation_receipt(save_root, geographic_continuation)
+            if output.continuation['count'] != len(output.contents):
+                raise CrawlerCollectionIncompleteError('geographic capture receipt count mismatch')
         return output
 
     def run_creator(
@@ -697,7 +712,7 @@ class MediaCrawlerAdapter:
                 "w", encoding="utf-8", errors="replace"
             ) as stderr_file:
                 from backend.task_admission.execution import crawler_fds, launch_crawler
-                from .crawler_route import RouteConfigPipe, RouteReceiptPipe, prepare_collection_child
+                from .crawler_route import CollectionRouteError, RouteConfigPipe, RouteReceiptPipe, prepare_collection_child
                 if route_context:
                     from backend.task_admission.resources import BorrowedRouteContext
                     prepare_collection_child(route_context,allowed_borrowers=2 if isinstance(route_context,BorrowedRouteContext) else 1)
@@ -779,7 +794,6 @@ class MediaCrawlerAdapter:
                         completed.wait(timeout=5)
                     if route_context:
                         route_context.child_active = False
-                    from .crawler_route import CollectionRouteError
                     if authority:
                         authority.close()
                     raise route_pipe.error or CollectionRouteError("PROXY_CONFIG_INVALID")

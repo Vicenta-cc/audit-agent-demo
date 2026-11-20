@@ -57,7 +57,15 @@ def test_preview_and_frozen_execution_share_order_without_rewriting_draft(creati
     stack = creation_stack
     app = stack['app_service']
     principal = Principal('principal-a')
-    ctx = dict(session_id='priority-session', principal=principal)
+    session_id = 'priority-session'
+    if rules == 'temporary':
+        rule_body = json.loads((Path(__file__).parent/'fixtures/recruitment_fraud_ruleset.json').read_text())
+        shown = _run_scripted_creation_turn(stack, content='生成并展示临时规则，不启动',
+            actions=[('create_ruleset_proposal', {'content': rule_body})])
+        session_id = shown['session_id']
+    # Adopt the lexicon in the same session that owns its resource reference.
+    ctx = dict(session_id=session_id, principal=principal)
+    resource_ref = None
     manager = app.resource_management
     lexicon = content()
     args = _t1_temporary_arguments(stack)
@@ -76,19 +84,20 @@ def test_preview_and_frozen_execution_share_order_without_rewriting_draft(creati
             selected = manager.update(edit['edit_id'], 1, [
                 {'operation': 'upsert_entry', 'target_id': 'v0', 'values': {'risk_level': '高'}}], **ctx)
             expected = ['低词', '高词甲', '高词乙', '中词', '未知词']
-        plan = manager.resolve_lexicon_ref(selected['resource_ref'], **ctx)
+        resource_ref = selected['resource_ref']
+        if rules == 'temporary':
+            plan = {'strategy': 'resource_ref', 'resource_ref': resource_ref}
+        else:
+            plan = manager.resolve_lexicon_ref(resource_ref, **ctx)
     args['configuration']['investigation']['recall_plan'] = plan
     if rules == 'temporary':
-        rule_body = json.loads((Path(__file__).parent/'fixtures/recruitment_fraud_ruleset.json').read_text())
-        shown = _run_scripted_creation_turn(stack, content='生成并展示临时规则，不启动',
-            actions=[('create_ruleset_proposal', {'content': rule_body})])
         args['configuration'].pop('judgement', None)
         args['configuration'].pop('schema_version', None)
         result, _, _ = approve(stack, shown, arguments={'create_draft': args})
         assert result['status'] == 'ok', result
         draft = app.get_draft(result['data']['draft']['id'], principal=principal)
     else:
-        draft = app.create_draft(CreateDraftCommand.model_validate(args), principal=principal)
+        draft = app.create_draft(CreateDraftCommand.model_validate(args), resource_ref=resource_ref, **ctx)
     original = deepcopy(draft.configuration.model_dump(mode='json'))
     preview = app.get_confirmation_preview(draft.id, principal=principal)
     assert preview.can_confirm, preview.blockers

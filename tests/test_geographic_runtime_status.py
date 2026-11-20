@@ -83,10 +83,17 @@ def test_authorized_real_run_endpoint_and_foreign_owner(creation_stack,content,m
     service=creation_stack['app_service']
     IsolatedGeographicCapability(tmp_path).install(service)
     run=service.confirm_and_queue(_command(authority['identity']),principal=P)
+    pending = selection_page(service, run.id, P)
+    assert pending['status'] == 'pending'
+    assert pending['geographic_strategy'] == 'geographic-mention-v1'
     claimed=service.store.claim_next('worker',lease_timeout_seconds=300)
     adapter=_adapter(creation_stack)
     job_id=adapter.ensure_job(claimed)
     run=service.store.bind_job(claimed.id,claimed.claim_token,job_id)
+    service.run_projector.job_store=adapter.job_store
+    pending = selection_page(service, run.id, P)
+    assert pending['status'] == 'pending'
+    assert pending['geographic_strategy'] == 'geographic-mention-v1'
     frozen=parse_confirmed_configuration_snapshot(run.confirmed_configuration)
     raw=frozen.execution.geographic_plan
     p2=parse_confirmed_scope_search_plan(raw,expected_identity=raw['identity'],expected_digest=raw['plan_digest'])

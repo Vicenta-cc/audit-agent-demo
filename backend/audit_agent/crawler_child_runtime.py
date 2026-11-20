@@ -181,4 +181,6 @@ def authority_for(bundle, **options):
     handle.env["MEDIACRAWLER_CAMOUFOX_PROFILE_GENERATION"] = account[
         "profile_generation"
     ]
+    if getattr(bundle.snapshot, 'local_direct_pinned', False):
+        bundle.pinned_child_authority = handle
     return handle

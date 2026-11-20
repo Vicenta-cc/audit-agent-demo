@@ -27,7 +27,7 @@ _RESERVE_RETRY_HEADROOM = 0.5
 
 _OWNER_OPERATIONS = frozenset({
     "initialize", "cache_lookup", "check_stop", "fail", "browser_validate",
-    "probe_reserve", "probe_confirm", "probe_snapshot", "make_gate", "reserve",
+    "probe_reserve", "probe_confirm", "probe_snapshot", "make_gate", "authorize_pinned_context", "close_pinned_context", "reserve",
     "consume", "release", "renew_request", "cooldown", "gate_snapshot", "trial_operation",
     "trial_begin_media", "trial_media_timeout", "trial_media_bytes", "trial_finish_media",
     "trial_snapshot",
@@ -122,7 +122,8 @@ def tighten_owner_account_policy(session):
             or not math.isfinite(parent['min_interval']) or parent['min_interval']<0
             or type(parent['per_minute']) is not int or parent['per_minute']<1):
         raise RuntimeError('SCHEDULER_POLICY_CONFLICT')
-    scopes=session.guard.require_business(session.receipt,session.context_id)
+    scopes = (session.business_scopes() if getattr(session.snapshot, 'local_direct_pinned', False)
+              else session.guard.require_business(session.receipt, session.context_id))
     with sqlite3.connect(session.snapshot.scheduler_db_path,timeout=.2) as db:
         db.execute('BEGIN IMMEDIATE')
         baseline_row=db.execute("SELECT limits_json FROM request_scheduler_policy WHERE platform='dy'").fetchone()
@@ -177,6 +178,7 @@ class RequestAuthority:
         from tools.authority_ledger import initialize
 
         self.options = dict(session_options or {})
+        self._pinned_context_issued = False
         # Fixed by the parent before the child inherits this channel. A child
         # cannot choose a different purpose in initialize or reserve payloads.
         self.allowed_operations = None
@@ -254,6 +256,12 @@ class RequestAuthority:
             target=self._serve, name="crawler-request-authority", daemon=True
         )
         self.thread.start()
+
+    def pinned_context_live(self, snapshot, child_pid):
+        session = self.session
+        return bool(self.pid == child_pid and not self.closed.is_set()
+                    and self.snapshot.snapshot_digest == snapshot.snapshot_digest
+                    and session is not None and session.pinned_context_active and session._gate is not None)
 
     def bind_child(self, pid):
         if self.pid is not None or self.closed.is_set():
@@ -383,6 +391,10 @@ class RequestAuthority:
             raise RuntimeError("PROXY_UNAVAILABLE")
         self.seen[request_id] = digest
         if request_id in self.cache:
+            if (getattr(self.snapshot, 'local_direct_pinned', False)
+                    and operation in {'authorize_pinned_context', 'browser_validate', 'reserve', 'consume', 'renew_request'}
+                    and not self.pinned_context_live(self.snapshot, self.pid)):
+                raise RuntimeError('PROXY_UNAVAILABLE')
             previous_digest, result = self.cache[request_id]
             if previous_digest != digest:
                 raise RuntimeError("PROXY_REVISION_MISMATCH")
@@ -498,6 +510,33 @@ class RequestAuthority:
             or operation.startswith("trial_")
         ):
             raise RuntimeError("PROXY_UNAVAILABLE")
+        pinned = getattr(self.snapshot, 'local_direct_pinned', False)
+        if operation in {'authorize_pinned_context', 'close_pinned_context'}:
+            if (not pinned or payload or session.maintenance_only or self.options.get('trial_id')
+                    or not self.options.get('investigation_collection')):
+                raise RuntimeError('PROXY_UNAVAILABLE')
+            if operation == 'close_pinned_context':
+                session.revoke_pinned_context()
+                return None
+            if self._pinned_context_issued:
+                raise RuntimeError('PROXY_REVISION_MISMATCH')
+            self._pinned_context_issued = True
+            session.check_stop()
+            session.authorize_pinned_context(self.snapshot.context_id)
+            try:
+                session._validate_browser_safety()
+                if session._reuse_existing_policy:
+                    tighten_owner_account_policy(session)
+                session._gate = session._make_gate()
+            except BaseException:
+                session.revoke_pinned_context()
+                raise
+            return {'trial_enabled': False}
+        if pinned:
+            if operation in {'probe_reserve', 'probe_confirm', 'make_gate'}:
+                raise RuntimeError('PROXY_UNAVAILABLE')
+            if operation in {'browser_validate', 'reserve', 'consume', 'renew_request'} and not session.pinned_context_active:
+                raise RuntimeError('PROXY_UNAVAILABLE')
         if operation == "cache_lookup":
             return self._cache_lookup(payload)
         if operation == "check_stop":

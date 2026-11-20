@@ -64,6 +64,8 @@ def parse_login_v2_origins(value: str, *, auth_mode: str, enabled: bool) -> list
 class Settings:
     investigation_multi_round_enabled = environment_flag("INVESTIGATION_MULTI_ROUND_ENABLED")
     crawler_safety_enabled = environment_flag("CRAWLER_SAFETY_ENABLED")
+    # Compatibility name only: direct investigation policy is unconditional.
+    crawler_local_direct_pinning_enabled = True
     crawler_direct_degrade_enabled = environment_flag("CRAWLER_DIRECT_DEGRADE_ENABLED")
     crawler_exit_observation_ttl = max(1, int(os.getenv("CRAWLER_EXIT_OBSERVATION_TTL", "300")))
     crawler_shared_exit_active_limit = max(1, int(os.getenv("CRAWLER_SHARED_EXIT_ACTIVE_LIMIT", "1")))
@@ -195,6 +197,9 @@ class Settings:
     qwen_vl_model = os.getenv("QWEN_VL_MODEL", "qwen3.7-plus")
     qwen_contact_sheet_model = os.getenv("QWEN_CONTACT_SHEET_MODEL", "qwen3.6-flash").strip()
     qwen_image_audit_model = os.getenv("QWEN_IMAGE_AUDIT_MODEL", qwen_contact_sheet_model).strip()
+    geographic_max_rounds = int(os.getenv("GEOGRAPHIC_MAX_ROUNDS", "3"))
+    if not 1 <= geographic_max_rounds <= 3:
+        raise ValueError("GEOGRAPHIC_MAX_ROUNDS must be between 1 and 3")
     triage_mode = os.getenv("TRIAGE_MODE", "off").strip().lower()
     triage_candidates_per_keyword = max(1, min(30, int(os.getenv("TRIAGE_CANDIDATES_PER_KEYWORD", "10"))))
     triage_candidate_comments = max(0, min(200, int(os.getenv("TRIAGE_CANDIDATE_COMMENTS", "60"))))

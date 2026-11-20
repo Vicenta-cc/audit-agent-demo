@@ -63,14 +63,15 @@ def test_geographic_worker_releases_source_route_before_local_analysis(
         detail_bundles.append(bundle)
         result = detail(self, **kwargs)
         snapshot = bundle.snapshot
-        receipt = contract.ProbeReceipt(snapshot.proxy_id, snapshot.config_revision,
-            snapshot.context_id, snapshot.observed_exit_ip, snapshot.observed_exit_at,
-            snapshot.exit_generation)
+        # The live pinned context carries the verified startup observation;
+        # a per-request probe receipt belongs only to the unpinned contract.
+        assert snapshot.local_direct_pinned and bundle.pass_fds
         for item in result.contents:
             item['collection_route_provenance'] = contract.collection_route_provenance(
-                snapshot, receipt, observation_id='offline-detail-observation',
+                snapshot, None, observation_id='offline-detail-observation',
                 source_task_id=bundle.execution_id, source_batch_id='offline-detail-batch',
-                collected_at=time.time(), context_id=snapshot.context_id)
+                collected_at=time.time(), context_id=snapshot.context_id,
+                pinned_context_active=True)
         return result
     monkeypatch.setattr(AuthoredCrawler, 'run_detail', routed_detail)
 

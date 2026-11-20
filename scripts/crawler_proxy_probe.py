@@ -193,25 +193,26 @@ async def _probe(
                     emit_account_risk(snapshot)
             finally:
                 await adapter.close()
-        print(
-            "PROXY_PROBE_RESULT "
-            + json.dumps(
-                dict(
-                    schema_version=1,
-                    account_id=snapshot.account_id,
-                    proxy_id=snapshot.proxy_id,
-                    binding_revision=snapshot.binding_revision,
-                    config_revision=snapshot.config_revision,
-                    context_id=receipt.context_id,
-                    ip=receipt.ip,
-                    observed_at=receipt.observed_at,
-                    **({"login_result": login_result} if check_login else {}),
+        if not (hold_context and getattr(snapshot, 'local_direct_pinned', False)):
+            print(
+                "PROXY_PROBE_RESULT "
+                + json.dumps(
+                    dict(
+                        schema_version=1,
+                        account_id=snapshot.account_id,
+                        proxy_id=snapshot.proxy_id,
+                        binding_revision=snapshot.binding_revision,
+                        config_revision=snapshot.config_revision,
+                        context_id=receipt.context_id,
+                        ip=receipt.ip,
+                        observed_at=receipt.observed_at,
+                        **({"login_result": login_result} if check_login else {}),
+                    ),
+                    separators=(",", ":"),
+                    allow_nan=False,
                 ),
-                separators=(",", ":"),
-                allow_nan=False,
-            ),
-            flush=True,
-        )
+                flush=True,
+            )
         if hold_context:
             command = await asyncio.wait_for(
                 asyncio.to_thread(sys.stdin.readline), 1200

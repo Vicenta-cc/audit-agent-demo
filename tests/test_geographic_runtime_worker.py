@@ -71,6 +71,9 @@ class AuditModel(Model):
 class AuthoredCrawler(Crawler):
     def run_search(self,**kwargs):
         output=super().run_search(**kwargs)
+        if kwargs.get('geographic_continuation'):
+            output.continuation = {k:v for k,v in kwargs['geographic_continuation'].items() if k!='state_path'} | {
+                'status':'complete', 'count':len(output.contents), 'exhausted':False}
         for item in output.contents:
             item.update(user_id='offline-author',sec_uid='offline-sec-user',nickname='离线作者')
         return output
@@ -154,4 +157,7 @@ def test_real_worker_pipeline_audit_and_native_report(
     assert report['posts'][0]['post_ref']=='post-001'
     assert report['posts'][0]['original_text']=='精采原文'
     assert any('audit_fusion_v4' in prompt for prompt,_ in model.calls)
+    if confirmed_fixture == 'confirmed_with_admission':
+        assert job['control']['geographic_selection']['geographic_strategy'] == 'geographic-mention-v1'
+        assert all('suspicion' in prompt or 'audit_fusion_v4' in prompt for prompt,_ in model.calls)
     assert creation_stack['conversation'].store.get_session(result.report_session_id) is not None

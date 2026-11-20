@@ -1,3 +1,5 @@
+import type { GeographicQueryProgress } from './investigationCreation';
+
 export interface ReportVersionSummary {
   report_version_id: string;
   report_id: string;
@@ -356,6 +358,8 @@ export interface ReportAppendixPage {
 }
 
 export interface GeographicCoverage {
+  queries?: GeographicQueryProgress[];
+  geographic_strategy?: string;
   source_job_id: string;
   candidate_occurrences: number;
   excluded_occurrences: number;
@@ -369,6 +373,8 @@ export interface GeographicCoverage {
   reasons: string[];
 }
 export interface GeographicSelectionBasis {
+  geographic_strategy?: string;
+  round_index?: number;
   target_name?: string;
   province_name?: string;
   source_job_id: string;
