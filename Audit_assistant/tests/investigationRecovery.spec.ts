@@ -32,3 +32,9 @@ test('database contention is shown independently of account and platform state',
   const run = { ...interrupted, error_code: 'crawler_scheduler_database_busy' };
   expect(formatRunFailureMessage(run)).toBe('采集调度数据库繁忙，本次采集已中断。');
 });
+
+test('geographic account verification directs the operator to verify and start a new investigation', () => {
+  const run = { ...interrupted, error_code: 'crawler_account_verification_required', recovery_blocker: 'geographic_account_verification_required' };
+  expect(formatRunFailureMessage(run)).toContain('完成核验后，新建调查');
+  expect(formatRunFailureMessage({ ...run, recovery_blocker: '', error_code: run.recovery_blocker })).toContain('新建调查');
+});

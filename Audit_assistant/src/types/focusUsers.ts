@@ -38,6 +38,8 @@ export interface RelatedAccount {
   name: string;
   platform: MonitoredAccount["platform"];
   avatarUrl?: string;
+  publicDouyinId: string;
+  secUid: string;
   profileUrl: string;
   sourceCommentId: string;
   sourceCommentText: string;
@@ -79,7 +81,9 @@ export interface MonitoredAccount {
   updatedAt: string;
   name: string;
   platform: FocusUserPlatform;
-  platformAccountId: string;
+  publicDouyinId: string;
+  secUid: string;
+  profileUrl: string;
   avatarUrl?: string;
   monitorScope: string[];
   status: AccountStatus;
@@ -127,6 +131,9 @@ export interface CommentRiskProfile {
   name: string;
   platform: FocusUserPlatform;
   avatarUrl?: string;
+  publicDouyinId: string;
+  secUid: string;
+  profileUrl: string;
   violationCount: number;
   highRiskCount: number;
   mediumRiskCount: number;

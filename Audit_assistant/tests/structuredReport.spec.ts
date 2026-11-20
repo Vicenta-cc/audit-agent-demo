@@ -220,3 +220,27 @@ test("current report shows five commenters and opens the full paged commenter dr
   await expect(drawer).toHaveCount(0);
   await expect(panel.locator(".r31-account-table-row")).toHaveCount(5);
 });
+
+test("a published report distinguishes pending manual review from a zero risk verdict", async ({ page }) => {
+  const post = {
+    post_ref: "post-001", title: "待复核作品", risk_level: "unknown", decision: "review",
+    pending_manual_review: true, audit_gap_stages: ["整帖汇总审核"], audit_summary: "供应商拦截",
+    author_display_name: "", content_summary: "", direct_evidence: []
+  };
+  await page.route("**/api/auth/config", route => route.fulfill({ json: { enabled: false } }));
+  await page.route("**/api/report-versions/*/presentation-projection", route => route.fulfill({ json: {
+    report_metadata: { title: "待复核报告", source_name: "测试调查", status: "published", platform: { status: "available", label: "抖音" } },
+    statistics: { collected_posts: 10, risk_assessed_posts: 0, pending_manual_review_posts: 10 },
+    ordered_sections: [{ section_ref: "pending", section_number: "4", title: "待人工复核", presentation_kind: "pending_post_analysis", group_posts: [post], paragraphs: [] }]
+  } }));
+  await page.route("**/posts/post-001", route => route.fulfill({ json: post }));
+  await page.goto(`/investigation/acceptance/report?report=${encodeURIComponent(version)}`);
+  const cover = page.locator(".r31-report-cover");
+  for (const [label, value] of [["已采集", "10 条"], ["已判定风险等级", "0 条"], ["风险未定、待人工复核", "10 条"]]) {
+    await expect(cover.locator("dl div").filter({ has: page.getByText(label, { exact: true }) }).locator("dd")).toHaveText(value);
+  }
+  await expect(page.locator(".r31-post-row .r31-risk-tag")).toHaveText("风险未定");
+  await page.getByRole("button", { name: "查看帖子详情" }).click();
+  await expect(page.getByText("待人工复核 · 风险未定", { exact: true })).toBeVisible();
+  await expect(page.getByText("未完成环节：整帖汇总审核")).toBeVisible();
+});

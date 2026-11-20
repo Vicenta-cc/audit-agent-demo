@@ -73,6 +73,7 @@ interface DetailComment {
   profileUrl: string;
   rawIdentity: string;
   translation: string;
+  pictures: string[];
   auditStatus: string;
   riskScore: number | null;
   riskLevel: string;
@@ -232,7 +233,7 @@ export function TaskOutputDetailPage() {
   const activeGroup = groupsByType.get(activeEvidenceType) || emptyGroup(activeEvidenceType);
   const publishedAt = getPublishedAt(result);
   const batchLabel = firstText(stringField(result, "batch_id"), stringField(result, "batch"), result.job_id, "--");
-  const commentTotal = Number(result.comments_count || result.comment_count || comments.length);
+  const commentTotal = Number(result.comments_count || result.comment_count || result.comments?.length || 0);
   const unreviewedComments = comments.filter(comment => comment.auditStatus !== "completed").length;
   const reviewedComments = comments.length - unreviewedComments;
   const rawVerdictSummary = firstText(item.summary, result.desc, result.title, "暂无内容摘要");
@@ -412,7 +413,7 @@ export function TaskOutputDetailPage() {
               })}
               {unreviewedComments > 0 ? (
                 <li>
-                  <div className="detail-audit-notice-item-label"><span>评论审核</span><small>已采集 {comments.length} 条 · 已审核 {reviewedComments} 条 · 未审核 {unreviewedComments} 条</small></div>
+                  <div className="detail-audit-notice-item-label"><span>评论审核</span><small>已采集 {commentTotal} 条{commentTotal !== comments.length ? ` · 可展示 ${comments.length} 条` : ""} · 已审核 {reviewedComments} 条 · 未审核 {unreviewedComments} 条</small></div>
                   <button type="button" className="detail-audit-notice-action" onClick={() => commentsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}>查看评论<ChevronRight size={14} aria-hidden="true" /></button>
                 </li>
               ) : null}
@@ -646,7 +647,7 @@ export function TaskOutputDetailPage() {
         <header className="detail-comments-header">
           <div>
             <h2>逐条评论审核</h2>
-            <span>{commentTotal.toLocaleString("zh-CN")} 条</span>
+            <span>已采集 {commentTotal.toLocaleString("zh-CN")} 条{commentTotal !== comments.length ? ` · 展示 ${comments.length.toLocaleString("zh-CN")} 条` : ""}</span>
           </div>
           {comments.length > INITIAL_COMMENT_RENDER_COUNT ? (
             <button type="button" aria-haspopup="dialog" onClick={() => setCommentsDrawerOpen(true)}>
@@ -677,16 +678,10 @@ export function TaskOutputDetailPage() {
                     </span>
                     <strong title={comment.name}>{comment.name}</strong>
                   </div>
-                  <span className={`detail-comment-risk status-${evidenceStatus(comment.riskLevel).tone}`}>
-                    {comment.auditStatus === "failed" ? "审核失败" : `${comment.riskScore ?? 0}分 · ${evidenceStatus(comment.riskLevel).label.replace("证据", "")}`}
-                  </span>
+                  <CommentRiskBadge comment={comment} />
                 </header>
                 <div className="detail-comment-body">
-                  <p title={comment.content}>{comment.content}</p>
-                  {comment.translation ? <p className="detail-comment-translation">译文：{comment.translation}</p> : null}
-                  {comment.auditStatus === "failed" ? (
-                    <p className="detail-comment-audit-failed">本条未完成审核，不计为 0 分</p>
-                  ) : null}
+                  <CommentBody comment={comment} />
                 </div>
                 <footer>
                   <time>{comment.region || "未知地区"} · {comment.time}</time>
@@ -727,6 +722,40 @@ export function TaskOutputDetailPage() {
   );
 }
 
+function CommentPicture({ url, index }: { url: string; index: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <span className="detail-comment-picture-unavailable">图片暂不可用</span>;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" aria-label={`查看评论图片 ${index + 1}`}>
+      <img src={url} alt={`评论图片 ${index + 1}`} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+    </a>
+  );
+}
+
+function CommentBody({ comment }: { comment: DetailComment }) {
+  return <>
+    {comment.content && <p dir="auto" title={comment.content}>{comment.content}</p>}
+    {comment.translation && <p className="detail-comment-translation" dir="auto">译文：{comment.translation}</p>}
+    {comment.pictures.length > 0 && (
+      <div className="detail-comment-pictures">
+        {comment.pictures.map((url, index) => <CommentPicture key={url} url={url} index={index} />)}
+      </div>
+    )}
+    {comment.auditStatus === "failed" && <p className="detail-comment-audit-failed">本条未完成审核，不计为 0 分</p>}
+  </>;
+}
+
+function CommentRiskBadge({ comment }: { comment: DetailComment }) {
+  const status = evidenceStatus(comment.riskLevel);
+  let label = comment.auditStatus === "failed" ? "审核失败" : "未审核";
+  if (comment.auditStatus === "image_unreviewed") label = "图片未审核";
+  if (comment.auditStatus === "completed" && comment.riskScore !== null) {
+    label = `${comment.riskScore}分 · ${status.label.replace("证据", "")}`;
+  }
+  const tone = comment.auditStatus === "completed" && comment.riskScore !== null ? status.tone : "pending";
+  return <span className={`detail-comment-risk status-${tone}`}>{label}</span>;
+}
+
 type CommentRiskFilter = "all" | "high" | "medium" | "review" | "safe" | "failed";
 
 function CommentReviewDrawer({
@@ -746,7 +775,7 @@ function CommentReviewDrawer({
   const [riskFilter, setRiskFilter] = useState<CommentRiskFilter>("all");
   const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
   const filteredComments = useMemo(() => comments.filter((comment) => {
-    const tone = evidenceStatus(comment.riskLevel).tone;
+    const tone = comment.auditStatus === "completed" ? evidenceStatus(comment.riskLevel).tone : "pending";
     const matchesRisk = riskFilter === "all"
       || (riskFilter === "failed" ? comment.auditStatus === "failed" : comment.auditStatus !== "failed" && tone === riskFilter);
     if (!matchesRisk) return false;
@@ -807,7 +836,6 @@ function CommentReviewDrawer({
 
         <div className="detail-comments-drawer-list">
           {filteredComments.length ? filteredComments.map((comment) => {
-            const status = evidenceStatus(comment.riskLevel);
             return (
               <article className="detail-comments-drawer-row" key={comment.id}>
                 <div className="detail-comments-drawer-author">
@@ -816,18 +844,10 @@ function CommentReviewDrawer({
                   <time>{comment.time}</time>
                 </div>
                 <div className="detail-comments-drawer-copy">
-                  <p dir="auto">{comment.content}</p>
-                  {comment.translation ? (
-                    <p className="detail-comments-drawer-translation" dir="auto"><strong>译文</strong>{comment.translation}</p>
-                  ) : null}
-                  {comment.auditStatus === "failed" ? (
-                    <p className="detail-comments-drawer-failed">本条未完成审核，不计为 0 分</p>
-                  ) : null}
+                  <CommentBody comment={comment} />
                 </div>
                 <div className="detail-comments-drawer-side">
-                  <span className={`detail-comment-risk status-${status.tone}`}>
-                    {comment.auditStatus === "failed" ? "审核失败" : `${comment.riskScore ?? 0}分 · ${status.label.replace("证据", "")}`}
-                  </span>
+                  <CommentRiskBadge comment={comment} />
                   <div>
                     <button type="button" onClick={() => void onLinkComment(comment)}>
                       <Link2 size={13} />
@@ -1149,16 +1169,40 @@ function buildTranscript(result: AuditResult): DetailTranscript {
   };
 }
 
+function commentPictures(value: AuditComment["pictures"]): string[] {
+  // The crawler stores comma-delimited URLs. A comma inside a signed URL is significant.
+  const candidates = typeof value === "string" ? value.split(/,\s*(?=https?:\/\/)/i) : value;
+  if (!Array.isArray(candidates)) return [];
+  const urls = new Set<string>();
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") continue;
+    const url = candidate.trim();
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === "https:" || parsed.protocol === "http:") urls.add(parsed.href);
+    } catch {
+      continue;
+    }
+  }
+  return [...urls];
+}
+
 function normalizeComments(comments: AuditComment[]): DetailComment[] {
   return comments
-    .map((comment, index) => {
-      const content = firstText(comment.content, comment.text) || "该评论未保存文字内容";
+    .flatMap((comment, index) => {
+      const content = firstText(comment.content, comment.text, comment.source_text);
+      const translation = firstText(comment.translation_zh);
+      const pictures = commentPictures(comment.pictures);
+      if (!content && !translation && pictures.length === 0) return [];
+      const auditStatus = !content && pictures.length > 0 && comment.audit_source === "local_empty"
+        ? "image_unreviewed"
+        : firstText(comment.audit_status, "pending");
       const name = firstText(comment.nickname, comment.user_name, comment.user_unique_id, comment.short_user_id, comment.user_id, "评论用户");
       const rawIdentity = firstText(comment.sec_uid, comment.user_id, comment.user_unique_id, comment.short_user_id, name);
-      const riskScore = comment.audit_status === "completed" && Number.isFinite(Number(comment.risk_score))
+      const riskScore = auditStatus === "completed" && comment.risk_score != null && Number.isFinite(Number(comment.risk_score))
         ? Number(comment.risk_score)
         : null;
-      return {
+      return [{
         id: firstText(comment.comment_id, String(comment.id || ""), `${index}`),
         name,
         avatarUrl: firstText(comment.avatar),
@@ -1167,12 +1211,13 @@ function normalizeComments(comments: AuditComment[]): DetailComment[] {
         time: formatCommentTime(comment.create_time || comment.created_at || comment.time || ""),
         profileUrl: firstText(comment.profile_url, comment.user_url),
         rawIdentity,
-        translation: firstText(comment.translation_zh),
-        auditStatus: firstText(comment.audit_status, "pending"),
+        translation,
+        pictures,
+        auditStatus,
         riskScore,
         riskLevel: firstText(comment.risk_level, riskScore !== null ? "none" : "unknown"),
         raw: comment
-      };
+      }];
     })
     .sort((left, right) => (right.riskScore ?? -1) - (left.riskScore ?? -1));
 }
@@ -1183,7 +1228,7 @@ function resolveEvidenceComment(evidence: AuditEvidenceGroupItem, comments: Deta
   if (exactMatch) return exactMatch;
 
   const content = firstText(evidence.content, evidence.text);
-  return comments.find((comment) => comment.content === content) || null;
+  return (content && comments.find((comment) => comment.content === content)) || null;
 }
 
 function buildCommentRelationContext(result: AuditResult, comment: DetailComment) {

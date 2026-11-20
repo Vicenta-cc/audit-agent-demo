@@ -4,6 +4,7 @@ import type {
   InvestigationTurnStage,
   InvestigationTurnStatus
 } from "./investigations";
+import type { InvestigationRiskSummary } from "./investigation";
 
 export type HistoricalDisplayMessageKind =
   | "user_request"
@@ -60,6 +61,7 @@ export interface HistoricalReportWorkspace {
   report_version_id: string;
   run_status: "PUBLISHED";
   import_semantics: "historical";
+  risk_summary?: InvestigationRiskSummary;
   draft: HistoricalReportDraft;
   display_timeline: HistoricalDisplayMessage[];
   conversation: HistoricalConversationMessage[];

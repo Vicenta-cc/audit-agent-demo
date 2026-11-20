@@ -37,6 +37,7 @@ import type {
   ReportPresentationSection
 } from "../../types/reports";
 import { resolvePublishedReportVersion } from "./reportRoute";
+import { ReportRiskTag, ReportAuditConclusion } from "./ReportAuditConclusion";
 import { ReportPostSourceDetails } from "./ReportPostSourceDetails";
 
 type DrawerState =
@@ -50,13 +51,6 @@ const decisionLabels: Record<string, string> = {
   pass: "通过",
   review: "复审",
   reject: "拒绝"
-};
-
-const riskLabels: Record<string, string> = {
-  high: "高风险",
-  medium: "中风险",
-  low: "低风险",
-  none: "无风险"
 };
 
 function displayNumber(value: number | null | undefined) {
@@ -209,10 +203,6 @@ function AccountTable({
   );
 }
 
-function RiskTag({ risk }: { risk: string }) {
-  return <span className={`r31-risk-tag is-${risk || "none"}`}>{riskLabels[risk] || "未分级"}</span>;
-}
-
 function PostRow({ post, onOpen }: { post: ReportPostPresentation; onOpen: (ref: string) => void }) {
   const decisionLabel = decisionLabels[post.decision];
   return (
@@ -222,7 +212,7 @@ function PostRow({ post, onOpen }: { post: ReportPostPresentation; onOpen: (ref:
           <strong>{post.title}</strong>
           {post.author_display_name ? <small>作者：{post.author_display_name}</small> : null}
         </div>
-        <RiskTag risk={post.risk_level} />
+        <ReportRiskTag post={post} />
       </div>
       <p>{post.content_summary || post.audit_summary || "当前报告未提供内容摘要。"}</p>
       <div className="r31-post-row-foot">
@@ -1010,11 +1000,11 @@ function PostDetailDrawer({ reportVersionId, postRef, onClose }: { reportVersion
       <AsyncState loading={!detail && !error} error={error} />
       {detail ? (
         <>
-          <div className="r31-post-detail-head"><div><h3>{detail.title}</h3>{detail.author_display_name ? <span>作者：{detail.author_display_name}</span> : null}</div><RiskTag risk={detail.risk_level} /></div>
+          <div className="r31-post-detail-head"><div><h3>{detail.title}</h3>{detail.author_display_name ? <span>作者：{detail.author_display_name}</span> : null}</div><ReportRiskTag post={detail} /></div>
           <ReportPostSourceDetails detail={detail} reportVersionId={reportVersionId} />
           <GeographicPostBasis basis={detail.selection_basis} />
           {detail.content_summary ? <section className="r31-drawer-section"><h3>内容摘要</h3><p>{detail.content_summary}</p></section> : null}
-          <section className="r31-drawer-section"><h3>审核结论</h3><p>{decisionLabels[detail.decision] ? `${decisionLabels[detail.decision]} · ` : ""}{riskLabels[detail.risk_level] || "未分级"}</p><p>{detail.audit_summary || "原审核结果未提供文字说明。"}</p></section>
+          <ReportAuditConclusion post={detail} decisionLabel={decisionLabels[detail.decision]} />
           {detail.direct_evidence.length ? <section className="r31-drawer-section"><h3>直接研判依据</h3><EvidenceList items={detail.direct_evidence} /></section> : null}
         </>
       ) : null}
@@ -1133,6 +1123,13 @@ export function InvestigationReportPage() {
             <dl>
               <div><dt>来源调查</dt><dd>{report.report_metadata.source_name}</dd></div>
               <div><dt>报告状态</dt><dd>{report.report_metadata.status === "published" ? "已发布" : report.report_metadata.status}</dd></div>
+              {report.statistics.pending_manual_review_posts != null && report.statistics.pending_manual_review_posts > 0 && (
+                <>
+                  <div><dt>已采集</dt><dd>{displayNumber(report.statistics.collected_posts)} 条</dd></div>
+                  <div><dt>已判定风险等级</dt><dd>{displayNumber(report.statistics.risk_assessed_posts)} 条</dd></div>
+                  <div><dt>风险未定、待人工复核</dt><dd>{displayNumber(report.statistics.pending_manual_review_posts)} 条</dd></div>
+                </>
+              )}
               <div><dt>发布时间</dt><dd>{displayTime(report.report_metadata.published_at)}</dd></div>
               {report.report_metadata.platform.status === "available" ? <div><dt>调查平台</dt><dd>{report.report_metadata.platform.label}</dd></div> : null}
             </dl>

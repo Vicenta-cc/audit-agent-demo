@@ -123,8 +123,8 @@ export function formatCreationErrorMessage(message: string) {
   if (normalized.includes("DRAFT_ALREADY_CONFIRMED")) {
     return "此调查配置已确认并锁定，不能直接修改；如需调整，请新建调查。";
   }
-  if (normalized.includes("DAILY_REPORT_LIMIT") || /今日三次任务额度已用完/.test(message)) {
-    return "今日三次任务额度已用完，北京时间次日 00:00 重置。";
+  if (normalized.includes("DAILY_REPORT_LIMIT") || message.includes("任务额度已用完")) {
+    return "今日任务额度已用完，北京时间次日 00:00 重置。";
   }
   if (normalized.includes("USER_TASK_LIMIT") || /已有未完成任务/.test(message)) {
     return "已有未完成任务，请继续原任务，或结束整个任务后再发起新调查。";

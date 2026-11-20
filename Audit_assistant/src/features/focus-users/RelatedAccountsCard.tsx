@@ -38,6 +38,7 @@ export function RelatedAccountsCard({
         <div className="related-list-compact">
           {accounts.map((account) => {
             const status = getAnalysisStatus(account);
+            const profileUrl = account.platform === "抖音" ? account.profileUrl : "";
 
             return (
               <div className="related-comment-item-compact" key={account.id}>
@@ -46,9 +47,24 @@ export function RelatedAccountsCard({
                 </div>
                 <div className="related-comment-main-compact">
                   <div className="related-comment-name-row">
-                    <strong>{account.name}</strong>
+                    {profileUrl ? (
+                      <a
+                        className="related-profile-link"
+                        href={profileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`打开${account.name}的抖音主页`}
+                      >
+                        {account.name}
+                        <ExternalLink size={13} aria-hidden="true" />
+                      </a>
+                    ) : <strong>{account.name}</strong>}
                     <Badge tone={status.tone}>{status.label}</Badge>
                   </div>
+                  {account.platform === "抖音" ? <div className="related-account-identity">
+                    <span>抖音号：{account.publicDouyinId || "未提供"}</span>
+                    {!profileUrl ? <span className="related-profile-unavailable">主页链接不可用</span> : null}
+                  </div> : null}
                   <p className="related-comment-desc">{account.sourceCommentText || "（无文本内容，可能为表情或空评论）"}</p>
                 </div>
               </div>

@@ -134,6 +134,8 @@ export interface ReportPostPresentation {
   audit_finding_ref: string;
   decision: string;
   risk_level: string;
+  pending_manual_review?: boolean;
+  audit_gap_stages?: string[];
   audit_summary: string;
   published_at?: string;
   source_url?: string;
@@ -206,6 +208,9 @@ export interface ReportPresentationProjection {
     geographic_coverage?: GeographicCoverage[];
     selection_basis?: GeographicSelectionBasis[];
     canonical_posts: number;
+    collected_posts?: number;
+    risk_assessed_posts?: number;
+    pending_manual_review_posts?: number;
     investigation_finding_count: number;
     independently_reviewed_comments: number | null;
     comment_own_risk: number | null;

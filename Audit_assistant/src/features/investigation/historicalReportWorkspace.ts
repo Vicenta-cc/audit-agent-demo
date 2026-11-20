@@ -128,6 +128,7 @@ export function buildHistoricalReportSession(
     id: workspace.workspace_id,
     title: workspace.title,
     status: "报告已生成",
+    riskSummary: workspace.risk_summary,
     updatedAt: formatSessionTimestamp(updatedAtIso, "历史报告"),
     updatedAtIso,
     draft,

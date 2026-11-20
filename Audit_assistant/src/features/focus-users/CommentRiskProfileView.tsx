@@ -1,4 +1,4 @@
-import { Clock3, MessageSquareText, ShieldAlert } from "lucide-react";
+import { ClipboardCopy, Clock3, ExternalLink, MessageSquareText, ShieldAlert } from "lucide-react";
 import { Badge } from "../../components/common/Badge";
 import { PlatformIcon } from "../../components/common/PlatformIcon";
 import { formatCommentRiskTime } from "../../mocks/userPenetration";
@@ -14,9 +14,24 @@ const riskMeta: Record<CommentRiskLevel, { label: string; tone: "red" | "orange"
 
 interface CommentRiskProfileViewProps {
   profile: CommentRiskProfile;
+  onCopyDouyinId: (succeeded: boolean) => void;
 }
 
-export function CommentRiskProfileView({ profile }: CommentRiskProfileViewProps) {
+export function CommentRiskProfileView({ profile, onCopyDouyinId }: CommentRiskProfileViewProps) {
+  const isDouyin = profile.platform === "抖音";
+  const profileUrl = isDouyin ? profile.profileUrl : "";
+  const copyDouyinId = async () => {
+    if (!profile.publicDouyinId || !navigator.clipboard?.writeText) {
+      onCopyDouyinId(false);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(profile.publicDouyinId);
+      onCopyDouyinId(true);
+    } catch {
+      onCopyDouyinId(false);
+    }
+  };
   return (
     <section className="penetration-workspace" aria-label={`${profile.name}用户穿透详情`}>
       <article className="dashboard-card penetration-evidence-card">
@@ -25,12 +40,31 @@ export function CommentRiskProfileView({ profile }: CommentRiskProfileViewProps)
             <AccountAvatar name={profile.name} src={profile.avatarUrl} variant="detail" />
             <div>
               <div className="account-name-row">
-                <h1>{profile.name}</h1>
+                <h1>
+                  {profileUrl ? (
+                    <a className="account-profile-link" href={profileUrl} target="_blank" rel="noopener noreferrer">
+                      {profile.name}
+                      <ExternalLink size={14} aria-hidden="true" />
+                    </a>
+                  ) : profile.name}
+                </h1>
                 <span className="platform-tag larger" style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
                   <PlatformIcon platform={profile.platform} size={15} />
                   <span>{profile.platform}</span>
                 </span>
               </div>
+              {isDouyin ? <div className="account-id-row penetration-account-id">
+                {profileUrl ? (
+                  <a href={profileUrl} target="_blank" rel="noopener noreferrer">
+                    抖音号：{profile.publicDouyinId || "未提供"}
+                  </a>
+                ) : <span>抖音号：{profile.publicDouyinId || "未提供"}</span>}
+                {profile.publicDouyinId ? (
+                  <button className="copy-button" type="button" onClick={() => void copyDouyinId()} title="复制抖音号" aria-label="复制抖音号">
+                    <ClipboardCopy size={13} />
+                  </button>
+                ) : null}
+              </div> : null}
               <p>近 30 天评论风险汇总</p>
             </div>
           </div>

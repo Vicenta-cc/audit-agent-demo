@@ -81,6 +81,8 @@ export interface AuditComment {
   time?: string;
   ip_location?: string;
   note_id?: string;
+  pictures?: string | string[];
+  audit_source?: string;
   content?: string;
   text?: string;
   user_id?: string;
