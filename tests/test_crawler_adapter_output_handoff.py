@@ -26,6 +26,8 @@ parser=argparse.ArgumentParser()
 parser.add_argument('--save_data_path',required=True)
 parser.add_argument('--fixture-mode',required=True)
 parser.add_argument('--fixture-control',required=True)
+parser.add_argument('--fixture-stderr',default='')
+parser.add_argument('--fixture-stdout',default='')
 args,_=parser.parse_known_args()
 route=initialize_bound_route();route.require_managed_ack(obtain_route_ack(route))
 authority=AuthorityClient(route);authority.call('initialize')
@@ -56,6 +58,8 @@ while True:time.sleep(.1)
 else:media.write_bytes(b'final')
 if args.fixture_mode=='waiting':
  while True:time.sleep(.1)
+print(args.fixture_stderr,file=sys.stderr,flush=True)
+print(args.fixture_stdout,flush=True)
 os._exit(7 if args.fixture_mode=='nonzero' else 0)
 '''
 
@@ -371,3 +375,49 @@ def test_adapter_runtime_route_fault_preserves_error_and_reaps_child(handoff, co
     assert item.processes and all(p.poll() is not None for p in item.processes)
     assert "final" not in item.events
     assert_private_payload_reclaimed(item)
+
+
+PROBE_EOF_DIAGNOSTIC = (
+    "2026-11-20 00:00:00 tools.bound_proxy WARNING (bound_proxy.py:940) - "
+    "EXIT_PROBE_HTTP_FAILURE code=PROXY_TRANSPORT_FAILED cause=tls errno=unknown "
+    "ssl_type=SSLEOFError ssl_reason=UNEXPECTED_EOF_WHILE_READING ssl_verify_code=unknown"
+)
+
+
+@pytest.mark.parametrize("prefix", [
+    "2026-11-20 00:00:00 tools.bound_proxy WARNING (bound_proxy.py:940) - ",
+    "WARNING:tools.bound_proxy:",
+])
+def test_adapter_accepts_success_after_probe_eof_diagnostic(handoff, prefix):
+    diagnostic = prefix + PROBE_EOF_DIAGNOSTIC.split(" - ", 1)[1]
+    output = handoff.run(extra=(
+        "--fixture-stderr",
+        diagnostic + "\nWARNING:tools.bound_proxy:EXIT_PROBE_RETRY cause=tls_eof retry=1 max_retries=1",
+    ))
+    assert [row["aweme_id"] for row in output.contents] == ["output-one"]
+
+
+@pytest.mark.parametrize("mode", ["normal", "nonzero"])
+@pytest.mark.parametrize("code", ["PROXY_TRANSPORT_FAILED", "PROXY_EXIT_CHANGED", "PROXY_AUTH_FAILED"])
+def test_adapter_probe_diagnostic_does_not_hide_terminal_route_failure(handoff, mode, code):
+    log = PROBE_EOF_DIAGNOSTIC + "\ntools.collection_route.CollectionRouteError: " + code
+    with pytest.raises(crawler_route.CollectionRouteError) as caught:
+        handoff.run(mode, extra=("--fixture-stderr", log))
+    assert caught.value.code == code
+
+
+def test_adapter_probe_diagnostic_does_not_hide_nonzero_exit(handoff):
+    with pytest.raises(RuntimeError, match="exit code 7"):
+        handoff.run("nonzero", extra=("--fixture-stderr", PROBE_EOF_DIAGNOSTIC))
+
+
+@pytest.mark.parametrize("log", [
+    "post text " + PROBE_EOF_DIAGNOSTIC,
+    PROBE_EOF_DIAGNOSTIC + " tools.collection_route.CollectionRouteError: PROXY_TRANSPORT_FAILED",
+    PROBE_EOF_DIAGNOSTIC.replace("tools.bound_proxy", "user.content"),
+    PROBE_EOF_DIAGNOSTIC.split(" - ", 1)[1],
+])
+def test_adapter_only_ignores_complete_known_probe_diagnostic_lines(handoff, log):
+    with pytest.raises(crawler_route.CollectionRouteError) as caught:
+        handoff.run(extra=("--fixture-stdout", log))
+    assert caught.value.code == "PROXY_TRANSPORT_FAILED"

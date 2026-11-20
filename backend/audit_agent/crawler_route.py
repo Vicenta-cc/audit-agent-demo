@@ -774,6 +774,20 @@ def probe_env(bundle):
 
 
 def raise_route_log_error(log):
+    import re
+
+    # A retried TLS EOF logs this diagnostic before the operation has an outcome.
+    # Only discard its complete, known logger record. Terminal exceptions and
+    # unrecognized text must still participate in the existing error detection.
+    retry_diagnostic = re.compile(
+        r"(?:[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} "
+        r"tools\.bound_proxy WARNING \(bound_proxy\.py:[0-9]+\) - "
+        r"|WARNING:tools\.bound_proxy:)"
+        r"EXIT_PROBE_HTTP_FAILURE code=(?:PROXY_TRANSPORT_FAILED|PROXY_UNAVAILABLE) "
+        r"cause=tls errno=unknown ssl_type=SSLEOFError "
+        r"ssl_reason=(?:UNEXPECTED_EOF_WHILE_READING|unknown) ssl_verify_code=unknown"
+    )
+    log = '\n'.join(line for line in log.splitlines() if not retry_diagnostic.fullmatch(line))
     for code in ('PROXY_BUSY', 'SUPPLEMENT_DEFERRED', 'PROXY_REVISION_MISMATCH',
                  'PROXY_EXIT_CHANGED', 'PROXY_UNAVAILABLE', 'PROXY_AUTH_FAILED',
                  'PROXY_CONFIG_INVALID', 'PROBE_BUDGET_EXHAUSTED', 'SCHEDULER_POLICY_CONFLICT',
