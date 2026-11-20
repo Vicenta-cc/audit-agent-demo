@@ -392,6 +392,14 @@ def resolve_account_route(account_id, *, account_store=None, expected_binding_re
         raise _safe_error(exc) from None
 
 
+def require_direct_investigation_policy():
+    """Supported investigations require verified direct routing, without fallback."""
+    if (not settings.crawler_safety_enabled or settings.crawler_proxy_enabled
+            or settings.crawler_direct_degrade_enabled or settings.crawler_proxy_trial_id
+            or settings.crawler_proxy_default_id or settings.crawler_proxy_pool_ids):
+        raise CollectionRouteError('PROXY_CONFIG_INVALID')
+
+
 class LocalDirectEgressPin:
     """One investigation's real startup observation, retained only by its owner."""
     def __init__(self, *, execution_id, owner_id):
@@ -442,6 +450,13 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
                             account_handle=None, snapshot=None, allow_probe=False, recovery_claim=None, human_login_operation_id=None,
                             migration_id=None, investigation_collection=False, interactive_intent=False, direct_egress_pin=None):
     from .crawler_child_runtime import require_browser_available
+    if direct_egress_pin is not None:
+        require_direct_investigation_policy()
+        from .crawler_account_store import crawler_account_store
+        account = (account_store or crawler_account_store).get(account_id)
+        if (not account or account.get('platform') != 'dy' or account.get('proxy_required')
+                or account.get('proxy_id') or account.get('route_mode') == 'direct_degraded'):
+            raise CollectionRouteError('PROXY_CONFIG_INVALID')
     require_browser_available(account_id, store=account_store, owner_id=owner_id,
         migration_id=migration_id, operation_id=execution_id)
     from backend.task_admission.resources import ExecutionLeaseBundle
@@ -468,10 +483,12 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
     # The first exit check runs before a managed snapshot exists. All helpers
     # for this collection inherit its accounting policy from the owner.
     bundle.investigation_collection = investigation_collection
-    pinned = bool(direct_egress_pin is not None and getattr(settings, 'crawler_local_direct_pinning_enabled', False)
+    pinned = bool(direct_egress_pin is not None
                   and settings.crawler_safety_enabled and investigation_collection and snapshot and snapshot.route_mode == 'legacy_direct'
                   and not (settings.crawler_proxy_enabled or settings.crawler_proxy_trial_id or recovery_claim
                            or interactive_intent or human_login_operation_id or allow_probe or migration_id))
+    if direct_egress_pin is not None and not pinned:
+        raise CollectionRouteError('PROXY_CONFIG_INVALID')
     bundle.direct_egress_pin = direct_egress_pin if pinned else None
     if pinned:
         direct_egress_pin.require_owner(execution_id, owner_id)
@@ -581,7 +598,8 @@ def _require_same_route(snapshot, accounts, *, allow_probe=False):
         expected_binding_revision=snapshot.binding_revision, expected_config_revision=snapshot.config_revision,
         allow_probe=allow_probe)
     if getattr(snapshot, 'local_direct_pinned', False):
-        if (not getattr(settings, 'crawler_local_direct_pinning_enabled', False) or not settings.crawler_safety_enabled
+        require_direct_investigation_policy()
+        if (not settings.crawler_safety_enabled
                 or settings.crawler_proxy_enabled
                 or settings.crawler_proxy_trial_id or current is None or current.route_mode != 'legacy_direct'
                 or current.proxy_id != snapshot.proxy_id or current.config_revision != snapshot.config_revision
@@ -817,8 +835,9 @@ def authorize_source_route(provenance, owner_id, execution_id, *, route_context=
         with route_context.borrow(execution_id=execution_id, owner_id=owner_id, account_id=account_id):
             yield route_context
         return
-    pinned_source = (direct_egress_pin is not None and value['route_mode'] == snapshot.route_mode == 'legacy_direct'
-                     and getattr(settings, 'crawler_local_direct_pinning_enabled', False))
+    pinned_source = (direct_egress_pin is not None and value['route_mode'] == snapshot.route_mode == 'legacy_direct')
+    if direct_egress_pin is not None and not pinned_source:
+        raise CollectionRouteError('PROXY_CONFIG_INVALID')
     if not pinned_source:
         check_provenance(snapshot)
     bundle = acquire_route_execution(account_id, execution_id, owner_id, snapshot=snapshot, account_store=account_store,

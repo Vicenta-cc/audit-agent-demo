@@ -368,10 +368,9 @@ class AuditPipeline:
             if getattr(request, "geographic_plan", None) and verified is None:
                 raise ValueError("geographic execution requires a verified frozen Run")
             if verified is not None:
-                if (settings.crawler_local_direct_pinning_enabled and verified.get("run_crawler")
-                        and verified.get("platform") == "dy" and not settings.crawler_proxy_enabled
-                        and settings.crawler_safety_enabled and not settings.crawler_proxy_trial_id):
-                    from .crawler_route import LocalDirectEgressPin
+                if verified.get("run_crawler") and verified.get("platform") == "dy":
+                    from .crawler_route import LocalDirectEgressPin, require_direct_investigation_policy
+                    require_direct_investigation_policy()
                     self._direct_egress_pin = LocalDirectEgressPin(
                         execution_id=self.job_id, owner_id=str(job_snapshot.get("owner_user_id") or "local-user"))
                 from types import SimpleNamespace

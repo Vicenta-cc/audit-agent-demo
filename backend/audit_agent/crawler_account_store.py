@@ -931,7 +931,7 @@ class CrawlerAccountStore:
             return dict(observed_exit_ip=row['exit_key'],observed_exit_at=row['observed_at'],shared_exit_key=row['exit_key'],shared_exit_generation=row['generation'])
 
     def _pinned_direct_exit(self, conn, account, key, generation, observed_at):
-        if (not settings.crawler_local_direct_pinning_enabled or not settings.crawler_safety_enabled
+        if (not settings.crawler_safety_enabled
                 or settings.crawler_proxy_enabled or not account or account['platform'] != 'dy'
                 or account['proxy_required'] or account['proxy_id'] or account['route_mode'] == 'direct_degraded'
                 or account['status'] != 'active' or account['route_state'] != 'active'

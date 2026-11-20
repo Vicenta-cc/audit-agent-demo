@@ -64,11 +64,8 @@ def parse_login_v2_origins(value: str, *, auth_mode: str, enabled: bool) -> list
 class Settings:
     investigation_multi_round_enabled = environment_flag("INVESTIGATION_MULTI_ROUND_ENABLED")
     crawler_safety_enabled = environment_flag("CRAWLER_SAFETY_ENABLED")
-    crawler_local_direct_pinning_enabled = (
-        bool(os.getenv("AUDIT_RUNTIME_MANIFEST"))
-        and not os.getenv("CAMOUFOX_RELEASE_MANIFEST")
-        and environment_flag("CRAWLER_LOCAL_DIRECT_PINNING_ENABLED")
-    )
+    # Compatibility name only: direct investigation policy is unconditional.
+    crawler_local_direct_pinning_enabled = True
     crawler_direct_degrade_enabled = environment_flag("CRAWLER_DIRECT_DEGRADE_ENABLED")
     crawler_exit_observation_ttl = max(1, int(os.getenv("CRAWLER_EXIT_OBSERVATION_TTL", "300")))
     crawler_shared_exit_active_limit = max(1, int(os.getenv("CRAWLER_SHARED_EXIT_ACTIVE_LIMIT", "1")))

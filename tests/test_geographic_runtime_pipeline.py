@@ -651,10 +651,10 @@ def test_confirmed_run_scopes_direct_pin_to_one_execution_attempt(confirmed, mon
         monkeypatch.setattr(module.settings, 'crawler_local_direct_pinning_enabled', enabled)
         pipeline.run(SimpleNamespace(**configuration))
         assert pipeline._direct_egress_pin is None
-    disabled, first, restarted = observed
-    assert disabled is None and first is not restarted
+    first, second, restarted = observed
+    assert len({id(pin) for pin in observed}) == 3
     owner = adapter.job_store.get(pipeline.job_id)['owner_user_id']
-    for pin in (first, restarted):
+    for pin in (first, second, restarted):
         pin.require_owner(pipeline.job_id, owner)
 
 

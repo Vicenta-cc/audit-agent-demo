@@ -477,3 +477,37 @@ def test_pin_bootstrap_retires_only_preexisting_transport_marker(direct, monkeyp
     assert (marker in rows) == (change not in {'unchanged', 'past_risk'})
     if change == 'past_risk':
         assert store.get(aid)['risk_count'] == 2
+
+
+@pytest.mark.parametrize(('setting', 'value'), [
+    ('crawler_safety_enabled', False),
+    ('crawler_proxy_enabled', True),
+    ('crawler_direct_degrade_enabled', True),
+    ('crawler_proxy_trial_id', 'old-trial'),
+    ('crawler_proxy_default_id', 'old-proxy'),
+    ('crawler_proxy_pool_ids', ['old-proxy']),
+])
+def test_direct_investigation_rejects_conflicting_configuration(direct, monkeypatch, setting, value):
+    accounts, account = direct
+    monkeypatch.setattr(app.settings, setting, value)
+    monkeypatch.setattr(app, '_run_maintenance_probe', lambda bundle: pytest.fail('must reject before probing'))
+    pin = app.LocalDirectEgressPin(execution_id='job', owner_id='owner')
+    with pytest.raises(app.CollectionRouteError, match='PROXY_CONFIG_INVALID'):
+        app.acquire_route_execution(account['id'], 'job', 'owner', account_store=accounts,
+                                    direct_egress_pin=pin, investigation_collection=True)
+    with accounts._connect() as db:
+        assert not db.execute('SELECT 1 FROM crawler_route_admissions').fetchone()
+
+
+@pytest.mark.parametrize(('column', 'value'), [
+    ('proxy_id', 'legacy-proxy'), ('proxy_required', 1), ('route_mode', 'direct_degraded'),
+])
+def test_direct_investigation_rejects_residual_account_binding(direct, monkeypatch, column, value):
+    accounts, account = direct
+    with accounts._connect() as db:
+        db.execute(f'UPDATE crawler_accounts SET {column}=? WHERE id=?', (value, account['id']))
+    monkeypatch.setattr(app, '_run_maintenance_probe', lambda bundle: pytest.fail('must reject before probing'))
+    pin = app.LocalDirectEgressPin(execution_id='job', owner_id='owner')
+    with pytest.raises(app.CollectionRouteError, match='PROXY_CONFIG_INVALID'):
+        app.acquire_route_execution(account['id'], 'job', 'owner', account_store=accounts,
+                                    direct_egress_pin=pin, investigation_collection=True)

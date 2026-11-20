@@ -2,6 +2,8 @@
 import asyncio
 from contextlib import closing, contextmanager
 import json
+import importlib.util
+from pathlib import Path
 import os
 import select
 import sqlite3
@@ -14,6 +16,7 @@ import pytest
 
 from backend.audit_agent import crawler_route as routes
 from backend.audit_agent.crawler_child_runtime import authority_for
+from tests.test_audit_runtime import config, camoufox_config, runtime  # noqa: F401
 from tests.test_camoufox_direct_route import direct  # noqa: F401 - isolated account/scheduler fixture
 
 
@@ -127,13 +130,55 @@ def child_context(bundle, clock, log):
             proc.stdout.close()
 
 
+def entry_environment(entry, config, monkeypatch):
+    root = Path(__file__).resolve().parents[1]
+    if entry == 'local':
+        config['settings'].pop('CRAWLER_LOCAL_DIRECT_PINNING_ENABLED', None)
+        return runtime.environment(config)
+    spec = importlib.util.spec_from_file_location('release_entry_fixture', root / 'deploy/camoufox/runtime-support/serve.py')
+    serve = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(serve)
+    release = json.loads((root / 'deploy/camoufox/runtime.json.example').read_text())
+    release['artifacts']['app']['path'] = str(root)
+    release['runtime']['account_db'] = str(Path(config['runtime_root']) / 'release-data/accounts.sqlite3')
+    release['environment']['XHS_AUDIT_OUTPUTS_DIR'] = str(Path(config['runtime_root']) / 'release-outputs')
+    release['environment'].update(CRAWLER_PROXY_ENABLED='false', CRAWLER_SAFETY_ENABLED='true',
+                                  CRAWLER_DIRECT_DEGRADE_ENABLED='false')
+    release['environment'].pop('CRAWLER_LOCAL_DIRECT_PINNING_ENABLED', None)
+    # Linux deployment asset validation is separately covered by release tests;
+    # exercise the real configure environment replacement without deployment I/O.
+    with monkeypatch.context() as patch:
+        patch.setenv('CAMOUFOX_RELEASE_MANIFEST', '/fixture/release.json')
+        patch.setattr(serve, 'read_json', lambda _: release)
+        patch.setattr(serve, 'validate', lambda value: value)
+        patch.setattr(serve, 'check_artifacts', lambda _: None)
+        patch.setattr(os, 'environ', os.environ.copy())
+        patch.setattr(os, 'chdir', lambda _: None)
+        patch.setattr(sys, 'path', sys.path.copy())
+        serve.configure()
+        env = dict(os.environ)
+    assert 'AUDIT_RUNTIME_MANIFEST' not in env
+    return env
+
+
+@pytest.mark.parametrize('entry', ['local', 'release'])
 @pytest.mark.parametrize('old_transport_fault', [False, True])
-def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monkeypatch, tmp_path, old_transport_fault):
+def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monkeypatch, tmp_path, old_transport_fault, entry, camoufox_config):
     from dataclasses import replace
     from backend.audit_agent import pipeline as pipeline_module
     from backend.audit_agent.job_store import JobStore
     from crawler_auth_fixtures import mark_camoufox_login_verified
 
+    env = entry_environment(entry, camoufox_config, monkeypatch)
+    assert 'CRAWLER_LOCAL_DIRECT_PINNING_ENABLED' not in env
+    with monkeypatch.context() as patch:
+        patch.setattr(os, 'environ', env)
+        spec = importlib.util.spec_from_file_location('backend.audit_agent.entry_settings', Path(routes.__file__).with_name('config.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    for name in ('crawler_local_direct_pinning_enabled', 'crawler_proxy_enabled', 'crawler_safety_enabled', 'crawler_direct_degrade_enabled'):
+        if hasattr(module.Settings, name):
+            monkeypatch.setattr(routes.settings, name, getattr(module.Settings, name))
     accounts, account = direct
     accounts.save_auth_state(account['id'], 'fixture-ciphertext')
     mark_camoufox_login_verified(accounts, account['id'])
@@ -146,7 +191,6 @@ def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monke
     for name in ('request_min_interval', 'crawler_account_min_interval', 'media_request_interval'):
         monkeypatch.setattr(routes.settings, name, 0)
     monkeypatch.setattr(routes.settings, 'task_resource_lock_dir', tmp_path / 'locks')
-    monkeypatch.setattr(routes.settings, 'crawler_local_direct_pinning_enabled', True)
     monkeypatch.setattr(routes.settings, 'crawler_proxy_echo_url', 'https://echo.invalid/ip')
     routes.route_contract()
     from tools.bound_proxy import BoundProxySession, route_health_key
@@ -199,7 +243,12 @@ def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monke
     observed_at = clock[0]
     contexts = set()
     operations = set()
+    second = accounts.create(platform='dy', display_name='rotated')
+    accounts.save_auth_state(second['id'], 'second-fixture-ciphertext')
+    mark_camoufox_login_verified(accounts, second['id'])
     for batch in range(2):
+        if batch == 1:
+            account = second
         operation = (pipeline._route_operation(account['id']) if batch == 0 else
                      pipeline._geographic_route_operation('dy', account['id'], {account['id']}))
         with operation as bundle:
@@ -228,7 +277,7 @@ def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monke
                 with closing(sqlite3.connect(snap.scheduler_db_path)) as db:
                     charged = dict(db.execute(
                         "SELECT platform,last_start FROM request_scheduler_channels WHERE channel='media'"))
-                    assert charged == dict.fromkeys(snap.scope_ids, clock[0])
+                    assert {scope: charged[scope] for scope in snap.scope_ids} == dict.fromkeys(snap.scope_ids, clock[0])
                     assert db.execute('SELECT count(*) FROM request_scheduler_leases').fetchone() == (0,)
                 if batch == 1:
                     accounts.pause_account_exit(account['id'], until=clock[0] + 60)
