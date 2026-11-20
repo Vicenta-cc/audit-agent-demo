@@ -414,7 +414,7 @@ class LocalDirectEgressPin:
                 # This distinct bootstrap gets both initial pairs, even on restart.
                 bundle.bootstrap_probe_id = secrets.token_hex(16)
                 try:
-                    receipt = _run_maintenance_probe(bundle)
+                    self._observation = _probe_pinned_exit(bundle, snapshot)
                 except CollectionRouteError as exc:
                     if exc.code in {'PROXY_TRANSPORT_FAILED', 'PROXY_UNAVAILABLE', 'PROXY_CONNECTION_REFUSED'}:
                         # The echo-only helper cannot have started platform capture.
@@ -422,10 +422,6 @@ class LocalDirectEgressPin:
                     raise
                 finally:
                     del bundle.bootstrap_probe_id
-                if snapshot.observed_exit_ip and receipt.ip != snapshot.observed_exit_ip:
-                    raise CollectionRouteError('PROXY_EXIT_CHANGED')
-                observed = accounts.consume_cached_exit(receipt.ip, observed_at=receipt.observed_at, service_exit=True)
-                self._observation = (receipt.ip, receipt.observed_at, observed['shared_exit_generation'])
             ip, observed_at, generation = self._observation
             revision = self._bindings.setdefault(snapshot.account_id, snapshot.binding_revision)
             if revision != snapshot.binding_revision or not accounts.get_pinned_direct_route(
@@ -1760,6 +1756,96 @@ def _direct_transport_key(db, snapshot):
     row = db.execute("SELECT stop_code FROM probe_health.collection_route_health WHERE proxy_id=? AND config_revision=?",
                      (key, snapshot.config_revision)).fetchone()
     return key if row and row[0] == 'PROXY_TRANSPORT_FAILED' else None
+
+
+def _bootstrap_transport_baseline(db, bundle, snapshot):
+    """Only a previously bound, healthy service exit may supply a maintenance baseline."""
+    from datetime import datetime
+    accounts = bundle.account_store
+    account = db.execute('SELECT * FROM crawler_accounts WHERE id=?', (snapshot.account_id,)).fetchone()
+    if (not account or account['binding_revision'] != snapshot.binding_revision
+            or account['failure_kind'] or not account['auth_state_ciphertext']
+            or account['recovery_state'] not in {'', 'manual_success', 'success'}):
+        return None
+    if account['cooldown_until']:
+        try:
+            if datetime.fromisoformat(account['cooldown_until']).timestamp() > time.time():
+                return None
+        except (ValueError, TypeError, OverflowError):
+            return None
+    ip, generation = account['shared_exit_key'], account['shared_exit_generation']
+    if not ip or snapshot.observed_exit_ip and (snapshot.observed_exit_ip, snapshot.exit_generation) != (ip, generation):
+        return None
+    row = db.execute('SELECT observed_at FROM crawler_shared_exits WHERE exit_key=? AND generation=?',
+                     (ip, generation)).fetchone()
+    if not row:
+        return None
+    # Keep the original timestamp on recheck to detect an intervening different service exit.
+    observed_at = snapshot.observed_exit_at or row['observed_at']
+    if accounts._pinned_direct_exit(db, account, ip, generation, observed_at):
+        baseline = replace(snapshot, observed_exit_ip=ip, exit_generation=generation, observed_exit_at=observed_at)
+        return baseline, (account['risk_count'], account['last_risk_at'],
+                          account['auth_state_revision'], account['profile_generation'])
+    return None
+
+
+def _watch_bootstrap_transport(bundle, snapshot):
+    from pathlib import Path
+    if not Path(snapshot.scheduler_db_path).is_file():
+        return None
+    with bundle.account_store._connect() as db:
+        db.execute('ATTACH DATABASE ? AS probe_health', (snapshot.scheduler_db_path,))
+        db.execute('BEGIN IMMEDIATE')
+        candidate = _bootstrap_transport_baseline(db, bundle, snapshot)
+        if candidate is None:
+            return None
+        baseline, account_revisions = candidate
+        key = _direct_transport_key(db, baseline)
+        if not key:
+            return None
+        # Keep the existing three-column health table compatible with every writer.
+        # A new write to the key invalidates this watch even when the stop code is identical.
+        db.execute("""CREATE TABLE IF NOT EXISTS probe_health.bootstrap_transport_watch (
+            proxy_id TEXT, config_revision INTEGER, token TEXT NOT NULL, PRIMARY KEY(proxy_id,config_revision))""")
+        for event, refs in [('INSERT', ('NEW',)), ('DELETE', ('OLD',)), ('UPDATE', ('OLD', 'NEW'))]:
+            matches = ' OR '.join(f'(proxy_id={ref}.proxy_id AND config_revision={ref}.config_revision)' for ref in refs)
+            db.execute(f"""CREATE TRIGGER IF NOT EXISTS probe_health.invalidate_bootstrap_watch_{event}
+                AFTER {event} ON collection_route_health BEGIN DELETE FROM bootstrap_transport_watch WHERE {matches}; END""")
+        db.execute('INSERT OR REPLACE INTO probe_health.bootstrap_transport_watch VALUES(?,?,?)',
+                   (key, snapshot.config_revision, bundle.bootstrap_probe_id))
+        return baseline, account_revisions, key
+
+
+def _probe_pinned_exit(bundle, snapshot):
+    watch = _watch_bootstrap_transport(bundle, snapshot)
+    accepted = None
+    try:
+        # Returns only after child result verification, process-group drain and profile check.
+        receipt = _run_maintenance_probe(bundle)
+        if snapshot.observed_exit_ip and receipt.ip != snapshot.observed_exit_ip:
+            raise CollectionRouteError('PROXY_EXIT_CHANGED')
+        observed = bundle.account_store.consume_cached_exit(receipt.ip, observed_at=receipt.observed_at, service_exit=True)
+        accepted = receipt
+        return receipt.ip, receipt.observed_at, observed['shared_exit_generation']
+    finally:
+        if watch is not None:
+            _finish_bootstrap_transport(bundle, watch, accepted)
+
+
+def _finish_bootstrap_transport(bundle, watch, receipt):
+    baseline, account_revisions, key = watch
+    with bundle.account_store._connect() as db:
+        db.execute('ATTACH DATABASE ? AS probe_health', (baseline.scheduler_db_path,))
+        db.execute('BEGIN IMMEDIATE')
+        watched = db.execute("""DELETE FROM probe_health.bootstrap_transport_watch
+            WHERE proxy_id=? AND config_revision=? AND token=?""",
+            (key, baseline.config_revision, bundle.bootstrap_probe_id)).rowcount
+        if (watched and receipt and receipt.ip == baseline.observed_exit_ip
+                and 0 <= time.time() - receipt.observed_at <= settings.crawler_proxy_probe_ttl
+                and _bootstrap_transport_baseline(db, bundle, baseline) == (baseline, account_revisions)):
+            db.execute("""DELETE FROM probe_health.collection_route_health
+                WHERE proxy_id=? AND config_revision=? AND stop_code='PROXY_TRANSPORT_FAILED'""",
+                (key, baseline.config_revision))
 
 
 def _direct_login_transport_marker(db, bundle):

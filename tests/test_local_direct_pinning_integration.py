@@ -127,7 +127,9 @@ def child_context(bundle, clock, log):
             proc.stdout.close()
 
 
-def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monkeypatch, tmp_path):
+@pytest.mark.parametrize('old_transport_fault', [False, True])
+def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monkeypatch, tmp_path, old_transport_fault):
+    from dataclasses import replace
     from backend.audit_agent import pipeline as pipeline_module
     from backend.audit_agent.job_store import JobStore
     from crawler_auth_fixtures import mark_camoufox_login_verified
@@ -147,7 +149,23 @@ def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monke
     monkeypatch.setattr(routes.settings, 'crawler_local_direct_pinning_enabled', True)
     monkeypatch.setattr(routes.settings, 'crawler_proxy_echo_url', 'https://echo.invalid/ip')
     routes.route_contract()
-    from tools.bound_proxy import BoundProxySession
+    from tools.bound_proxy import BoundProxySession, route_health_key
+
+    if old_transport_fault:
+        old_time = clock[0]
+        generation = accounts.observe_shared_exit('203.0.113.9', observed_at=old_time,
+                                                  service_exit=True)['shared_exit_generation']
+        accounts.set_route_state(account['id'], state='active',
+                                 shared_exit_key='203.0.113.9', generation=generation)
+        clock[0] += routes.settings.crawler_exit_observation_ttl + 1
+        old_snapshot = replace(routes.resolve_account_route(account['id'], account_store=accounts),
+                               observed_exit_ip='203.0.113.9', observed_exit_at=old_time,
+                               exit_generation=generation)
+        with sqlite3.connect(old_snapshot.scheduler_db_path) as db:
+            db.execute('CREATE TABLE collection_route_health (proxy_id TEXT, config_revision INTEGER, '
+                       'stop_code TEXT, PRIMARY KEY(proxy_id, config_revision))')
+            db.execute('INSERT INTO collection_route_health VALUES(?,?,?)',
+                       (route_health_key(old_snapshot), old_snapshot.config_revision, 'PROXY_TRANSPORT_FAILED'))
 
     sends = []
     def startup_observation(bundle):
@@ -187,6 +205,10 @@ def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monke
         with operation as bundle:
             snap = bundle.snapshot
             assert snap.local_direct_pinned and snap.observed_exit_at == observed_at
+            if old_transport_fault:
+                with sqlite3.connect(snap.scheduler_db_path) as db:
+                    assert db.execute('SELECT stop_code FROM collection_route_health WHERE proxy_id=?',
+                                      (route_health_key(snap),)).fetchone() is None
             contexts.add(snap.context_id)
             operations.add(snap.operation_id)
             with child_context(bundle, clock[0], tmp_path / f'child-{batch}.log') as exchange:
