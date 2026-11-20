@@ -1312,9 +1312,13 @@ def renew_same_route_phase(bundle, *, allowed_borrowers=1):
 
 
 def prepare_collection_child(bundle, *, allowed_borrowers=0, timeout=15):
-    """Drain a supplementary context after every other media borrower finishes."""
+    """Hand off the previous collection or supplementary browser before launch."""
     process=getattr(bundle,'asset_browser_process',None)
     if process is None:
+        pipe=getattr(bundle,'child_receipt_pipe',None)
+        if (pipe is not None and bundle.snapshot.managed
+                and pipe.snapshot.operation_id == bundle.snapshot.operation_id):
+            renew_same_route_phase(bundle,allowed_borrowers=allowed_borrowers)
         return
     deadline=time.monotonic()+timeout
     while getattr(bundle,'_borrowers',0)>allowed_borrowers:

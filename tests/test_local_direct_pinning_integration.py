@@ -87,7 +87,8 @@ asyncio.run(run())
 
 
 @contextmanager
-def child_context(bundle, clock, log):
+def child_context(bundle, clock, log, *, drain=True):
+    routes.prepare_collection_child(bundle)
     config = routes.RouteConfigPipe(bundle.snapshot)
     receipt = routes.RouteReceiptPipe(bundle)
     authority = authority_for(bundle)
@@ -123,7 +124,12 @@ def child_context(bundle, clock, log):
                 proc.kill()
                 proc.wait(timeout=5)
             bundle.child_active = False
-            receipt.drain()
+            if drain:
+                receipt.drain()
+            else:
+                # The collection adapter closes the pipe after each child; the
+                # next collection's preparation owns the phase transition.
+                receipt.close()
             authority.close()
             config.close()
             proc.stdin.close()
@@ -163,7 +169,8 @@ def entry_environment(entry, config, monkeypatch):
 
 @pytest.mark.parametrize('entry', ['local', 'release'])
 @pytest.mark.parametrize('old_transport_fault', [False, True])
-def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monkeypatch, tmp_path, old_transport_fault, entry, camoufox_config):
+@pytest.mark.parametrize('first_renewals', [0, 5])
+def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monkeypatch, tmp_path, old_transport_fault, entry, camoufox_config, first_renewals):
     from dataclasses import replace
     from backend.audit_agent import pipeline as pipeline_module
     from backend.audit_agent.job_store import JobStore
@@ -260,8 +267,14 @@ def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monke
                                       (route_health_key(snap),)).fetchone() is None
             contexts.add(snap.context_id)
             operations.add(snap.operation_id)
-            with child_context(bundle, clock[0], tmp_path / f'child-{batch}.log') as exchange:
-                for renewal in range(5 if batch == 0 else 1):
+            with child_context(bundle, clock[0], tmp_path / f'child-{batch}.log', drain=False) as exchange:
+                first_pid = bundle.child_receipt_pipe.process.pid
+                with pytest.raises(routes.CollectionRouteError, match='SUPPLEMENT_DEFERRED'):
+                    routes.prepare_collection_child(bundle)
+                assert bundle.child_receipt_pipe.process.poll() is None
+                assert bundle.snapshot == snap
+                source = exchange({'time': clock[0]})['source']
+                for renewal in range(first_renewals if batch == 0 else 1):
                     clock[0] += 275
                     result = exchange({'time': clock[0], 'tick': True})
                     assert result['version'] == renewal + 2
@@ -279,10 +292,38 @@ def test_confirm_once_then_renew_collect_and_download_without_echo(direct, monke
                         "SELECT platform,last_start FROM request_scheduler_channels WHERE channel='media'"))
                     assert {scope: charged[scope] for scope in snap.scope_ids} == dict.fromkeys(snap.scope_ids, clock[0])
                     assert db.execute('SELECT count(*) FROM request_scheduler_leases').fetchone() == (0,)
+            with bundle.borrow():
+                with pytest.raises(routes.CollectionRouteError, match='SUPPLEMENT_DEFERRED'):
+                    routes.prepare_collection_child(bundle)
+                assert bundle.snapshot == snap
+            routes.prepare_collection_child(bundle)
+            prepared = bundle.snapshot
+            routes.prepare_collection_child(bundle)
+            assert bundle.snapshot == prepared  # Repeated preparation must not reissue.
+            with child_context(bundle, clock[0], tmp_path / f'detail-{batch}.log', drain=False) as exchange:
+                detail = bundle.snapshot
+                assert detail.operation_id != snap.operation_id
+                assert detail.lease_id != snap.lease_id and detail.context_id != snap.context_id
+                assert detail.observed_exit_at == snap.observed_exit_at == observed_at
+                assert detail.observed_exit_ip == snap.observed_exit_ip
+                assert detail.exit_generation == snap.exit_generation
+                assert detail.account_id == snap.account_id and detail.profile_key == snap.profile_key
+                assert bundle.child_receipt_pipe.process.pid != first_pid
+                assert exchange({'time': clock[0]})['source']['operation_id'] == detail.operation_id
+                with closing(sqlite3.connect(detail.scheduler_db_path)) as db:
+                    assert db.execute('SELECT state FROM route_operations WHERE operation_id=?',
+                                      (snap.operation_id,)).fetchone() == ('ended',)
+                    assert db.execute('SELECT lease_version FROM route_operations WHERE operation_id=?',
+                                      (detail.operation_id,)).fetchone() == (1,)
                 if batch == 1:
                     accounts.pause_account_exit(account['id'], until=clock[0] + 60)
                     assert 'error' in exchange({'time': clock[0]})
+            if batch == 1:
+                with pytest.raises(routes.CollectionRouteError, match='PROXY_REVISION_MISMATCH'):
+                    routes.prepare_collection_child(bundle)
+                assert bundle.snapshot == detail  # No new operation for a paused account.
 
-    assert clock[0] - observed_at >= 20 * 60
+    if first_renewals:
+        assert clock[0] - observed_at >= 20 * 60
     assert len(contexts) == len(operations) == 2
     assert sends == ['browser', 'http', 'browser', 'http']
