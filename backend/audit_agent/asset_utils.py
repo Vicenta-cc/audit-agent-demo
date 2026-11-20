@@ -92,6 +92,7 @@ def download_url_with_error(
     owner_id: str | None = None,
     execution_id: str | None = None,
     route_context=None,
+    direct_egress_pin=None,
     verify: bool | str = True,
     required_route: bool = False,
 ) -> DownloadResult:
@@ -109,7 +110,8 @@ def download_url_with_error(
             if getattr(exc, "code", None):
                 raise crawler_route.CollectionRouteError(exc.code) from None
             raise
-        route = crawler_route.authorize_source_route(source, owner_id, execution_id, route_context=route_context)
+        route = crawler_route.authorize_source_route(
+            source, owner_id, execution_id, route_context=route_context, direct_egress_pin=direct_egress_pin)
     else:
         route = nullcontext(None)
     if verify is not True and not (isinstance(verify, str) and Path(verify).is_file()):

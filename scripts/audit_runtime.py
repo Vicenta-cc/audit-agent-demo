@@ -19,6 +19,7 @@ XFYUN_SECRET_KEYS = {"XFYUN_APP_ID", "XFYUN_API_KEY", "XFYUN_API_SECRET"}
 SECRET_KEYS = XFYUN_SECRET_KEYS | {"DASHSCOPE_API_KEY", "RESOURCE_GENERATION_API_KEY", "CONVERSATION_API_KEY", "REMOTE_INFERENCE_API_KEY", "CRAWLER_AUTH_ENCRYPTION_KEY"}
 SETTING_KEYS = {
     "CRAWLER_PROXY_ENABLED", "CRAWLER_SAFETY_ENABLED", "CRAWLER_DIRECT_DEGRADE_ENABLED", "CRAWLER_PROXY_ECHO_URL",
+    "CRAWLER_LOCAL_DIRECT_PINNING_ENABLED",
     "QWEN_TEXT_MODEL", "RESOURCE_GENERATION_MODEL", "QWEN_VL_MODEL", "QWEN_IMAGE_AUDIT_MODEL",
     "QWEN_CONTACT_SHEET_MODEL", "ASR_ENGINE", "ASR_TRANSLATE_MODEL", "ASR_LANGUAGE", "DOLPHIN_LANG_SYM",
     "DOLPHIN_REGION_SYM", "INVESTIGATION_MAX_POSTS", "APP_AUTH_COOKIE_SECURE",
@@ -182,6 +183,15 @@ def load_config(path):
 def validate_camoufox(config):
     """Permit explicit release assets, never path or safety overrides in settings."""
     settings = config["settings"]
+    pinning = settings.get("CRAWLER_LOCAL_DIRECT_PINNING_ENABLED", "false")
+    if pinning not in ("true", "false"):
+        raise ValueError("CRAWLER_LOCAL_DIRECT_PINNING_ENABLED must be true or false")
+    if pinning == "true" and (
+        "camoufox" not in config or settings.get("CRAWLER_PROXY_ENABLED") != "false"
+        or settings.get("CRAWLER_SAFETY_ENABLED") != "true" or config.get("crawler_proxy_url")
+        or config.get("managed_proxy") or settings.get("CRAWLER_DIRECT_DEGRADE_ENABLED") != "false"
+    ):
+        raise ValueError("Local direct pinning requires a protected direct Camoufox runtime")
     if "CRAWLER_PROXY_ENABLED" in settings and settings["CRAWLER_PROXY_ENABLED"] not in ("true", "false"):
         raise ValueError("CRAWLER_PROXY_ENABLED must be true or false")
     for key, expected in (("CRAWLER_SAFETY_ENABLED", "true"),

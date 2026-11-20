@@ -293,6 +293,16 @@ def test_camoufox_direct_environment_preserves_state_without_inherited_proxy(cam
     assert env["CRAWLER_DIRECT_DEGRADE_ENABLED"] == "false"
 
 
+def test_local_direct_pinning_requires_explicit_direct_manifest(camoufox_config):
+    key = "CRAWLER_LOCAL_DIRECT_PINNING_ENABLED"
+    assert key not in runtime.environment(camoufox_config)
+    camoufox_config["settings"][key] = "true"
+    assert runtime.environment(camoufox_config)[key] == "true"
+    camoufox_config["crawler_proxy_url"] = "http://localhost:9001"
+    with pytest.raises(ValueError, match="direct pinning"):
+        runtime.environment(camoufox_config)
+
+
 @pytest.mark.parametrize("value", ["", "yes", "TRUE", True, False, None])
 def test_camoufox_rejects_invalid_routing(camoufox_config, value):
     camoufox_config["settings"]["CRAWLER_PROXY_ENABLED"] = value

@@ -628,6 +628,36 @@ def test_geographic_consumer_never_downloads_even_with_matching_source(monkeypat
     assert calls == [] and not (tmp_path/'image').exists()
 
 
+def test_confirmed_run_scopes_direct_pin_to_one_execution_attempt(confirmed, monkeypatch):
+    from types import SimpleNamespace
+    from backend.audit_agent import pipeline as module
+
+    adapter, configuration = confirmed
+    pipeline = module.AuditPipeline.__new__(module.AuditPipeline)
+    pipeline.job_id = configuration['_verified_geographic_binding']['job_id']
+    pipeline.ingestion = adapter.ingestion_store
+    pipeline._m3_snapshot_validator = lambda: configuration
+    monkeypatch.setattr(module, 'job_store', adapter.job_store)
+    monkeypatch.setattr(module.settings, 'app_auth_mode', 'local')
+    monkeypatch.setattr(module.settings, 'crawler_proxy_enabled', False)
+    monkeypatch.setattr(module.settings, 'crawler_safety_enabled', True)
+    monkeypatch.setattr(module.settings, 'crawler_proxy_trial_id', '')
+    observed = []
+    def stop_before_collection(*args):
+        observed.append(pipeline._direct_egress_pin)
+        raise RuntimeError('fixture_stop_before_collection')
+    pipeline._set_prompt_context = stop_before_collection
+    for enabled in (False, True, True):
+        monkeypatch.setattr(module.settings, 'crawler_local_direct_pinning_enabled', enabled)
+        pipeline.run(SimpleNamespace(**configuration))
+        assert pipeline._direct_egress_pin is None
+    disabled, first, restarted = observed
+    assert disabled is None and first is not restarted
+    owner = adapter.job_store.get(pipeline.job_id)['owner_user_id']
+    for pin in (first, restarted):
+        pin.require_owner(pipeline.job_id, owner)
+
+
 def test_fresh_resume_from_verified_geographic_run_never_falls_back_to_producer(confirmed, tmp_path, monkeypatch):
     from types import SimpleNamespace
     from backend.audit_agent import pipeline as module

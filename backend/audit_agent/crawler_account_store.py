@@ -930,6 +930,38 @@ class CrawlerAccountStore:
                 return None
             return dict(observed_exit_ip=row['exit_key'],observed_exit_at=row['observed_at'],shared_exit_key=row['exit_key'],shared_exit_generation=row['generation'])
 
+    def _pinned_direct_exit(self, conn, account, key, generation, observed_at):
+        if (not settings.crawler_local_direct_pinning_enabled or not settings.crawler_safety_enabled
+                or settings.crawler_proxy_enabled or not account or account['platform'] != 'dy'
+                or account['proxy_required'] or account['proxy_id'] or account['route_mode'] == 'direct_degraded'
+                or account['status'] != 'active' or account['route_state'] != 'active'
+                or account['pause_reason'] or (account['paused_until'] or 0) > time.time()):
+            return None
+        # A newer service observation on another address invalidates the pin.
+        # An ambiguous tie also fails closed. Never renew an observation here.
+        at = self._epoch(observed_at)
+        if at is None or not 0 < at <= time.time():
+            return None
+        row = conn.execute("""
+            SELECT s.* FROM crawler_shared_exits s
+            WHERE s.exit_key=? AND s.generation=? AND s.service_exit=1 AND s.observed_at>=?
+              AND NOT EXISTS (SELECT 1 FROM crawler_shared_exits other
+                  WHERE other.service_exit=1 AND other.exit_key<>s.exit_key
+                    AND other.observed_at>=?)
+        """, (key, generation, at, at)).fetchone()
+        if row and 0 < row['observed_at'] <= time.time() and self._pause_allows(conn, row):
+            return row
+        return None
+
+    def get_pinned_direct_route(self, account_id, exit_key, generation, *, observed_at):
+        with self._connect() as conn:
+            account = conn.execute('SELECT * FROM crawler_accounts WHERE id=?', (account_id,)).fetchone()
+            row = self._pinned_direct_exit(conn, account, self._exit_key(exit_key), self._generation(generation), observed_at)
+            if row:
+                return dict(observed_exit_ip=row['exit_key'], observed_exit_at=observed_at,
+                            shared_exit_key=row['exit_key'], shared_exit_generation=row['generation'])
+        return None
+
     def mark_direct_validated(self, account_id, generation, *, connection=None):
         generation=self._generation(generation)
         def write(conn):
@@ -946,8 +978,9 @@ class CrawlerAccountStore:
             conn.execute('BEGIN IMMEDIATE')
             return write(conn)
 
-    def admit_route(self, account_id, observed_exit, generation, operation_id, *, recovery_claim=None, login_bootstrap=False, require_existing=False, require_healthy_exit=False):
-        if type(login_bootstrap) is not bool:
+    def admit_route(self, account_id, observed_exit, generation, operation_id, *, recovery_claim=None, login_bootstrap=False, require_existing=False, require_healthy_exit=False, local_direct_pinned=False, pinned_observed_at=None):
+        if (type(login_bootstrap) is not bool or type(local_direct_pinned) is not bool
+                or local_direct_pinned and (recovery_claim or login_bootstrap or require_healthy_exit)):
             raise ValueError('ROUTE_BOOTSTRAP_INVALID')
         key = self._exit_key(observed_exit)
         generation = self._generation(generation)
@@ -959,7 +992,7 @@ class CrawlerAccountStore:
             if prior:
                 if (prior['account_id'],prior['exit_key'],prior['generation'],prior['state']) != (account_id,key,generation,'active'):
                     raise ValueError('ROUTE_OPERATION_CONFLICT')
-                if not require_existing:
+                if not require_existing and not local_direct_pinned:
                     return operation_id
             elif require_existing:
                 raise ValueError('ROUTE_LEASE_REJECTED')
@@ -970,7 +1003,10 @@ class CrawlerAccountStore:
                 raise ValueError('ACCOUNT_CHALLENGE')
             if recovery and (key!=account['shared_exit_key'] or generation<account['shared_exit_generation'] or account['recovery_state']=='manual_claimed' and not manual):
                 raise ValueError('ACCOUNT_CHALLENGE')
-            if not account or (account['status']!='active' and not ((login_bootstrap or manual) and account['status'] in {'login_required','expired'})) or (account['route_state']!='active' and not recovery and not (login_bootstrap and account['route_state']=='transport_blocked')) or (account['paused_until'] and account['paused_until']>time.time() and not manual) or not self._exit_allowed(conn,key,generation,recovery_account=account_id if recovery else None,manual=manual):
+            exit_allowed = (self._pinned_direct_exit(conn, account, key, generation, pinned_observed_at) is not None
+                            if local_direct_pinned else self._exit_allowed(conn, key, generation,
+                                recovery_account=account_id if recovery else None, manual=manual))
+            if not account or (account['status']!='active' and not ((login_bootstrap or manual) and account['status'] in {'login_required','expired'})) or (account['route_state']!='active' and not recovery and not (login_bootstrap and account['route_state']=='transport_blocked')) or (account['paused_until'] and account['paused_until']>time.time() and not manual) or not exit_allowed:
                 raise ValueError('ACCOUNT_CHALLENGE')
             if not login_bootstrap and not manual:
                 if not account['auth_state_ciphertext']:
@@ -983,7 +1019,7 @@ class CrawlerAccountStore:
                     raise ValueError('ACCOUNT_CHALLENGE')
             if account['route_mode']=='direct_degraded' and account['validated_direct_generation']!=generation and not (login_bootstrap or recovery):
                 raise ValueError('LOGIN_REVALIDATION_REQUIRED')
-            if require_existing:
+            if require_existing or prior:
                 if account['shared_exit_key'] != key or account['shared_exit_generation'] != generation:
                     raise ValueError('ROUTE_GENERATION_STALE')
                 return operation_id

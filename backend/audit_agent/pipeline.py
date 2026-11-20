@@ -304,6 +304,7 @@ class AuditPipeline:
         return _GeographicFencedStore(job_store, self, {"update", "update_control", "log"})
 
     def run(self, request, crawl_epoch: int | None = None) -> None:
+        self._direct_egress_pin = None
         self._geographic_entry = bool(getattr(request, "geographic_plan", None))
         job_store = self._fenced_job_store()
         if settings.app_auth_mode == "required":
@@ -367,6 +368,12 @@ class AuditPipeline:
             if getattr(request, "geographic_plan", None) and verified is None:
                 raise ValueError("geographic execution requires a verified frozen Run")
             if verified is not None:
+                if (settings.crawler_local_direct_pinning_enabled and verified.get("run_crawler")
+                        and verified.get("platform") == "dy" and not settings.crawler_proxy_enabled
+                        and settings.crawler_safety_enabled and not settings.crawler_proxy_trial_id):
+                    from .crawler_route import LocalDirectEgressPin
+                    self._direct_egress_pin = LocalDirectEgressPin(
+                        execution_id=self.job_id, owner_id=str(job_snapshot.get("owner_user_id") or "local-user"))
                 from types import SimpleNamespace
                 request = SimpleNamespace(**{**verified, "_authoritative_m3_contract": True,
                     "_confirmed_analyze_limit": verified["analyze_limit"]})
@@ -1804,6 +1811,8 @@ class AuditPipeline:
                 },
                 action="retry_after_recovery",
             )
+        finally:
+            self._direct_egress_pin = None
 
     @contextmanager
     def _geographic_route_operation(self, platform: str, account_id: str, leased_ids: set[str]):
@@ -1856,13 +1865,14 @@ class AuditPipeline:
                     finally:
                         self._collection_route_context = previous
             return
-        if not account_id or (not retain_direct and not getattr(settings, "crawler_proxy_enabled", False) and not (account or {}).get("proxy_required")):
+        pin = getattr(self, "_direct_egress_pin", None)
+        if not account_id or (pin is None and not retain_direct and not getattr(settings, "crawler_proxy_enabled", False) and not (account or {}).get("proxy_required")):
             yield None
             return
         job = job_store.get(self.job_id) or {}
         owner = str(job.get("owner_user_id") or "local-user")
         bundle = acquire_route_execution(account_id, self.job_id, owner, account_store=crawler_account_store,
-                                         investigation_collection=True)
+                                         investigation_collection=True, **({"direct_egress_pin": pin} if pin is not None else {}))
         previous = getattr(self, "_collection_route_context", None)
         self._collection_route_context = bundle
         try:
@@ -8541,6 +8551,7 @@ class AuditPipeline:
             collection_route_provenance=subject.collection_route_provenance,
             owner_id=owner_id, execution_id=self.job_id,
             route_context=route_context, required_route=required_route,
+            direct_egress_pin=getattr(self, "_direct_egress_pin", None),
         )
 
     def _analyze_images(self, subject: AuditSubject, image_dir: Path) -> list[dict]:
