@@ -12,6 +12,7 @@ from backend.audit_agent.crawler_adapter import (CrawlerCollectionIncompleteErro
                                                  CrawlerMediaDownloadError,
                                                  CrawlerVerificationError, CrawlOutput,
                                                  MediaCrawlerAdapter)
+from backend.audit_agent.geographic_media import TriageMediaReadiness
 from backend.audit_agent.triage import CandidateScore, mark_candidates_collected, write_candidates_file
 
 
@@ -66,6 +67,9 @@ class FakeIngestion:
     def __init__(self, analyzed):
         self.analyzed = set(analyzed)
         self.db_path = Path("/tmp/unused.sqlite3")
+
+    def validated_refs_for_task(self, task_id):
+        return []
 
     def analyzed_content_keys(self, platform, keys):
         return {k for k in keys if k in self.analyzed}
@@ -506,6 +510,7 @@ def test_rotated_sweep_reads_collected_markers_from_both_account_directories(tmp
 def test_sweep_reports_keyword_progress_command_and_visited_count(tmp_path: Path, monkeypatch):
     logs: list[str] = []
     progress: list[tuple[int, int]] = []
+    delivered = []
     monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
     monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
     monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
@@ -515,8 +520,8 @@ def test_sweep_reports_keyword_progress_command_and_visited_count(tmp_path: Path
     output = pipeline._run_triaged_search(
         request=_base_request(keyword="词A,词B,词C"), save_root=tmp_path, start_page=1, max_total_notes=10,
         crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
-        content_callback=lambda c, m: None, stream_items=True,
-        stop_checker=lambda: len(crawler.detail_calls) >= 2,      # 采到两条后要求停止
+        content_callback=lambda c, m: delivered.extend(c), stream_items=True,
+        stop_checker=lambda: len(delivered) >= 2,                # 完成交付两条后要求停止
         started_callback=None, progress_callback=lambda done, total: progress.append((done, total)),
     )
     assert progress == [(1, 3), (2, 3)]                            # 外层看到的是第几个词，不是 run_detail 的 1/1
@@ -589,9 +594,16 @@ def test_resume_replays_complete_snapshot_not_partial_attempt(tmp_path, monkeypa
             pipeline._run_triaged_search(**kwargs)
     else:
         output = pipeline._run_triaged_search(**kwargs)
-        assert output.contents == [item]
+        prepared, = output.contents
+        assert {key: prepared[key] for key in item} == item
+        binding = TriageMediaReadiness.validate_item_binding(
+            prepared, "resume", "dy", "p1")
+        assert TriageMediaReadiness(tmp_path).load(binding,
+            **pipeline._geographic_media_policy(prepared, "dy", True)) == {"images": [], "videos": []}
         assert output.comments == comments
-    assert delivered == ([([item], comments)] if state == "missing" else [])
+        assert delivered == ([([prepared], comments)] if state == "missing" else [])
+    if state == "incomplete":
+        assert delivered == []
     assert crawler.search_calls == []
 
 

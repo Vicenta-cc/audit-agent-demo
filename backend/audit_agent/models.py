@@ -47,6 +47,7 @@ class AuditSubject:
     local_image_paths: list[str] = field(default_factory=list)
     local_video_paths: list[str] = field(default_factory=list)
     collection_route_provenance: dict | None = None
+    media_readiness: dict | None = None
 
 
 @dataclass

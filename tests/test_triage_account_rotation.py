@@ -689,33 +689,45 @@ def test_trial_verification_never_automatically_retries_backup(env, monkeypatch)
 
 
 def test_fatal_stream_route_error_stops_inflight_crawler_before_next_probe(env, monkeypatch):
+    import threading
     import time
-    error=pipeline_module.CollectionRouteError('PROXY_EXIT_CHANGED')
-    monkeypatch.setattr(pipeline_module.AuditPipeline,'_analyze_subject',lambda *a: (_ for _ in ()).throw(error))
+    error = pipeline_module.CollectionRouteError('PROXY_EXIT_CHANGED')
+    next_search = threading.Event()
+
+    def analyze(*args):
+        assert next_search.wait(3), 'next keyword did not overlap first analysis'
+        raise error
+
+    monkeypatch.setattr(pipeline_module.AuditPipeline, '_analyze_subject', analyze)
+
     class BlockingCrawler(RotationCrawler):
-        stopped=False
-        ticks=0
-        def run_detail(self,platform,content_id,*,source_keyword,save_root=None,account_id='',**kwargs):
-            item={'aweme_id':content_id,'desc':'full','source_keyword':source_keyword}
-            kwargs['content_callback']([item],[])
-            deadline=time.monotonic()+2
-            while time.monotonic()<deadline:
-                if kwargs['stop_checker']():
-                    self.stopped=True
-                    raise RuntimeError('crawler interrupted by stop checker')
-                self.ticks+=1
-                time.sleep(.01)
-            pytest.fail('in-flight crawler continued after fatal stream route error')
-    account=env.add('A');crawler=BlockingCrawler()
-    with pytest.raises(pipeline_module.CollectionRouteError,match='PROXY_EXIT_CHANGED'):
-        _run_pipeline(env,monkeypatch,crawler,account,settings_auto_analyze=True,
-                      auto_analyze=True,analyze_limit=2,max_total_notes=2)
-    job=pipeline_module.job_store.get('job-rot')
-    assert crawler.stopped and crawler.ticks<100
+        stopped = False
+        ticks = 0
+
+        def run_search(self, **kwargs):
+            if self.search_accounts:
+                next_search.set()
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    if kwargs['stop_checker']():
+                        self.stopped = True
+                        raise RuntimeError('crawler interrupted by stop checker')
+                    self.ticks += 1
+                    time.sleep(.01)
+                pytest.fail('in-flight crawler continued after fatal stream route error')
+            return super().run_search(**kwargs)
+
+    account = env.add('A')
+    crawler = BlockingCrawler()
+    with pytest.raises(pipeline_module.CollectionRouteError, match='PROXY_EXIT_CHANGED'):
+        _run_pipeline(env, monkeypatch, crawler, account, settings_auto_analyze=True,
+                      auto_analyze=True, analyze_limit=2, max_total_notes=2)
+    job = pipeline_module.job_store.get('job-rot')
+    assert crawler.stopped and crawler.ticks < 100
     assert job['control']['crawl_stop_requested']
-    assert job['control']['collection_route_error']=='PROXY_EXIT_CHANGED'
-    assert job['status']!='completed' and job['error']=='PROXY_EXIT_CHANGED'
-    assert env.store.get(account['id'])['risk_count']==0
+    assert job['control']['collection_route_error'] == 'PROXY_EXIT_CHANGED'
+    assert job['status'] != 'completed' and job['error'] == 'PROXY_EXIT_CHANGED'
+    assert env.store.get(account['id'])['risk_count'] == 0
 
 
 def test_stream_does_not_mark_revoked_challenged_route_unavailable(env, monkeypatch):

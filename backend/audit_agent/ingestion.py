@@ -1226,7 +1226,8 @@ class IngestionStore:
                 """
             )
 
-    def ingest_batch(self, batch_path: Path, raw_items_dir: Path) -> list[dict]:
+    def ingest_batch(self, batch_path: Path, raw_items_dir: Path, *,
+                     media_source_task_id: str | None = None) -> list[dict]:
         batch_path = batch_path.resolve()
         raw_items_dir.mkdir(parents=True, exist_ok=True)
         payload = json.loads(batch_path.read_text(encoding="utf-8"))
@@ -1267,12 +1268,22 @@ class IngestionStore:
                 content_key = content_identity(item, platform)
                 if not content_key:
                     continue
+                prepared_binding = None
+                if "triage_media_binding" in item:
+                    from .geographic_media import TriageMediaReadiness
+                    prepared_binding = TriageMediaReadiness.validate_item_binding(
+                        item, media_source_task_id or task_id, platform, content_key)
                 item_keyword = str(item.get("source_keyword") or keyword)
                 note_id = str(item.get("note_id") or item.get("aweme_id") or item.get("video_id") or "")
                 url = str(item.get("note_url") or item.get("aweme_url") or item.get("video_url") or "")
                 title = str(item.get("title") or item.get("desc") or "")
                 content_comments = comments_by_content.get(content_key, [])
                 raw_path = raw_items_dir / f"{safe_part(platform)}_{safe_part(content_key)}.json"
+                canonical_raw_path = raw_path
+                if prepared_binding is not None:
+                    from .scoped_selection import digest
+                    raw_path = raw_path.with_name(
+                        f"{raw_path.stem}.triage-{digest(prepared_binding)}.json")
                 provenance = item.get("collection_route_provenance")
                 if provenance is not None:
                     provenance = _validated_collection_source(provenance)
@@ -1293,7 +1304,7 @@ class IngestionStore:
                         (platform, content_key, note_id, url, title, raw_item_path, analyze_status, first_seen_at, last_seen_at)
                     VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)
                     """,
-                        (platform, content_key, note_id, url, title, str(raw_path), now, now),
+                        (platform, content_key, note_id, url, title, str(canonical_raw_path), now, now),
                 )
                 inserted = cursor.rowcount == 1
                 row = conn.execute(
@@ -1303,14 +1314,25 @@ class IngestionStore:
                 if not row:
                     continue
                 content_id = int(row["id"])
-                conn.execute(
-                    """
-                    UPDATE contents
-                    SET last_seen_at = ?, url = COALESCE(NULLIF(?, ''), url), title = COALESCE(NULLIF(?, ''), title)
-                    WHERE id = ?
-                    """,
-                    (now, url, title, content_id),
-                )
+                if prepared_binding is not None:
+                    previous_task = conn.execute(
+                        "SELECT analyze_status FROM task_contents WHERE task_id = ? AND content_id = ?",
+                        (task_id, content_id),
+                    ).fetchone()
+                    # Once claimed, the task's evidence and its audit association
+                    # cannot be replaced by a later capture of the same post.
+                    if previous_task and previous_task["analyze_status"] not in {"queued", "failed"}:
+                        processed += 1
+                        continue
+                if prepared_binding is None or inserted or row["collection_status"] != "complete":
+                    conn.execute(
+                        """
+                        UPDATE contents
+                        SET last_seen_at = ?, url = COALESCE(NULLIF(?, ''), url), title = COALESCE(NULLIF(?, ''), title)
+                        WHERE id = ?
+                        """,
+                        (now, url, title, content_id),
+                    )
                 conn.execute(
                     """
                     INSERT OR IGNORE INTO content_matches
@@ -1332,6 +1354,8 @@ class IngestionStore:
                 )
                 use_context = {"task_id": task_id, "keyword": item_keyword, "discovered_at": now,
                                "observation_id": provenance.get("observation_id") if provenance else None}
+                if prepared_binding is not None and media_source_task_id:
+                    use_context["media_source_task_id"] = media_source_task_id
                 conn.execute("UPDATE task_contents SET use_context_json = ? WHERE task_id = ? AND content_id = ?",
                              (json.dumps(use_context), task_id, content_id))
                 processed += 1
@@ -1348,22 +1372,44 @@ class IngestionStore:
                 shared_complete = row["collection_status"] == "complete" and self._valid_raw_payload(Path(shared_raw_path), platform, content_key)
                 task_raw_path = str(task_row["raw_item_path"] or (shared_raw_path if shared_complete else raw_path)) if task_row else str(raw_path)
 
-                # A complete shared payload is immutable for this phase.  New tasks
-                # reference it and still get their own task/content match row.
-                if not shared_complete or inserted:
+                # Prepared selections bind local media to this task's exact
+                # capture. Shared evidence remains immutable, but cannot replace
+                # the new task's item, comments, source or media identity.
+                if prepared_binding is not None:
+                    if raw_path.exists():
+                        saved = json.loads(raw_path.read_text(encoding="utf-8"))
+                        if any(saved.get(key) != raw_payload.get(key) for key in
+                               ("task_id", "platform", "item", "comments", "collection_route_provenance")):
+                            raise ValueError("prepared selection evidence changed for the same media binding")
+                        raw_payload = saved
+                    else:
+                        pending = raw_path.with_suffix(".tmp")
+                        pending.write_text(json.dumps(raw_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                        pending.replace(raw_path)
+                    task_raw_path = str(raw_path)
+                elif not shared_complete or inserted:
                     raw_path.write_text(json.dumps(raw_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                    task_raw_path = str(raw_path)
+                if not shared_complete or inserted:
+                    if prepared_binding is not None:
+                        # Shared content carries evidence, never a task-local media capability.
+                        shared_payload = {**raw_payload, "item": {
+                            key: value for key, value in raw_payload["item"].items()
+                            if key != "triage_media_binding"}}
+                        pending = canonical_raw_path.with_suffix(".tmp")
+                        pending.write_text(json.dumps(shared_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                        pending.replace(canonical_raw_path)
                     conn.execute(
                         "UPDATE contents SET raw_item_path = ?, collection_status = 'complete', "
                         "collected_at = COALESCE(collected_at, ?), comments_count = ?, get_sub_comment = ? WHERE id = ?",
-                        (str(raw_path), now, len(content_comments), int(bool(payload.get("get_sub_comment"))) if "get_sub_comment" in payload else None, content_id),
+                        (str(canonical_raw_path), now, len(content_comments), int(bool(payload.get("get_sub_comment"))) if "get_sub_comment" in payload else None, content_id),
                     )
-                    task_raw_path = str(raw_path)
-                elif shared_complete:
+                elif prepared_binding is None:
                     conn.execute(
                         "UPDATE task_contents SET raw_item_path = ? WHERE task_id = ? AND content_id = ?",
                         (shared_raw_path, task_id, content_id),
                     )
-                if shared_complete and not inserted:
+                if shared_complete and not inserted and prepared_binding is None:
                     task_raw_path = shared_raw_path
                     raw_payload = json.loads(Path(shared_raw_path).read_text(encoding="utf-8"))
                 if task_status in {"queued", "failed"}:
@@ -1371,7 +1417,7 @@ class IngestionStore:
                         "content_id": content_id,
                         "platform": platform,
                         "content_key": content_key,
-                        "item": self._source_item(raw_payload),
+                        "item": self._source_item(raw_payload, use_context.get("media_source_task_id") or task_id),
                         "comments": raw_payload.get("comments") or [],
                         "collection_route_provenance": raw_payload.get("collection_route_provenance"),
                         "use_context": use_context,
@@ -1395,7 +1441,8 @@ class IngestionStore:
                 c.id,
                 c.platform,
                 c.content_key,
-                COALESCE(NULLIF(tc.raw_item_path, ''), c.raw_item_path) AS raw_item_path
+                COALESCE(NULLIF(tc.raw_item_path, ''), c.raw_item_path) AS raw_item_path,
+                tc.use_context_json
             FROM task_contents tc
             JOIN contents c ON c.id = tc.content_id
             WHERE tc.task_id = ?
@@ -1422,7 +1469,8 @@ class IngestionStore:
                 "content_id": int(row["id"]),
                 "platform": str(row["platform"]),
                 "content_key": str(row["content_key"]),
-                "item": self._source_item(payload),
+                "item": self._source_item(payload,
+                    json.loads(row["use_context_json"] or "{}").get("media_source_task_id") or task_id),
                 "collection_route_provenance": payload.get("collection_route_provenance"),
                 "comments": payload.get("comments") or [],
                 "raw_item_path": str(raw_path),
@@ -1439,7 +1487,7 @@ class IngestionStore:
                 continue
             payload = json.loads(raw_path.read_text(encoding="utf-8"))
             self._verify_geographic_evidence(task_id, membership["content_id"], raw_path, payload)
-            refs.append(self._ref_from_payload(membership, payload, raw_path))
+            refs.append(self._ref_from_payload(membership, payload, raw_path, task_id))
         return refs
 
     def selection_membership_for_task(self, task_id: str, limit: int = 0, *, complete_only: bool = False) -> list[dict]:
@@ -1545,7 +1593,7 @@ class IngestionStore:
                     task_content_id, "raw payload identity does not match SQL selection"
                 )
             self._verify_geographic_evidence(task_id, membership["content_id"], raw_path, payload)
-            refs.append(self._ref_from_payload(membership, payload, raw_path))
+            refs.append(self._ref_from_payload(membership, payload, raw_path, task_id))
         return memberships, refs
 
     def _verify_geographic_evidence(self, task_id, content_id, path, payload):
@@ -1554,14 +1602,18 @@ class IngestionStore:
             verify_geographic_evidence(conn, task_id, content_id, path, payload)
 
     @staticmethod
-    def _source_item(payload: dict) -> dict:
+    def _source_item(payload: dict, media_source_task_id: str | None = None) -> dict:
         item = dict(payload.get("item") or {})
+        binding = item.get("triage_media_binding")
+        if media_source_task_id is not None and isinstance(binding, dict) and binding.get("job_id") != media_source_task_id:
+            # Historical shared payloads may predate separation of task-local media.
+            item.pop("triage_media_binding", None)
         # The raw top-level source is authoritative, including historical unknown.
         item["collection_route_provenance"] = payload.get("collection_route_provenance")
         return item
 
     @staticmethod
-    def _ref_from_payload(membership: dict, payload: dict, raw_path: Path) -> dict:
+    def _ref_from_payload(membership: dict, payload: dict, raw_path: Path, task_id: str | None = None) -> dict:
         item = payload.get("item")
         comments = payload.get("comments")
         return {
@@ -1569,7 +1621,8 @@ class IngestionStore:
             "content_id": int(membership["content_id"]),
             "platform": str(membership["platform"]),
             "content_key": str(membership["content_key"]),
-            "item": IngestionStore._source_item(payload),
+            "item": IngestionStore._source_item(payload,
+                (membership.get("use_context") or {}).get("media_source_task_id") or task_id),
             "collection_route_provenance": payload.get("collection_route_provenance"),
             "use_context": membership.get("use_context") or {},
             "comments": comments if isinstance(comments, list) else [],
