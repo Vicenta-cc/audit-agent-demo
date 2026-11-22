@@ -105,3 +105,60 @@ def test_audit_upsert_executes_inside_atomic_claim_guard(stale_pipeline):
     assert stale_pipeline._persist_audit_result(platform='dy', content_key='same',
         result={}, result_path=Path('unused')) == {'saved': True}
     assert active == []
+
+
+@pytest.mark.parametrize('replace_at', ['acquire', 'sleep', 'timeout'])
+def test_capacity_wait_cannot_overwrite_replacement_claim(
+        confirmed, creation_stack, monkeypatch, replace_at):
+    from backend.audit_agent import route_capacity_wait
+    from backend.audit_agent.crawler_route import RouteCapacityBusy
+    from backend.investigation_creation.geographic_runtime import hold_geographic_claim
+
+    adapter, config = confirmed
+    binding = config['_verified_geographic_binding']
+    store = creation_stack['creation_store']
+    run = store.claim_next('old-worker', task_id=binding['run_id'])
+    pipeline = module.AuditPipeline.__new__(module.AuditPipeline)
+    pipeline.job_id = binding['job_id']
+    pipeline._direct_egress_pin = object()
+    pipeline._geographic_lease_guard = lambda: hold_geographic_claim(store, run.id, run.claim_token)
+
+    def fence():
+        if not store.owns_claim(run.id, run.claim_token):
+            raise LeaseLostError('claim replaced')
+
+    pipeline._geographic_lease_fence = fence
+    monkeypatch.setattr(module, 'job_store', adapter.job_store)
+    monkeypatch.setattr(module, 'get_current_route_context', lambda: None)
+    writes = []
+    update, log = adapter.job_store.update_control, adapter.job_store.log
+    monkeypatch.setattr(adapter.job_store, 'update_control',
+        lambda *a, **kw: (writes.append('update'), update(*a, **kw))[-1])
+    monkeypatch.setattr(adapter.job_store, 'log',
+        lambda *a, **kw: (writes.append('log'), log(*a, **kw))[-1])
+
+    def replace():
+        with store._connect() as db:
+            db.execute('UPDATE investigation_runs SET claim_token=? WHERE id=?', ('replacement', run.id))
+        update(pipeline.job_id, route_capacity_waiting=True, route_capacity_wait_reason='replacement-owner')
+        writes.clear()
+
+    def busy(*a, **kw):
+        if replace_at == 'acquire':
+            replace()
+        raise RouteCapacityBusy('exit_capacity')
+
+    monkeypatch.setattr(module, 'acquire_route_execution', busy)
+    monkeypatch.setattr(route_capacity_wait.time, 'sleep', lambda _: replace())
+    if replace_at == 'timeout':
+        def timeout(*a, **kw):
+            replace()
+            error = RouteCapacityBusy('exit_capacity')
+            error.wait_timed_out = True
+            raise error
+        monkeypatch.setattr(route_capacity_wait, 'acquire_with_capacity_wait', timeout)
+    with pytest.raises(LeaseLostError):
+        with pipeline._route_operation('capacity-account'):
+            pytest.fail('stale owner must not enter collection')
+    assert writes == []
+    assert adapter.job_store.control(pipeline.job_id)['route_capacity_wait_reason'] == 'replacement-owner'

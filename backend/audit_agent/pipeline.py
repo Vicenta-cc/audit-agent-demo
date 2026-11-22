@@ -1903,8 +1903,48 @@ class AuditPipeline:
             return
         job = job_store.get(self.job_id) or {}
         owner = str(job.get("owner_user_id") or "local-user")
-        bundle = acquire_route_execution(account_id, self.job_id, owner, account_store=crawler_account_store,
-                                         investigation_collection=True, **({"direct_egress_pin": pin} if pin is not None else {}))
+        def acquire():
+            return acquire_route_execution(account_id, self.job_id, owner, account_store=crawler_account_store,
+                investigation_collection=True, **({"direct_egress_pin": pin} if pin is not None else {}))
+
+        if current is not None:
+            # A nested owner may itself hold the last exit slot. Never wait for
+            # capacity that only this caller can release, or close its route.
+            bundle = acquire()
+        else:
+            from .route_capacity_wait import acquire_with_capacity_wait
+
+            def check():
+                self._assert_geographic_lease()
+                execution = getattr(self, '_admission_execution', None)
+                if execution:
+                    from backend.task_admission.execution import assert_execution
+                    assert_execution(self.job_id, execution)
+                control = job_store.control(self.job_id)
+                if control.get('crawl_stop_requested') or control.get('stop_all_requested'):
+                    raise CollectionRouteError('SUPPLEMENT_DEFERRED')
+
+            def waiting(reason):
+                with self._geographic_commit_guard():
+                    job_store.update_control(self.job_id, route_capacity_waiting=bool(reason),
+                                             route_capacity_wait_reason=reason,
+                                             **({'route_capacity_wait_timed_out': False} if reason else {}))
+                    if reason:
+                        job_store.log(self.job_id, '采集资源暂被占用，正在等待可用容量',
+                                      stage='crawl', reason=reason)
+
+            try:
+                bundle = acquire_with_capacity_wait(acquire, check=check, on_wait=waiting,
+                    max_wait=settings.crawler_route_capacity_wait_seconds)
+            except CollectionRouteError as exc:
+                if getattr(exc, 'wait_timed_out', False):
+                    with self._geographic_commit_guard():
+                        job_store.update_control(self.job_id, route_capacity_wait_timed_out=True,
+                                                 route_capacity_wait_reason=exc.reason)
+                        job_store.log(self.job_id, '等待采集容量已达上限，已保留现有进度',
+                                      stage='crawl', reason=exc.reason, error_code=exc.code,
+                                      retryable=True, action='retry_after_recovery')
+                raise
         previous = getattr(self, "_collection_route_context", None)
         self._collection_route_context = bundle
         try:

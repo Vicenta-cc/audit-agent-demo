@@ -194,6 +194,7 @@ class ExecutionLeaseBundle:
         self._borrowers = 0
         self._closing = False
         self._closers = []
+        self.capacity_wait_reason = ''
 
     @property
     def pass_fds(self):
@@ -203,6 +204,7 @@ class ExecutionLeaseBundle:
     def acquire(self, *, account_handle=None, max_active_accounts=1):
         import os
         with self._lock:
+            self.capacity_wait_reason = ''
             if self._handles or self._closing:
                 raise ResourceBusy('PROXY_BUSY')
             if account_handle is None:
@@ -225,6 +227,8 @@ class ExecutionLeaseBundle:
                         self._handles.append(active)
                         return True
             self._close_handles()
+            if shared is not None:
+                self.capacity_wait_reason = 'route_capacity'
             return False
 
     def acquire_exit_capacity(self, observed_exit):

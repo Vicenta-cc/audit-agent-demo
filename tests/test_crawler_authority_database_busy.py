@@ -115,6 +115,44 @@ def test_safety_database_writer_releases_same_request_without_double_charge(mana
     assert_accounting(route, granted=True)
 
 
+def test_owner_reservation_accounts_after_slow_admission_check(managed, monkeypatch):
+    """The production owner must supply a live clock, not a pre-check timestamp."""
+    from tools import persistent_request_gate as gate
+
+    route, client, _ = managed
+    reserve = gate._try_reserve_scopes
+    validate = gate.validate_safety_connection
+    checking = False
+    finished = []
+
+    def observed_reserve(*args, **kwargs):
+        nonlocal checking
+        checking = True
+        try:
+            return reserve(*args, **kwargs)
+        finally:
+            checking = False
+
+    def slow_check(connection, fence, now):
+        validate(connection, fence, now)
+        if checking and not finished:
+            time.sleep(.06)
+            finished.append(time.time())
+
+    monkeypatch.setattr(gate, '_try_reserve_scopes', observed_reserve)
+    monkeypatch.setattr(gate, 'validate_safety_connection', slow_check)
+    grant = client.call('reserve', MEDIA, request_id=REQUEST_ID)
+    assert grant['delay'] == 0
+    assert len(finished) == 1
+    with closing(sqlite3.connect(route.scheduler_db_path)) as db:
+        charged = [json.loads(row[0]) for row in db.execute(
+            'SELECT request_times_json FROM request_scheduler_state') if json.loads(row[0])]
+    assert len(charged) == 4
+    assert all(len(times) == 1 and times[0] >= finished[0] for times in charged)
+    assert client.call('reserve', MEDIA, request_id=REQUEST_ID) == grant
+    assert_accounting(route, granted=True)
+
+
 def test_busy_commit_rolls_back_written_debits_before_replay(managed, retry_seen, monkeypatch, caplog):
     """A DELETE-mode reader allows writes to start but blocks COMMIT."""
     from tools import persistent_request_gate

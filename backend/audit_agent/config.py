@@ -376,6 +376,7 @@ class Settings:
     task_execution_capacity = max(1, int(os.getenv("TASK_EXECUTION_CAPACITY", "3")))
     task_analysis_capacity = max(1, int(os.getenv("TASK_ANALYSIS_CAPACITY", "3")))
     task_worker_processes = max(1, int(os.getenv("TASK_WORKER_PROCESSES", "3")))
+    crawler_route_capacity_wait_seconds = float(os.getenv("CRAWLER_ROUTE_CAPACITY_WAIT_SECONDS", "3600"))
     request_scheduler_db = Path(os.getenv("REQUEST_SCHEDULER_DB", str(data_dir / "request_scheduler.sqlite3"))).expanduser().resolve()
     crawler_content_pacing_enabled = os.getenv("CRAWLER_CONTENT_PACING_ENABLED", "true").lower() != "false"
     request_min_interval = float(os.getenv("REQUEST_MIN_INTERVAL", "2"))

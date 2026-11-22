@@ -16,6 +16,7 @@ from test_triage_account_rotation import RotationCrawler, _run_pipeline, env  # 
 @pytest.mark.parametrize('analysis_control', ['', 'analysis_paused', 'analysis_stop_requested'])
 def test_next_collection_finishes_while_first_model_is_running(env, monkeypatch, same_keyword, analysis_control):
     accounts = [env.add(name) for name in ('A', 'B')]
+    accounts.sort(key=env.store.fair_key)
     for name, value in {
         'crawler_proxy_enabled': True,
         'task_resource_lock_dir': env.tmp / 'locks',
@@ -135,7 +136,7 @@ def test_route_operation_does_not_bypass_another_owners_account_lock(env, monkey
     account = env.add('busy-account')
     monkeypatch.setattr(pipeline_module.settings, 'crawler_proxy_enabled', True)
     monkeypatch.setattr(pipeline_module.settings, 'task_resource_lock_dir', env.tmp / 'locks')
-    monkeypatch.setattr(pipeline_module, 'job_store', SimpleNamespace(get=lambda _: {}))
+    monkeypatch.setattr(pipeline_module, 'job_store', SimpleNamespace(get=lambda _: {}, control=lambda _: {}))
     other = ExecutionLeaseBundle('unrelated-job', 'other-owner', account['id'])
     assert other.acquire()
     attempts = []

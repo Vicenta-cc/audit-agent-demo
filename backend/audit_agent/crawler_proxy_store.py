@@ -122,7 +122,7 @@ class CrawlerProxyStore:
         self.cipher = cipher
         self.mutation_guard = mutation_guard
         self.health_notifier = health_notifier
-        self.max_active_limit = _limit(settings.request_concurrency if max_active_limit is None else max_active_limit)
+        self.max_active_limit = _limit(settings.crawler_shared_exit_active_limit if max_active_limit is None else max_active_limit)
         self._init_db()
 
     def _init_db(self):

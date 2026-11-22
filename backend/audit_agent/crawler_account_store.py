@@ -89,6 +89,9 @@ class CrawlerAccountStore:
             self._ensure_columns(conn)
 
     def _ensure_columns(self, conn: sqlite3.Connection) -> None:
+        # Serialize schema inspection with its ALTERs across worker processes.
+        # executescript below commits this short migration transaction.
+        conn.execute('BEGIN IMMEDIATE')
         columns = {
             row["name"]
             for row in conn.execute("PRAGMA table_info(crawler_accounts)").fetchall()
@@ -162,6 +165,7 @@ class CrawlerAccountStore:
         from .crawler_browser_migration import ensure_migration_schema
         ensure_migration_schema(conn)
 
+        conn.execute('BEGIN IMMEDIATE')
         manual_columns={row[1] for row in conn.execute('PRAGMA table_info(crawler_manual_recovery_operations)')}
         for name in ('initial_login','risk_recorded'):
             if name not in manual_columns:

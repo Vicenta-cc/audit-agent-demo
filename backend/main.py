@@ -1743,7 +1743,7 @@ def list_crawler_proxies(principal: Principal = Depends(principal_provider)):
     if _authz_enabled() and not principal.is_admin:
         items = [_crawler_proxy_readonly_view(item) for item in items]
     return {"items": items, "enabled": settings.crawler_proxy_enabled,
-            "max_active_accounts_cap": settings.request_concurrency,
+            "max_active_accounts_cap": _crawler_proxy_store().max_active_limit,
             "can_manage": not _authz_enabled() or principal.is_admin}
 
 

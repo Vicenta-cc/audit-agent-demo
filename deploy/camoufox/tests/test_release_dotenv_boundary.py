@@ -77,7 +77,7 @@ else:
         sys.modules['uvicorn'] = uvicorn
     else:
         worker = types.ModuleType('backend.investigation_creation.worker')
-        worker.build_worker = lambda: types.SimpleNamespace(run_forever=inspect_settings)
+        worker.main = inspect_settings
         sys.modules['backend.investigation_creation.worker'] = worker
     with patch.object(control, 'check_artifacts'):
         runpy.run_path(sys.argv[1] + '/runtime-support/' + entry + '.py', run_name='__main__')

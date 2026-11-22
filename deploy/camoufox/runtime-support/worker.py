@@ -4,6 +4,6 @@ from serve import configure
 
 if __name__ == "__main__":
     configure()
-    from backend.investigation_creation.worker import build_worker
+    from backend.investigation_creation.worker import main
 
-    build_worker().run_forever(poll_seconds=1)
+    main()

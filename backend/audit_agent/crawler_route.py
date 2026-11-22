@@ -63,6 +63,15 @@ class CollectionRouteError(RuntimeError):
         super().__init__(self.code)
 
 
+class RouteCapacityBusy(CollectionRouteError):
+    """Retryable admission contention, after all provisional locks are released."""
+    def __init__(self, reason):
+        if reason not in {'route_capacity', 'exit_capacity'}:
+            raise ValueError('invalid route capacity reason')
+        self.reason = reason
+        super().__init__('PROXY_BUSY')
+
+
 ROUTE_MODES = frozenset({'proxy_required', 'proxy_preferred', 'direct_degraded', 'legacy_direct'})
 DIRECT_ROUTE_MODES = frozenset({'direct_degraded', 'legacy_direct'})
 OPERATION_STATES = frozenset({'issued', 'acked', 'draining', 'ended', 'expired', 'drain_timeout'})
@@ -324,6 +333,8 @@ def get_proxy_store(account_store=None):
 
 
 def _safe_error(exc):
+    if isinstance(exc, RouteCapacityBusy):
+        return exc
     code = getattr(exc, 'code', str(exc))
     if code in {'PROXY_NOT_FOUND', 'PROXY_BINDING_REQUIRED', 'PROXY_LOGIN_VALIDATION_REQUIRED', 'ACCOUNT_CHALLENGE'}:
         code = 'PROXY_UNAVAILABLE'
@@ -512,7 +523,10 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
     else:
         from .crawler_account_store import crawler_account_store
         bundle.account_store = crawler_account_store
-    if not bundle.acquire(account_handle=account_handle, max_active_accounts=min(resource['max_active_accounts'], max(1, int(settings.request_concurrency))) if resource else max(1, int(settings.request_concurrency))):
+    route_capacity = resource['max_active_accounts'] if resource else settings.crawler_shared_exit_active_limit
+    if not bundle.acquire(account_handle=account_handle, max_active_accounts=route_capacity):
+        if bundle.capacity_wait_reason == 'route_capacity':
+            raise RouteCapacityBusy('route_capacity')
         raise CollectionRouteError('PROXY_BUSY')
     try:
         fresh = resolve_account_route(account_id, account_store=account_store,
@@ -558,8 +572,9 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
                 snapshot.observed_exit_ip, observed_at=snapshot.observed_exit_at,
                 service_exit=snapshot.route_mode in DIRECT_ROUTE_MODES)['shared_exit_generation']
             if not bundle.acquire_exit_capacity(snapshot.observed_exit_ip):
-                bundle.close()
-                raise CollectionRouteError('PROXY_BUSY')
+                # The enclosing handler releases every provisional lock before
+                # exposing capacity contention; a cleanup failure must escape.
+                raise RouteCapacityBusy('exit_capacity')
             if human_login_operation_id and not recovery_claim:
                 recovery_claim=bundle.account_store.begin_manual_recovery(account_id,human_login_operation_id,owner_id=owner_id,allow_active=True,observed_exit=snapshot.observed_exit_ip,generation=generation)
                 if not recovery_claim:raise CollectionRouteError('PROXY_BUSY')

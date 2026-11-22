@@ -65,11 +65,38 @@ def create_run(creation, auth, owner, key, account):
 
 
 def account_pool():
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+
+    # Healthy, private fixture accounts implement the scheduler's current
+    # listing, recovery-candidate and fairness interface. No recovery work is
+    # eligible; real authorization checks and account leases still run.
+    accounts = [
+        {"id": "account-a", "platform": "dy", "route_state": "active"},
+        {"id": "account-b", "platform": "dy", "route_state": "active"},
+    ]
+
+    def listed(platform):
+        return [dict(account) for account in accounts if account["platform"] == platform]
+
+    def record_selection(selected_id, eligible_ids):
+        assert selected_id in eligible_ids
+        assert set(eligible_ids) <= {account["id"] for account in accounts}
+        for account in accounts:
+            if account["id"] in eligible_ids:
+                account["skip_count"] = (
+                    0 if account["id"] == selected_id else
+                    min(account.get("skip_count", 0) + 1, settings.crawler_fair_skip_limit)
+                )
+
     return SimpleNamespace(
-        available_accounts=lambda platform: [
-            {"id": "account-a", "platform": "dy"},
-            {"id": "account-b", "platform": "dy"},
-        ]
+        list=listed,
+        available_accounts=listed,
+        # Cached synthetic exit: the scheduler dry check never probes it.
+        get_direct_route=lambda account_id: {"observed_exit_ip": "203.0.113.9"},
+        stale_route_candidates=lambda platform: [],
+        degraded_candidates=lambda platform: [],
+        fair_key=CrawlerAccountStore.fair_key,
+        record_fair_selection=record_selection,
     )
 
 
@@ -84,8 +111,20 @@ def wait_file(path, futures=()):
 
 
 def test_two_users_have_overlapping_crawler_processes_and_cancel_is_scoped(
-    stack, tmp_path
+    stack, tmp_path, monkeypatch
 ):
+    from backend.audit_agent import crawler_route, crawler_child_runtime
+
+    # These children model task overlap/cancellation, not a platform browser.
+    # Keep the real adapter, spool, launch barrier and inherited account leases;
+    # isolate only route/network authority, covered by the exact-entry suite.
+    monkeypatch.setattr(settings, "crawler_camoufox_state_root", tmp_path / "child-state")
+    monkeypatch.setattr(crawler_route, "acquire_route_execution", lambda *a, **k: SimpleNamespace(
+        snapshot=None, execution_id=a[1], pass_fds=(), close=lambda: None,
+    ))
+    monkeypatch.setattr(crawler_child_runtime, "authority_for", lambda *a, **k: SimpleNamespace(
+        env={}, pass_fds=(), bind_child=lambda pid: None, close=lambda: None,
+    ))
     creation, auth, (a, b) = stack
     run_a = create_run(creation, auth, a, "A", "account-a")
     run_b = create_run(creation, auth, b, "B", "account-b")
@@ -109,7 +148,8 @@ def test_two_users_have_overlapping_crawler_processes_and_cancel_is_scoped(
             assert account in {"account-a", "account-b"}
             adapter = MediaCrawlerAdapter(tmp_path)
             adapter._run_command(
-                [sys.executable, str(script), str(tmp_path), account],
+                [sys.executable, str(script), str(tmp_path), account,
+                 "--save_data_path", str(tmp_path / job_id)],
                 tmp_path / job_id,
                 "dy",
                 1,
@@ -211,6 +251,9 @@ def test_scheduler_prefers_public_then_private_then_waits(tmp_path, monkeypatch)
     )
     accounts.save_auth_state(public_account["id"], "public-state")
     accounts.save_auth_state(private_account["id"], "private-state")
+    from crawler_auth_fixtures import mark_camoufox_login_verified
+    mark_camoufox_login_verified(accounts, public_account["id"])
+    mark_camoufox_login_verified(accounts, private_account["id"])
     auth.register_crawler_account(private_account["id"], owner)
     creation = InvestigationCreationStore(
         tmp_path / "pool-creation.sqlite3",
@@ -355,7 +398,7 @@ def test_login_and_maintenance_cannot_enter_an_account_used_by_collection(
     from backend import main
     from backend.audit_agent.auth_state_cipher import AuthStateCipher
     from backend.audit_agent.crawler_account_store import CrawlerAccountStore
-    from backend.audit_agent.crawler_login_manager import CrawlerAccountLoginManager
+    from backend.audit_agent.crawler_login_v2_manager import CrawlerLoginV2Manager, LoginV2Error
     from backend.investigation_creation.principal import Principal
     from fastapi import HTTPException
 
@@ -363,7 +406,7 @@ def test_login_and_maintenance_cannot_enter_an_account_used_by_collection(
     account = store.create(platform="dy", display_name="test")
     helper = tmp_path / "login.py"
     helper.write_text("raise AssertionError('must not open login while collecting')")
-    manager = CrawlerAccountLoginManager(
+    manager = CrawlerLoginV2Manager(
         store=store,
         cipher=AuthStateCipher(key_file=tmp_path / "key"),
         python_path=Path(sys.executable),
@@ -376,8 +419,10 @@ def test_login_and_maintenance_cannot_enter_an_account_used_by_collection(
     monkeypatch.setattr(main, "crawler_account_store", store)
     monkeypatch.setattr(settings, "crawler_login_interactive", False)
     try:
-        with pytest.raises(ValueError, match="正在采集或登录"):
-            manager.start(account)
+        with pytest.raises(LoginV2Error) as busy:
+            manager.start(account, user_id=stack[2][0], app_session_id="fixture-session",
+                          owner_token="x" * 32, request_key="busy-login")
+        assert busy.value.code == "ACCOUNT_BUSY"
         with pytest.raises(HTTPException) as blocked:
             main.delete_crawler_account(account["id"], Principal("admin", role="admin"))
         assert blocked.value.status_code == 409

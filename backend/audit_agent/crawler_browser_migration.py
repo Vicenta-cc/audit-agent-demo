@@ -38,6 +38,8 @@ class MigrationError(ValueError):
 
 
 def ensure_migration_schema(conn):
+    if not conn.in_transaction:
+        conn.execute('BEGIN IMMEDIATE')
     columns = {r[1] for r in conn.execute("PRAGMA table_info(crawler_accounts)")}
     for name, definition in (
         ("profile_engine", "TEXT NOT NULL DEFAULT 'legacy'"),

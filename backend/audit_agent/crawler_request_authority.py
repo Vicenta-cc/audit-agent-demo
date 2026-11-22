@@ -457,7 +457,7 @@ class RequestAuthority:
             return _try_reserve_scopes(
                 self.snapshot.scheduler_db_path, session._gate.scope_ids,
                 payload["operation"], lease, time.time(),
-                safety_fence=session._safety_fence(), authority=request,
+                safety_fence=session._safety_fence(), authority=request, clock=time.time,
             )
         except sqlite3.Error as exc:
             self._retry_database_error(exc, operation="reserve", stage=stage,

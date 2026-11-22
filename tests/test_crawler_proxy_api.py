@@ -227,4 +227,17 @@ def test_platform_normalization_requires_binding_and_summary_excludes_pending(ap
     accounts.save_auth_state(legacy['id'], 'fixture-encrypted')
     assert main._shared_crawler_pool_summary()['ready'] == 0
     cap = client.get('/api/crawler-proxies').json()['max_active_accounts_cap']
-    assert cap == settings.request_concurrency
+    assert cap == proxies.max_active_limit
+
+
+@pytest.mark.parametrize('explicit_limit', [None, 1])
+def test_proxy_capacity_projection_matches_store_not_http_concurrency(api, monkeypatch, explicit_limit):
+    client, _, accounts, original, _, _ = api
+    monkeypatch.setattr(settings, 'request_concurrency', 1)
+    monkeypatch.setattr(settings, 'crawler_shared_exit_active_limit', 2)
+    proxies = CrawlerProxyStore(accounts, cipher=original.cipher, max_active_limit=explicit_limit)
+    monkeypatch.setattr(main, '_crawler_proxy_store', lambda: proxies)
+    cap = 2 if explicit_limit is None else explicit_limit
+    assert client.get('/api/crawler-proxies').json()['max_active_accounts_cap'] == cap
+    resource = create_proxy(client, max_bound_accounts=2, max_active_accounts=cap)
+    assert resource['max_active_accounts'] == cap

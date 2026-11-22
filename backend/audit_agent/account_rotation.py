@@ -154,8 +154,13 @@ class AccountRotationManager:
                 key=account.get('shared_exit_key')
                 limit=1
                 proxy_id=account.get('proxy_id')
-                if account.get('route_mode')=='direct_degraded':
+                if platform == 'dy' and (account.get('route_mode') == 'direct_degraded'
+                        or not proxy_id and not account.get('proxy_required')):
                     proxy_id='service-direct'
+                    limit=settings.crawler_shared_exit_active_limit
+                    direct=self.store.get_direct_route(account['id'])
+                    if direct:
+                        key=direct['observed_exit_ip']
                 elif proxy_id:
                     with self.store._connect() as db:
                         resource=db.execute('SELECT shared_exit_key,max_active_accounts FROM proxy_resources WHERE id=?',(proxy_id,)).fetchone()
@@ -163,7 +168,7 @@ class AccountRotationManager:
                     key,limit=resource['shared_exit_key'],resource['max_active_accounts']
                 bundle=ExecutionLeaseBundle('capacity-check',owner_id,account['id'],SimpleNamespace(proxy_id=proxy_id) if proxy_id else None)
                 try:
-                    if not bundle.acquire(max_active_accounts=min(limit,max(1,settings.request_concurrency))): continue
+                    if not bundle.acquire(max_active_accounts=limit): continue
                     if key and not bundle.acquire_exit_capacity(key): continue
                     return True
                 finally:
