@@ -20,6 +20,19 @@ REQUEST_ID = 'b' * 32
 MEDIA = {'operation': 'media', 'lease_seconds': 60}
 
 
+def recovering_call(client, operation, payload=None, **kwargs):
+    """Run the public recovering call while the test owns a writer connection."""
+    from concurrent.futures import Future
+    result = Future()
+    def run():
+        try:
+            result.set_result(client.call(operation, payload, **kwargs))
+        except BaseException as exc:
+            result.set_exception(exc)
+    threading.Thread(target=run, daemon=True).start()
+    return result
+
+
 @pytest.fixture
 def managed(direct, tmp_path, monkeypatch):
     store, account = direct
@@ -92,7 +105,7 @@ def test_safety_database_writer_releases_same_request_without_double_charge(mana
     route, client, _ = managed
     with closing(sqlite3.connect(route.safety_db_path)) as writer:
         writer.execute('BEGIN IMMEDIATE')
-        pending = client.submit('reserve', MEDIA, request_id=REQUEST_ID)
+        pending = recovering_call(client, 'reserve', MEDIA, request_id=REQUEST_ID)
         assert retry_seen.wait(3)
         writer.rollback()
 
@@ -118,7 +131,7 @@ def test_busy_commit_rolls_back_written_debits_before_replay(managed, retry_seen
 
     monkeypatch.setattr(persistent_request_gate, '_try_reserve_scopes', wait_for_reader)
     with closing(sqlite3.connect(route.scheduler_db_path)) as reader:
-        pending = client.submit('reserve', MEDIA, request_id=REQUEST_ID)
+        pending = recovering_call(client, 'reserve', MEDIA, request_id=REQUEST_ID)
         try:
             assert entered.wait(2)
             reader.execute('BEGIN')
@@ -141,7 +154,7 @@ def test_persistent_lock_returns_explicit_error_without_charging(managed, retry_
     with closing(sqlite3.connect(route.safety_db_path)) as writer:
         writer.execute('BEGIN IMMEDIATE')
         with pytest.raises(CollectionRouteError, match='SCHEDULER_DATABASE_BUSY'):
-            client.call('reserve', MEDIA, request_id=REQUEST_ID)
+            client.submit('reserve', MEDIA, request_id=REQUEST_ID).result(2)
         assert retry_seen.is_set()
     assert_accounting(route, granted=False)
 
@@ -155,7 +168,7 @@ def test_pause_committed_while_waiting_prevents_grant(managed, retry_seen):
         changed = writer.execute('UPDATE crawler_shared_exits SET paused_until=? WHERE exit_key=?',
                                  (time.time() + 300, route.observed_exit_ip))
         assert changed.rowcount == 1
-        pending = client.submit('reserve', MEDIA, request_id=REQUEST_ID)
+        pending = recovering_call(client, 'reserve', MEDIA, request_id=REQUEST_ID)
         assert retry_seen.wait(3)
         writer.commit()
     with pytest.raises(CollectionRouteError, match='PROXY_UNAVAILABLE|ACCOUNT_CHALLENGE'):
@@ -182,7 +195,7 @@ def test_cancel_during_backoff_stops_owner_without_issuing_grant(managed, retry_
     route, client, owner = managed
     with closing(sqlite3.connect(route.safety_db_path)) as writer:
         writer.execute('BEGIN IMMEDIATE')
-        pending = client.submit('reserve', MEDIA, request_id=REQUEST_ID)
+        pending = recovering_call(client, 'reserve', MEDIA, request_id=REQUEST_ID)
         assert retry_seen.wait(3)
         owner.close()
         writer.rollback()

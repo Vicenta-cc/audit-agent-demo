@@ -172,7 +172,13 @@ c.dy_client=DouYinClient.__new__(DouYinClient)
 c.dy_client._bound_proxy_session=session
 posts=[{'aweme_info':{'aweme_id':i,'desc':'fixture','images':[{'url_list':['https://fixture.invalid/image']} ]}} for i in ('123','456')]
 c.dy_client.search_info_by_keyword=AsyncMock(return_value={'data':posts})
-c.dy_client.get_aweme_media=AsyncMock(side_effect=[b'fixture-bytes',MediaDownloadError('403',403)])
+async def fixture_media(url, output_path, *, raise_on_error=False):
+ output_path=Path(output_path)
+ if output_path.parent.name=='456':raise MediaDownloadError('403',403)
+ output_path.parent.mkdir(parents=True,exist_ok=True)
+ output_path.write_bytes(b'fixture-bytes')
+ return output_path
+c.dy_client.get_aweme_media=AsyncMock(side_effect=fixture_media)
 try:asyncio.run(c.search())
 except CollectionIncompleteError:
  if args.fixture_result=='caught':print('COLLECTION_INCOMPLETE: fixture caught',file=sys.stderr)

@@ -213,16 +213,23 @@ class RouteOperationStore:
                 raise ValueError('ROUTE_LEASE_REJECTED')
             conn.execute('UPDATE route_operations SET child_pgid=? WHERE operation_id=?',(child_pgid,operation_id))
 
-    def ticket(self, operation_id, *, owner_id, snapshot_digest, context_id):
+    def ticket(self, operation_id, *, owner_id, snapshot_digest, context_id, authority_retry=False):
         import sqlite3
-        with sqlite3.connect(self.db_path) as conn:
-            row = self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?',(operation_id,)).fetchone())
+        from contextlib import closing
+        try:
+            with closing(sqlite3.connect(self.db_path, timeout=.2 if authority_retry else 5)) as conn:
+                row = self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?',(operation_id,)).fetchone())
+        except sqlite3.Error as exc:
+            if authority_retry:
+                exc.reservation_step = 'ticket_read'
+                exc.reservation_rolled_back = True
+            raise
         if (not row or row['owner_id'] != owner_id or row['state'] != 'acked' or row['expires_at'] <= time.time()
                 or row['request']['snapshot_digest'] != snapshot_digest or row['request']['context_id'] != context_id):
             raise ValueError('ROUTE_LEASE_REJECTED')
         return row['ack']
 
-    def renew(self, operation_id, *, route_operation_id, owner_id, lease_version):
+    def renew(self, operation_id, *, route_operation_id, owner_id, lease_version, authority_retry=False):
         """Idempotent bounded ticket renewal; frozen route identity never changes."""
         import sqlite3
         import re
@@ -231,8 +238,12 @@ class RouteOperationStore:
             raise ValueError('ROUTE_LEASE_REJECTED')
         request = json.dumps(dict(route_operation_id=route_operation_id, owner_id=owner_id,
             lease_version=lease_version), sort_keys=True)
-        with self._lock, sqlite3.connect(self.db_path) as conn:
-            conn.execute('BEGIN IMMEDIATE')
+        if authority_retry:
+            from tools.persistent_request_gate import reservation_transaction
+        with self._lock, (reservation_transaction(sqlite3.connect(self.db_path, timeout=.2), None)
+                         if authority_retry else sqlite3.connect(self.db_path)) as conn:
+            if not authority_retry:
+                conn.execute('BEGIN IMMEDIATE')
             if conn.execute('SELECT 1 FROM route_operations WHERE operation_id=?',(operation_id,)).fetchone():
                 raise ValueError('ROUTE_OPERATION_CONFLICT')
             prior = conn.execute('SELECT request_json,response_json FROM route_lease_commands WHERE operation_id=?', (operation_id,)).fetchone()
@@ -622,7 +633,7 @@ def _require_same_route(snapshot, accounts, *, allow_probe=False):
         raise CollectionRouteError('PROXY_REVISION_MISMATCH')
 
 
-def require_route_renewal(bundle):
+def require_route_renewal(bundle, *, authority_retry=False):
     """Recheck the owner, live admission and frozen route before extending a ticket."""
     from .crawler_child_runtime import require_browser_available
     require_browser_available(bundle.account_id, store=getattr(bundle, 'account_store', None),
@@ -632,7 +643,7 @@ def require_route_renewal(bundle):
         raise CollectionRouteError('PROXY_UNAVAILABLE')
     accounts = bundle.account_store
     authorize_route_owner(snapshot.account_id, None if snapshot.route_mode in DIRECT_ROUTE_MODES else snapshot.proxy_id,
-        bundle.owner_id, account_store=accounts)
+        bundle.owner_id, account_store=accounts, authority_retry=authority_retry)
     interactive_login = getattr(bundle, 'interactive_login', False)
     if interactive_login and accounts.direct_exit_paused():
         raise CollectionRouteError('PROXY_UNAVAILABLE')
@@ -640,7 +651,7 @@ def require_route_renewal(bundle):
     accounts.admit_route(snapshot.account_id, snapshot.observed_exit_ip, snapshot.exit_generation,
         snapshot.operation_id, recovery_claim=bundle.manual_recovery_claim if interactive_login else snapshot.recovery_claim,
         login_bootstrap=snapshot.login_bootstrap, require_existing=True, require_healthy_exit=interactive_login,
-        **_pinned_admission(snapshot))
+        **_pinned_admission(snapshot), authority_retry=authority_retry)
 
 
 def parent_renew_ticket(bundle, prior):
@@ -760,14 +771,16 @@ def load_child_route(account_id):
         raise _safe_error(exc) from None
 
 
-def authorize_route_owner(account_id, proxy_id, owner_id, *, account_store=None, auth_store=None):
+def authorize_route_owner(account_id, proxy_id, owner_id, *, account_store=None, auth_store=None, authority_retry=False):
     if settings.app_auth_mode != 'required':
         return
     if not owner_id:
         raise CollectionRouteError('PROXY_UNAVAILABLE')
     from backend.application_auth.store import AuthStore
     from backend.application_auth.service import ApplicationAuthService
-    auth = auth_store or AuthStore(settings.app_auth_db)
+    import sqlite3
+    auth = auth_store or (AuthStore(settings.app_auth_db, read_only=True) if authority_retry
+                          else AuthStore(settings.app_auth_db))
     try:
         principal = auth.principal_for_user(owner_id)
         account = get_proxy_store(account_store).accounts.get(account_id)
@@ -777,6 +790,11 @@ def authorize_route_owner(account_id, proxy_id, owner_id, *, account_store=None,
             raise CollectionRouteError('PROXY_UNAVAILABLE')
     except CollectionRouteError:
         raise
+    except sqlite3.Error as exc:
+        if (authority_retry and getattr(exc, 'reservation_step', None) == 'auth_read'
+                and getattr(exc, 'reservation_rolled_back', False) is True):
+            raise
+        raise CollectionRouteError('PROXY_UNAVAILABLE') from None
     except Exception:
         raise CollectionRouteError('PROXY_UNAVAILABLE') from None
 

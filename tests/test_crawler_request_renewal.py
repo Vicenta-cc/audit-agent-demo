@@ -74,7 +74,7 @@ def test_cross_fd_group_and_maintenance_capability_cannot_renew(owner,monkeypatc
     monkeypatch.setattr(persistent_request_gate,'renew_scope_tokens',lambda *a,**k:pytest.fail('unauthorized renewal reached DB'))
     first=reserve(owner)
     other=object.__new__(authority.RequestAuthority)
-    other.session=owner.session;other.media_grants={}
+    other.session=owner.session;other.snapshot=owner.snapshot;other.media_grants={}
     with pytest.raises(RuntimeError,match='PROXY_REVISION_MISMATCH'):
         other._execute('renew_request',{'scope_tokens':first['scope_tokens']},{})
     owner.session.maintenance_only=True

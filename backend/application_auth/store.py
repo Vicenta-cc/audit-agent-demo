@@ -5,9 +5,10 @@ import secrets
 import sqlite3
 import threading
 import unicodedata
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, ContextManager
 from uuid import uuid4
 
 from backend.investigation_creation.principal import Principal
@@ -42,23 +43,50 @@ class AuthStore:
         *,
         default_validity_days: int = 7,
         activation_mode: str = "first_login",
+        read_only: bool = False,
     ) -> None:
         self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._read_only = read_only
+        if not read_only:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.default_validity_days = max(1, int(default_validity_days))
         normalized_mode = str(activation_mode).strip().lower()
         if normalized_mode not in VALID_ACTIVATION_MODES:
             raise ValueError("unsupported account activation mode")
         self.activation_mode = normalized_mode
         self._lock = threading.RLock()
-        self._init_db()
+        if not read_only:
+            self._init_db()
 
-    def _connect(self) -> sqlite3.Connection:
+    def _connect(self) -> sqlite3.Connection | ContextManager[sqlite3.Connection]:
+        if self._read_only:
+            return self._read_connection()
         connection = sqlite3.connect(self.db_path, timeout=30)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA busy_timeout=30000")
         return connection
+
+    @contextmanager
+    def _read_connection(self):
+        """Runtime authorization reads never initialize schema or acquire write locks."""
+        connection = sqlite3.connect(self.db_path.resolve().as_uri() + "?mode=ro", uri=True, timeout=.2)
+        closed = False
+        try:
+            try:
+                connection.row_factory = sqlite3.Row
+                yield connection
+            finally:
+                connection.close()
+                closed = True
+        except sqlite3.OperationalError as exc:
+            code = getattr(exc, "sqlite_errorcode", None)
+            if closed and type(code) is int and code & 255 == sqlite3.SQLITE_BUSY:
+                # Only this closed, read-only connection proves no write outcome
+                # is unknown. Callers may re-read current authorization later.
+                exc.reservation_step = "auth_read"
+                exc.reservation_rolled_back = True
+            raise
 
     def _init_db(self) -> None:
         with self._lock, self._connect() as connection:

@@ -56,8 +56,8 @@ class CrawlerAccountStore:
         self._lock = threading.Lock()
         self._init_db()
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+    def _connect(self, *, timeout=5.0) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path, timeout=timeout)
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -978,7 +978,7 @@ class CrawlerAccountStore:
             conn.execute('BEGIN IMMEDIATE')
             return write(conn)
 
-    def admit_route(self, account_id, observed_exit, generation, operation_id, *, recovery_claim=None, login_bootstrap=False, require_existing=False, require_healthy_exit=False, local_direct_pinned=False, pinned_observed_at=None):
+    def admit_route(self, account_id, observed_exit, generation, operation_id, *, recovery_claim=None, login_bootstrap=False, require_existing=False, require_healthy_exit=False, local_direct_pinned=False, pinned_observed_at=None, authority_retry=False):
         if (type(login_bootstrap) is not bool or type(local_direct_pinned) is not bool
                 or local_direct_pinned and (recovery_claim or login_bootstrap or require_healthy_exit)):
             raise ValueError('ROUTE_BOOTSTRAP_INVALID')
@@ -986,8 +986,14 @@ class CrawlerAccountStore:
         generation = self._generation(generation)
         if not isinstance(operation_id,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}',operation_id):
             raise ValueError('ROUTE_OPERATION_INVALID')
-        with self._lock, self._connect() as conn:
-            conn.execute('BEGIN IMMEDIATE')
+        if authority_retry:
+            if not require_existing:
+                raise ValueError('ROUTE_LEASE_REJECTED')
+            from tools.persistent_request_gate import reservation_transaction
+        with self._lock, (reservation_transaction(self._connect(timeout=.2), None)
+                         if authority_retry else self._connect()) as conn:
+            if not authority_retry:
+                conn.execute('BEGIN IMMEDIATE')
             prior = conn.execute('SELECT * FROM crawler_route_admissions WHERE operation_id=?',(operation_id,)).fetchone()
             if prior:
                 if (prior['account_id'],prior['exit_key'],prior['generation'],prior['state']) != (account_id,key,generation,'active'):

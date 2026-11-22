@@ -20,10 +20,8 @@ import time
 from pathlib import Path
 
 MAX_FRAME = 16384
-_RESERVE_BUSY_BACKOFF = (0.05, 0.10)
-# Leave room inside the private channel deadline for safety and the grant
-# transaction (both use a 200 ms SQLite busy timeout), plus the response.
-_RESERVE_RETRY_HEADROOM = 0.5
+_DATABASE_RETRY_OPERATIONS = frozenset({"browser_validate", "check_stop", "reserve", "consume", "renew_request"})
+_DATABASE_RETRY_PAUSE = 0.1
 
 _OWNER_OPERATIONS = frozenset({
     "initialize", "cache_lookup", "check_stop", "fail", "browser_validate",
@@ -333,6 +331,8 @@ class RequestAuthority:
                             "ok": False,
                             "error": code if code in allowed else "PROXY_UNAVAILABLE",
                         }
+                        if code == "SCHEDULER_DATABASE_BUSY" and getattr(exc, "retryable", False) is True:
+                            response["retryable"] = True
                     data = (
                         json.dumps(response, allow_nan=False, separators=(",", ":"))
                         + "\n"
@@ -390,7 +390,7 @@ class RequestAuthority:
         if request_id not in self.seen and len(self.seen) >= 20000:
             raise RuntimeError("PROXY_UNAVAILABLE")
         self.seen[request_id] = digest
-        if request_id in self.cache:
+        if request_id in self.cache and operation != "browser_validate":
             if (getattr(self.snapshot, 'local_direct_pinned', False)
                     and operation in {'authorize_pinned_context', 'browser_validate', 'reserve', 'consume', 'renew_request'}
                     and not self.pinned_context_live(self.snapshot, self.pid)):
@@ -413,10 +413,24 @@ class RequestAuthority:
 
         token = owner_access.set(True)
         try:
-            result = self._execute(operation, payload, request)
+            if operation in _DATABASE_RETRY_OPERATIONS:
+                self._check_validation_lifetime(frame["deadline"])
+                if time.monotonic() < getattr(self, "_database_retry_after", 0):
+                    error = RuntimeError("SCHEDULER_DATABASE_BUSY")
+                    error.retryable = True
+                    raise error
+            try:
+                result = self._execute(operation, payload, request)
+            except sqlite3.Error as exc:
+                if operation not in _DATABASE_RETRY_OPERATIONS:
+                    raise
+                self._retry_database_error(exc, operation=operation, stage=operation,
+                    retries=0, started=time.monotonic(), deadline=frame["deadline"])
         finally:
             owner_access.reset(token)
-        self.cache[request_id] = digest, result
+        # A completed safety decision must never authorize a later replay.
+        if operation != "browser_validate":
+            self.cache[request_id] = digest, result
         return result
 
     def _reserve(self, payload, request):
@@ -432,43 +446,70 @@ class RequestAuthority:
         session = self.session
         started = time.monotonic()
         deadline = request.get("deadline", float("inf"))
-        retries = 0
-        while True:
-            stage = "browser_safety"
-            try:
-                session._validate_browser_safety()
-                if session._gate is None or self.closed.is_set():
-                    raise RuntimeError("PROXY_UNAVAILABLE")
-                if time.time() >= deadline:
-                    raise TimeoutError("request deadline expired")
-                stage = "reserve_scopes"
-                return _try_reserve_scopes(
-                    self.snapshot.scheduler_db_path, session._gate.scope_ids,
-                    payload["operation"], lease, time.time(),
-                    safety_fence=session._safety_fence(), authority=request,
-                )
-            except sqlite3.Error as exc:
-                code = getattr(exc, "sqlite_errorcode", None)
-                busy = (isinstance(exc, sqlite3.OperationalError) and type(code) is int
-                        and (code & 0xff) == sqlite3.SQLITE_BUSY)
-                backoff = _RESERVE_BUSY_BACKOFF[retries] if retries < len(_RESERVE_BUSY_BACKOFF) else None
-                retry = (busy and getattr(exc, "reservation_rolled_back", False)
-                         and backoff is not None and deadline - time.time() > backoff + _RESERVE_RETRY_HEADROOM)
-                action = "retry" if retry else ("exhausted" if busy else "failed")
-                logging.getLogger(__name__).warning(
-                    "CRAWLER_RESERVE_DATABASE stage=%s step=%s sqlite_code=%s retries=%d elapsed_ms=%d action=%s",
-                    stage, getattr(exc, "reservation_step", "unclassified"), code, retries,
-                    int((time.monotonic() - started) * 1000), action,
-                )
-                if not retry:
-                    if busy:
-                        raise RuntimeError("SCHEDULER_DATABASE_BUSY") from exc
-                    raise
-                if self.closed.wait(backoff) or not self._alive():
-                    raise RuntimeError("PROXY_UNAVAILABLE") from None
-                if deadline - time.time() <= _RESERVE_RETRY_HEADROOM:
-                    raise RuntimeError("SCHEDULER_DATABASE_BUSY") from exc
-                retries += 1
+        stage = "browser_safety"
+        try:
+            session._validate_browser_safety()
+            if session._gate is None or self.closed.is_set():
+                raise RuntimeError("PROXY_UNAVAILABLE")
+            if time.time() >= deadline:
+                raise TimeoutError("request deadline expired")
+            stage = "reserve_scopes"
+            return _try_reserve_scopes(
+                self.snapshot.scheduler_db_path, session._gate.scope_ids,
+                payload["operation"], lease, time.time(),
+                safety_fence=session._safety_fence(), authority=request,
+            )
+        except sqlite3.Error as exc:
+            self._retry_database_error(exc, operation="reserve", stage=stage,
+                                       retries=0, started=started, deadline=deadline)
+
+    def _retry_database_error(self, exc, *, operation, stage, retries, started, deadline):
+        """Retry only known rolled-back contention; never sleep holding a transaction."""
+        code = getattr(exc, "sqlite_errorcode", None)
+        code = code if type(code) is int else None
+        busy = (isinstance(exc, sqlite3.OperationalError) and code is not None
+                and (code & 0xff) == sqlite3.SQLITE_BUSY)
+        rolled_back = getattr(exc, "reservation_rolled_back", False) is True
+        retry = busy and rolled_back and deadline > time.time()
+        step = getattr(exc, "reservation_step", "unclassified")
+        if step not in {"attach", "begin", "body", "commit", "rollback", "health_read", "ticket_read", "auth_read"}:
+            step = "unclassified"
+        name = getattr(exc, "sqlite_errorname", "unknown")
+        if not isinstance(name, str) or not re.fullmatch(r"SQLITE_[A-Z0-9_]{1,64}", name):
+            name = "unknown"
+        logging.getLogger(__name__).warning(
+            "%s stage=%s step=%s sqlite_code=%s retries=%d elapsed_ms=%d action=%s sqlite_name=%s rolled_back=%s",
+            "CRAWLER_RESERVE_DATABASE" if operation == "reserve" else "CRAWLER_BROWSER_DATABASE",
+            stage, step, code, retries, int((time.monotonic() - started) * 1000),
+            "retry" if retry else ("exhausted" if busy else "failed"), name, rolled_back,
+        )
+        if busy:
+            error = RuntimeError("SCHEDULER_DATABASE_BUSY")
+            if retry:
+                self._database_retry_after = time.monotonic() + _DATABASE_RETRY_PAUSE
+                error.retryable = True
+            raise error from exc
+        raise exc
+
+    def _validate_browser(self, request):
+        started = time.monotonic()
+        deadline = request["deadline"]
+        self._check_validation_lifetime(deadline)
+        try:
+            # Each attempt rechecks revocation, expiry, and current DB safety.
+            self.session._validate_browser_safety()
+        except sqlite3.Error as exc:
+            self._retry_database_error(exc, operation="browser_validate", stage="browser_safety",
+                                       retries=0, started=started, deadline=deadline)
+        self._check_validation_lifetime(deadline)
+        return None
+
+    def _check_validation_lifetime(self, deadline):
+        if self.closed.is_set() or not self._alive():
+            raise RuntimeError("PROXY_UNAVAILABLE")
+        if time.time() >= deadline:
+            raise TimeoutError("request deadline expired")
+        self.snapshot.require_not_expired(allow_unknown=True)
 
     def _execute(self, operation, payload, request):
         from tools.bound_proxy import BoundProxySession
@@ -476,6 +517,7 @@ class RequestAuthority:
         from tools.persistent_request_gate import (
             release_scope_tokens,
             validate_safety_connection,
+            reservation_transaction,
         )
 
         if operation == "initialize":
@@ -545,8 +587,7 @@ class RequestAuthority:
         if operation == "fail":
             return session.fail(payload["code"]).code
         if operation == "browser_validate":
-            session._validate_browser_safety()
-            return None
+            return self._validate_browser(request)
         if operation == "probe_reserve":
             session.check_stop()
             return session.budget.reserve(**payload)
@@ -587,11 +628,8 @@ class RequestAuthority:
         if operation == "consume":
             session.check_stop()
             now = time.time()
-            with sqlite3.connect(self.snapshot.scheduler_db_path, timeout=0.2) as db:
-                fence = session._safety_fence()
-                if fence:
-                    db.execute("ATTACH DATABASE ? AS safety", (fence["db_path"],))
-                db.execute("BEGIN IMMEDIATE")
+            fence = session._safety_fence()
+            with reservation_transaction(sqlite3.connect(self.snapshot.scheduler_db_path, timeout=0.2), fence) as db:
                 validate_safety_connection(db, fence, now)
                 for scope in session._gate.scope_ids:
                     row = db.execute(
@@ -729,14 +767,15 @@ class RequestAuthority:
         return {"ids": complete, "next_offset": next_offset}
 
 
-def parent_authority_ticket(bundle):
-    """Read an already ACKed ticket after the child completed its route ACK."""
+def parent_authority_ticket(bundle, *, authority_retry=False):
+    """Read an ACK; short waits are opt-in only for retry-aware renewal calls."""
     snapshot = bundle.snapshot
     return bundle.route_operation_store.ticket(
         snapshot.operation_id,
         owner_id=bundle.owner_id,
         snapshot_digest=snapshot.snapshot_digest,
         context_id=snapshot.context_id,
+        authority_retry=authority_retry,
     )
 
 
@@ -744,8 +783,8 @@ def parent_authority_renew_ticket(bundle, prior):
     """Authority owner performs renewal; never waits for its child to renew it."""
     from .crawler_route import require_route_renewal
 
-    require_route_renewal(bundle)
-    current = parent_authority_ticket(bundle)
+    require_route_renewal(bundle, authority_retry=True)
+    current = parent_authority_ticket(bundle, authority_retry=True)
     if current["lease_version"] > prior["lease_version"]:
         return current
     if current["lease_version"] != prior["lease_version"]:
@@ -756,11 +795,12 @@ def parent_authority_renew_ticket(bundle, prior):
             route_operation_id=bundle.snapshot.operation_id,
             owner_id=bundle.owner_id,
             lease_version=prior["lease_version"],
+            authority_retry=True,
         )
     except ValueError:
         # A concurrent caller may have won the same CAS. Return only the already
         # committed newer ticket, never mint another lease or extend it twice.
-        current = parent_authority_ticket(bundle)
+        current = parent_authority_ticket(bundle, authority_retry=True)
         if current["lease_version"] > prior["lease_version"]:
             return current
         raise
